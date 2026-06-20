@@ -5,8 +5,9 @@ import 'detail_panel.dart';
 import 'grid_area.dart';
 import 'top_bar.dart';
 import 'edit_dialog.dart';
-
-const String kLibraryRoot = r'E:\Test\vivy_library';
+import '../services/library_root_service.dart';
+import 'library_root_selector.dart';
+import 'dart:io';
 
 class ShellPage extends StatefulWidget {
   const ShellPage({super.key});
@@ -30,10 +31,29 @@ class _ShellPageState extends State<ShellPage> {
 
   final TextEditingController _searchController = TextEditingController();
 
+  final LibraryRootService _rootService = LibraryRootService();
+
   @override
   void initState() {
     super.initState();
-    _state.scan(kLibraryRoot);
+    _initLibrary();
+  }
+
+  /// 启动时尝试恢复上次使用的资源库,没有记录则不自动扫描,
+  /// 等待用户通过左侧的资源库选择器手动打开一个
+  Future<void> _initLibrary() async {
+    final lastPath = await _rootService.getCurrentRootPath();
+    if (lastPath != null && Directory(lastPath).existsSync()) {
+      await _state.scan(lastPath);
+    } else {
+      // 没有可恢复的资源库,标记加载结束,显示"请选择资源库"的提示界面
+      _state.markNoLibrarySelected();
+    }
+  }
+
+  Future<void> _onRootSelected(String path) async {
+    await _rootService.setCurrentRootPath(path); // 记住这次选择,下次启动直接用
+    await _state.scan(path);
   }
 
   @override
@@ -66,6 +86,33 @@ class _ShellPageState extends State<ShellPage> {
             ),
           );
         }
+        // 没有资源库时,只显示顶部资源库选择器,中间引导用户选择
+        if (_state.currentRootPath.isEmpty) {
+          return Scaffold(
+            body: Column(
+              children: [
+                Container(
+                  height: 56,
+                  color: Colors.deepPurple.shade100,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.centerLeft,
+                  child: LibraryRootSelector(
+                    currentPath: '',
+                    onRootSelected: _onRootSelected,
+                  ),
+                ),
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                      '请先选择一个资源库目录',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         return Scaffold(
           body: Column(
             children: [
@@ -83,10 +130,25 @@ class _ShellPageState extends State<ShellPage> {
       children: [
         SizedBox(
           width: _leftPanelWidth,
-          child: CategoryPanel(
-            categories: _state.categories,
-            selectedCategory: _state.selectedCategory,
-            onCategorySelected: _state.setSelectedCategory,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.blue.shade50,
+                child: LibraryRootSelector(
+                  currentPath: _state.currentRootPath,
+                  onRootSelected: _onRootSelected,
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: CategoryPanel(
+                  categories: _state.categories,
+                  selectedCategory: _state.selectedCategory,
+                  onCategorySelected: _state.setSelectedCategory,
+                ),
+              ),
+            ],
           ),
         ),
         _buildDragHandle(onDrag: _resizeLeftPanel),

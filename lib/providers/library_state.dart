@@ -332,4 +332,11 @@ class LibraryState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// 应用启动时如果没有可恢复的资源库路径,调用这个方法结束 loading 状态,
+  /// 让界面显示"请选择资源库"的引导,而不是一直转圈
+  void markNoLibrarySelected() {
+    _isLoading = false;
+    notifyListeners();
+  }
 }
