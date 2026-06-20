@@ -13,6 +13,8 @@ class LibraryState extends ChangeNotifier {
   bool _isLoading = true;
   String? _error;
 
+  String _currentRootPath = '';
+
   String _searchQuery = '';
   String? _selectedCategory;
   String _selectedClass = '全部'; // 顶部 class 导航当前选中项,默认"全部"
@@ -30,6 +32,9 @@ class LibraryState extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  String get currentRootPath => _currentRootPath;
+
   String get searchQuery => _searchQuery;
   String? get selectedCategory => _selectedCategory;
   String get selectedClass => _selectedClass;  // 加对应 getter
@@ -306,9 +311,18 @@ class LibraryState extends ChangeNotifier {
   }
 
   Future<void> scan(String rootDir) async {
+    _currentRootPath = rootDir;
     _isLoading = true;
     _error = null;
+    // 切换资源库时重置所有筛选/选中状态,避免带着上一个库的筛选条件
+    // 进入新库后出现"看起来没数据"的困惑(比如还选着上个库才有的 class 标签)
+    _selectedCategory = null;
+    _selectedClass = '全部';
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _fileBrowserVisible = false;
     notifyListeners();
+
     try {
       _allItems = await LibraryScanner().scanAll(rootDir);
     } catch (e) {
