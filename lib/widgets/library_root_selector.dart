@@ -148,6 +148,9 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   List<LibraryRoot> _allRoots = [];
   bool _isLoading = true;
 
+  // 记录当前哪一项的迷你菜单是展开的,path 为 null 表示都没展开
+  String? _openMenuPath;
+
   @override
   void initState() {
     super.initState();
@@ -179,8 +182,6 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   }
 
   Future<void> _openOtherLibrary() async {
-    // FilePicker 的 getDirectoryPath 专门用来选择文件夹(不是文件),
-    // 对应 Windows 的"选择文件夹"对话框
     final path = await FilePicker.platform.getDirectoryPath(
       dialogTitle: '选择资源库根目录',
     );
@@ -195,11 +196,13 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   }
 
   Future<void> _removeRoot(LibraryRoot root) async {
+    setState(() => _openMenuPath = null);
     final updated = await _service.removeRoot(root.path);
     setState(() => _allRoots = updated);
   }
 
   Future<void> _renameRoot(LibraryRoot root) async {
+    setState(() => _openMenuPath = null);
     final ctrl = TextEditingController(text: root.name);
 
     final newName = await showDialog<String>(
@@ -231,91 +234,19 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
     );
 
     if (newName == null || newName.isEmpty) return;
-
     final updated = await _service.renameRoot(root.path, newName);
     setState(() => _allRoots = updated);
   }
 
-  void _showItemMenuAtWidget(BuildContext iconContext, LibraryRoot root) {
-    // 拿到这个"more"图标自己的渲染框,精确得到它在屏幕上的实际位置和尺寸
-    final iconBox = iconContext.findRenderObject() as RenderBox;
-    final iconPosition = iconBox.localToGlobal(Offset.zero);
-    final iconSize = iconBox.size;
-
-    // 找到当前 Navigator 的整体范围作为参照系
-    final overlayBox =
-        Navigator.of(iconContext).overlay!.context.findRenderObject()
-            as RenderBox;
-
-    showMenu<String>(
-      context: iconContext,
-      position: RelativeRect.fromRect(
-        Rect.fromLTWH(
-          iconPosition.dx,
-          // 关键:用图标顶部(而不是底部)作为矩形的起点,
-          // 这样 showMenu 计算"向上还是向下展开"时,
-          // 会把这个矩形当成菜单应该贴着出现的参照位置,
-          // 配合矩形本身朝上的偏移,更倾向于向上弹出
-          iconPosition.dy - 200, // 往上预留 200 的"虚拟空间",引导菜单向上展开
-          iconSize.width,
-          iconSize.height,
-        ),
-        Offset.zero & overlayBox.size,
-      ),
-      constraints: const BoxConstraints(minWidth: 150),
-      items: const [
-        PopupMenuItem(
-          value: 'rename',
-          height: 32,
-          child: Row(
-            children: [
-              Icon(Icons.drive_file_rename_outline, size: 14),
-              SizedBox(width: 8),
-              Text('命名资源库', style: TextStyle(fontSize: 12)),
-            ],
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'open_explorer',
-          height: 32,
-          child: Row(
-            children: [
-              Icon(Icons.folder_open, size: 14),
-              SizedBox(width: 8),
-              Text('在资源管理器中打开', style: TextStyle(fontSize: 12)),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'remove',
-          height: 32,
-          child: Row(
-            children: [
-              Icon(Icons.delete_outline, size: 14, color: Colors.red),
-              SizedBox(width: 8),
-              Text('从列表中删除',
-                  style: TextStyle(fontSize: 12, color: Colors.red)),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (value == 'rename') {
-        _renameRoot(root);
-      } else if (value == 'remove') {
-        _removeRoot(root);
-      } else if (value == 'open_explorer') {
-        Process.run('explorer', [root.path]);
-      }
+  void _toggleMenu(String path) {
+    setState(() {
+      _openMenuPath = _openMenuPath == path ? null : path;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      // Material 包裹是必须的:OverlayEntry 里的内容默认没有 Material 祖先,
-      // 像 InkWell 水波纹、阴影这些 Material 风格效果需要它才能正常显示
       elevation: 8,
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -333,7 +264,6 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 第一行:搜索框
                   Padding(
                     padding: const EdgeInsets.all(10),
                     child: TextField(
@@ -353,8 +283,6 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
-
-                  // 第二行:已添加资源库列表,多个时一行一个纵向排列
                   Flexible(
                     child: _filteredRoots.isEmpty
                         ? Padding(
@@ -370,38 +298,22 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                             itemCount: _filteredRoots.length,
                             itemBuilder: (context, index) {
                               final root = _filteredRoots[index];
-                              final isCurrent = root.path == widget.currentPath;
-                              return ListTile(
-                                dense: true,
-                                selected: isCurrent,
-                                selectedTileColor: Colors.blue.shade50,
-                                leading: const Icon(Icons.folder, size: 16),
-                                title: Text(root.name,
-                                    style: const TextStyle(fontSize: 12.5)),
-                                subtitle: Text(
-                                  root.path,
-                                  style: TextStyle(
-                                      fontSize: 10, color: Colors.grey.shade500),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () => widget.onSelect(root.path),
-                                trailing: Builder(
-                                  builder: (iconContext) {
-                                    return GestureDetector(
-                                      onTap: () => _showItemMenuAtWidget(iconContext, root),
-                                      child: const Icon(Icons.more_vert, size: 16),
-                                    );
-                                  },
-                                ),
+                              return _RootListTile(
+                                key: ValueKey(root.path), // 用路径作为稳定标识,帮助 Flutter 正确复用 State
+                                root: root,
+                                isCurrent: root.path == widget.currentPath,
+                                isMenuOpen: _openMenuPath == root.path,
+                                onSelect: () => widget.onSelect(root.path),
+                                onToggleMenu: () => _toggleMenu(root.path),
+                                onRename: () => _renameRoot(root),
+                                onRemove: () => _removeRoot(root),
+                                onOpenExplorer: () =>
+                                    Process.run('explorer', [root.path]),
                               );
                             },
                           ),
                   ),
-
                   const Divider(height: 1),
-
-                  // 第三行:打开其他资源库
                   InkWell(
                     onTap: _openOtherLibrary,
                     child: const Padding(
@@ -419,6 +331,178 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+/// 单个资源库列表项,自带一个紧贴在自己右侧展开的迷你菜单。
+/// 菜单本身复用跟列表项一致的视觉风格:无动画,ListTile 同款字号和间距。
+class _RootListTile extends StatefulWidget {
+  final LibraryRoot root;
+  final bool isCurrent;
+  final bool isMenuOpen;
+  final VoidCallback onSelect;
+  final VoidCallback onToggleMenu;
+  final VoidCallback onRename;
+  final VoidCallback onRemove;
+  final VoidCallback onOpenExplorer;
+
+  const _RootListTile({
+    super.key, // 新增
+    required this.root,
+    required this.isCurrent,
+    required this.isMenuOpen,
+    required this.onSelect,
+    required this.onToggleMenu,
+    required this.onRename,
+    required this.onRemove,
+    required this.onOpenExplorer,
+  });
+
+  @override
+  State<_RootListTile> createState() => _RootListTileState();
+}
+
+class _RootListTileState extends State<_RootListTile> {
+  final LayerLink _menuLink = LayerLink();
+  OverlayEntry? _menuEntry;
+
+  @override
+  void didUpdateWidget(_RootListTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 父级状态变化时(比如点了别的项的菜单,这一项的 isMenuOpen 变成 false),
+    // 同步关闭自己持有的 OverlayEntry,避免残留
+    if (oldWidget.isMenuOpen && !widget.isMenuOpen) {
+      _removeMenu();
+    } else if (!oldWidget.isMenuOpen && widget.isMenuOpen) {
+      _showMenu();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeMenu();
+    super.dispose();
+  }
+
+  void _removeMenu() {
+    _menuEntry?.remove();
+    _menuEntry = null;
+  }
+
+  void _showMenu() {
+    final overlay = Overlay.of(context);
+    _menuEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // 点菜单以外区域关闭,但不拦截到资源库浮层最外层那个"点外面关闭整个浮层"的层,
+          // 这里只处理"点击这个迷你菜单以外的地方,收起迷你菜单本身"
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: widget.onToggleMenu, // 点外面,等效于再点一次 more 按钮收起
+            ),
+          ),
+          CompositedTransformFollower(
+            link: _menuLink,
+            showWhenUnlinked: false,
+            // 关键:targetAnchor 和 followerAnchor 配合,
+            // 让菜单出现在锚点的"左侧"而不是默认的下方。
+            // targetAnchor: centerRight 表示"以锚点的右边中点为基准对齐",
+            // followerAnchor: centerLeft 表示"菜单用自己的左边中点去贴这个基准点",
+            // 两者组合的效果就是"菜单贴着锚点左边展开",也就是你说的"前方"。
+            targetAnchor: Alignment.centerLeft,
+            followerAnchor: Alignment.centerRight,
+            child: _buildMenuContent(),
+          ),
+        ],
+      ),
+    );
+    overlay.insert(_menuEntry!);
+  }
+
+  Widget _buildMenuContent() {
+    return Material(
+      elevation: 6,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 170,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _menuItem(
+              icon: Icons.drive_file_rename_outline,
+              label: '命名资源库',
+              onTap: widget.onRename,
+            ),
+            Divider(height: 1, color: Colors.grey.shade200),
+            _menuItem(
+              icon: Icons.folder_open,
+              label: '在资源管理器中打开',
+              onTap: widget.onOpenExplorer,
+            ),
+            _menuItem(
+              icon: Icons.delete_outline,
+              label: '从列表中删除',
+              onTap: widget.onRemove,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 这个菜单项的样式,直接对应 ListTile 风格:左图标 + 文字,
+  // 没有水波纹延迟动画(用 onTap 直接响应,不依赖 InkWell 的涟漪效果展示时间)
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    final color = isDestructive ? Colors.red : const Color(0xFF333333);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontSize: 12.5, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _menuLink,
+      child: ListTile(
+        dense: true,
+        selected: widget.isCurrent,
+        selectedTileColor: Colors.blue.shade50,
+        leading: const Icon(Icons.folder, size: 16),
+        title: Text(widget.root.name, style: const TextStyle(fontSize: 12.5)),
+        subtitle: Text(
+          widget.root.path,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: widget.onSelect,
+        trailing: GestureDetector(
+          onTap: widget.onToggleMenu,
+          child: const Icon(Icons.more_vert, size: 16),
+        ),
       ),
     );
   }
