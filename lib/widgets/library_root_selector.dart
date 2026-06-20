@@ -147,9 +147,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
 
   List<LibraryRoot> _allRoots = [];
   bool _isLoading = true;
-
-  // 记录当前哪一项的迷你菜单是展开的,path 为 null 表示都没展开
-  String? _openMenuPath;
+  String? _expandedPath; // 当前哪一项展开了菜单,null 表示都没展开
 
   @override
   void initState() {
@@ -196,13 +194,13 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   }
 
   Future<void> _removeRoot(LibraryRoot root) async {
-    setState(() => _openMenuPath = null);
+    setState(() => _expandedPath = null);
     final updated = await _service.removeRoot(root.path);
     setState(() => _allRoots = updated);
   }
 
   Future<void> _renameRoot(LibraryRoot root) async {
-    setState(() => _openMenuPath = null);
+    setState(() => _expandedPath = null);
     final ctrl = TextEditingController(text: root.name);
 
     final newName = await showDialog<String>(
@@ -238,9 +236,9 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
     setState(() => _allRoots = updated);
   }
 
-  void _toggleMenu(String path) {
+  void _toggleExpanded(String path) {
     setState(() {
-      _openMenuPath = _openMenuPath == path ? null : path;
+      _expandedPath = _expandedPath == path ? null : path;
     });
   }
 
@@ -293,24 +291,27 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                                   fontSize: 11, color: Colors.grey.shade500),
                             ),
                           )
-                        : ListView.builder(
+                        // 用普通 ListView(非 builder)+ Column 拼装,
+                        // 因为现在每一项可能带展开的子菜单,高度不固定,
+                        // 数据量本身也不大(用户添加的资源库数量通常很少),
+                        // 不需要 builder 的按需渲染优化,用最简单可靠的方式拼装
+                        : ListView(
                             shrinkWrap: true,
-                            itemCount: _filteredRoots.length,
-                            itemBuilder: (context, index) {
-                              final root = _filteredRoots[index];
-                              return _RootListTile(
-                                key: ValueKey(root.path), // 用路径作为稳定标识,帮助 Flutter 正确复用 State
-                                root: root,
-                                isCurrent: root.path == widget.currentPath,
-                                isMenuOpen: _openMenuPath == root.path,
-                                onSelect: () => widget.onSelect(root.path),
-                                onToggleMenu: () => _toggleMenu(root.path),
-                                onRename: () => _renameRoot(root),
-                                onRemove: () => _removeRoot(root),
-                                onOpenExplorer: () =>
-                                    Process.run('explorer', [root.path]),
-                              );
-                            },
+                            children: _filteredRoots
+                                .map((root) => _RootListTile(
+                                      key: ValueKey(root.path),
+                                      root: root,
+                                      isCurrent: root.path == widget.currentPath,
+                                      isExpanded: _expandedPath == root.path,
+                                      onSelect: () => widget.onSelect(root.path),
+                                      onToggleExpanded: () =>
+                                          _toggleExpanded(root.path),
+                                      onRename: () => _renameRoot(root),
+                                      onRemove: () => _removeRoot(root),
+                                      onOpenExplorer: () => Process.run(
+                                          'explorer', [root.path]),
+                                    ))
+                                .toList(),
                           ),
                   ),
                   const Divider(height: 1),
@@ -336,130 +337,88 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   }
 }
 
-/// 单个资源库列表项,自带一个紧贴在自己右侧展开的迷你菜单。
-/// 菜单本身复用跟列表项一致的视觉风格:无动画,ListTile 同款字号和间距。
-class _RootListTile extends StatefulWidget {
+/// 单个资源库列表项。点击 more 按钮时,在这一项下方原地展开菜单选项,
+/// 不依赖 Overlay/LayerLink,彻底规避列表项被回收导致的渲染崩溃问题。
+class _RootListTile extends StatelessWidget {
   final LibraryRoot root;
   final bool isCurrent;
-  final bool isMenuOpen;
+  final bool isExpanded;
   final VoidCallback onSelect;
-  final VoidCallback onToggleMenu;
+  final VoidCallback onToggleExpanded;
   final VoidCallback onRename;
   final VoidCallback onRemove;
   final VoidCallback onOpenExplorer;
 
   const _RootListTile({
-    super.key, // 新增
+    super.key,
     required this.root,
     required this.isCurrent,
-    required this.isMenuOpen,
+    required this.isExpanded,
     required this.onSelect,
-    required this.onToggleMenu,
+    required this.onToggleExpanded,
     required this.onRename,
     required this.onRemove,
     required this.onOpenExplorer,
   });
 
   @override
-  State<_RootListTile> createState() => _RootListTileState();
-}
-
-class _RootListTileState extends State<_RootListTile> {
-  final LayerLink _menuLink = LayerLink();
-  OverlayEntry? _menuEntry;
-
-  @override
-  void didUpdateWidget(_RootListTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 父级状态变化时(比如点了别的项的菜单,这一项的 isMenuOpen 变成 false),
-    // 同步关闭自己持有的 OverlayEntry,避免残留
-    if (oldWidget.isMenuOpen && !widget.isMenuOpen) {
-      _removeMenu();
-    } else if (!oldWidget.isMenuOpen && widget.isMenuOpen) {
-      _showMenu();
-    }
-  }
-
-  @override
-  void dispose() {
-    _removeMenu();
-    super.dispose();
-  }
-
-  void _removeMenu() {
-    _menuEntry?.remove();
-    _menuEntry = null;
-  }
-
-  void _showMenu() {
-    final overlay = Overlay.of(context);
-    _menuEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          // 点菜单以外区域关闭,但不拦截到资源库浮层最外层那个"点外面关闭整个浮层"的层,
-          // 这里只处理"点击这个迷你菜单以外的地方,收起迷你菜单本身"
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: widget.onToggleMenu, // 点外面,等效于再点一次 more 按钮收起
+  Widget build(BuildContext context) {
+    // 不再需要 StatefulWidget 了,展开状态完全由父级传入,
+    // 这个组件本身变成纯粹的"无状态展示",更简单也更不容易出问题
+    return Column(
+      children: [
+        ListTile(
+          dense: true,
+          selected: isCurrent,
+          selectedTileColor: Colors.blue.shade50,
+          leading: const Icon(Icons.folder, size: 16),
+          title: Text(root.name, style: const TextStyle(fontSize: 12.5)),
+          subtitle: Text(
+            root.path,
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: onSelect,
+          trailing: GestureDetector(
+            onTap: onToggleExpanded,
+            child: Icon(
+              isExpanded ? Icons.expand_less : Icons.more_vert,
+              size: 16,
             ),
           ),
-          CompositedTransformFollower(
-            link: _menuLink,
-            showWhenUnlinked: false,
-            // 关键:targetAnchor 和 followerAnchor 配合,
-            // 让菜单出现在锚点的"左侧"而不是默认的下方。
-            // targetAnchor: centerRight 表示"以锚点的右边中点为基准对齐",
-            // followerAnchor: centerLeft 表示"菜单用自己的左边中点去贴这个基准点",
-            // 两者组合的效果就是"菜单贴着锚点左边展开",也就是你说的"前方"。
-            targetAnchor: Alignment.centerLeft,
-            followerAnchor: Alignment.centerRight,
-            child: _buildMenuContent(),
+        ),
+        // 展开的菜单内容,原地占用列表空间,跟随列表一起滚动/回收,
+        // 没有任何独立的浮层生命周期需要管理
+        if (isExpanded)
+          Container(
+            color: Colors.grey.shade50,
+            child: Column(
+              children: [
+                _menuItem(
+                  icon: Icons.drive_file_rename_outline,
+                  label: '命名资源库',
+                  onTap: onRename,
+                ),
+                Divider(height: 1, color: Colors.grey.shade200),
+                _menuItem(
+                  icon: Icons.folder_open,
+                  label: '在资源管理器中打开',
+                  onTap: onOpenExplorer,
+                ),
+                _menuItem(
+                  icon: Icons.delete_outline,
+                  label: '从列表中删除',
+                  onTap: onRemove,
+                  isDestructive: true,
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-    );
-    overlay.insert(_menuEntry!);
-  }
-
-  Widget _buildMenuContent() {
-    return Material(
-      elevation: 6,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: 170,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _menuItem(
-              icon: Icons.drive_file_rename_outline,
-              label: '命名资源库',
-              onTap: widget.onRename,
-            ),
-            Divider(height: 1, color: Colors.grey.shade200),
-            _menuItem(
-              icon: Icons.folder_open,
-              label: '在资源管理器中打开',
-              onTap: widget.onOpenExplorer,
-            ),
-            _menuItem(
-              icon: Icons.delete_outline,
-              label: '从列表中删除',
-              onTap: widget.onRemove,
-              isDestructive: true,
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
-  // 这个菜单项的样式,直接对应 ListTile 风格:左图标 + 文字,
-  // 没有水波纹延迟动画(用 onTap 直接响应,不依赖 InkWell 的涟漪效果展示时间)
   Widget _menuItem({
     required IconData icon,
     required String label,
@@ -470,38 +429,13 @@ class _RootListTileState extends State<_RootListTile> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        padding: const EdgeInsets.only(left: 32, right: 12, top: 9, bottom: 9),
         child: Row(
           children: [
             Icon(icon, size: 15, color: color),
             const SizedBox(width: 8),
             Text(label, style: TextStyle(fontSize: 12.5, color: color)),
           ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _menuLink,
-      child: ListTile(
-        dense: true,
-        selected: widget.isCurrent,
-        selectedTileColor: Colors.blue.shade50,
-        leading: const Icon(Icons.folder, size: 16),
-        title: Text(widget.root.name, style: const TextStyle(fontSize: 12.5)),
-        subtitle: Text(
-          widget.root.path,
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onTap: widget.onSelect,
-        trailing: GestureDetector(
-          onTap: widget.onToggleMenu,
-          child: const Icon(Icons.more_vert, size: 16),
         ),
       ),
     );
