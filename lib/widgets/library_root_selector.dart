@@ -371,48 +371,50 @@ class _RootListTile extends StatelessWidget {
     }
 
   Widget _buildRenameRow() {
-    return Container(
+    return Material(
       color: Colors.grey.shade50,
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: renameController,
-              autofocus: true,
-              style: const TextStyle(fontSize: 12.5),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '资源库显示名称',
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: renameController,
+                autofocus: true,
+                style: const TextStyle(fontSize: 12.5),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '资源库显示名称',
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                onSubmitted: (_) => onConfirmRename(),
               ),
-              onSubmitted: (_) => onConfirmRename(),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.check, size: 16, color: Colors.green),
-            onPressed: onConfirmRename,
-            tooltip: '保存',
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16, color: Colors.grey),
-            onPressed: onCancelRename,
-            tooltip: '取消',
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.check, size: 16, color: Colors.green),
+              onPressed: onConfirmRename,
+              tooltip: '保存',
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+              onPressed: onCancelRename,
+              tooltip: '取消',
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMenu() {
-    return Container(
+    return Material(
       color: Colors.grey.shade50,
       child: Column(
         children: [

@@ -10,34 +10,29 @@ import 'package:flutter/services.dart';
 class GridArea extends StatelessWidget {
   final List<LibraryItem> items;
   final LibraryState state;
-
-  final double filePanelHeight;                        // 新增
-  final void Function(double delta) onFilePanelResize;  // 新增
-
-  // 编辑回调由父级(ShellPage)传入,因为对话框需要在页面级别弹出
+  final double filePanelHeight;
+  final void Function(double delta) onFilePanelResize;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
 
   const GridArea({
     super.key,
     required this.items,
     required this.state,
-
-    required this.filePanelHeight,        // 新增
-    required this.onFilePanelResize,      // 新增
-
+    required this.filePanelHeight,
+    required this.onFilePanelResize,
     required this.onEditRequest,
   });
 
   @override
   Widget build(BuildContext context) {
     return Focus(
-      autofocus: true, // 网格区域默认获取键盘焦点,这样不用先点一下才能用快捷键
+      autofocus: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.keyA &&
             HardwareKeyboard.instance.isControlPressed) {
           state.selectAll(items);
-          return KeyEventResult.handled; // 告诉 Flutter 这个按键已经被处理了
+          return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
@@ -48,77 +43,83 @@ class GridArea extends StatelessWidget {
             child: items.isEmpty
                 ? const Center(child: Text('没有找到项目'))
                 : Padding(
-                    // ...GridView 保持不变...
-                  padding: const EdgeInsets.all(12),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      const maxCardWidth = 200.0;
-                      const spacing = 10.0;
-                      const textAreaHeight = 40.0;
-
-                      final crossAxisCount =
-                          (constraints.maxWidth / (maxCardWidth + spacing)).floor().clamp(1, 999);
-                      final cardWidth =
-                          (constraints.maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                      final imageHeight = cardWidth * 2 / 3;
-                      final cardHeight = imageHeight + textAreaHeight;
-                      final aspectRatio = cardWidth / cardHeight;
-
-                      return GridView.builder(
-                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: maxCardWidth,
-                          childAspectRatio: aspectRatio,
-                          mainAxisSpacing: spacing,
-                          crossAxisSpacing: spacing,
-                        ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          return ItemCard(
-                            item: item,
-                            isSelected: state.isItemSelected(item.path),
-                            imageHeight: imageHeight,     // 新增
-                            textHeight: textAreaHeight,   // 新增
-                            onTap: () => state.setSelectedItem(item),
-                            onCtrlTap: () => state.toggleItemSelection(item),
-                            onShiftTap: () => state.selectRange(item, items),
-                            onRightClick: (globalPos) =>
-                                _showContextMenu(context, item, globalPos),
-                          );
-                        },
-                      );
-                    },
+                    padding: const EdgeInsets.all(12),
+                    child: _buildGrid(context),
                   ),
-                ),
-        ),
-
-        if (state.fileBrowserVisible && state.selectedItem != null) ...[
-          MouseRegion(
-            cursor: SystemMouseCursors.resizeUpDown,
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
-              child: Container(
-                height: 6,
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(height: 1, color: Colors.black12),
+          ),
+          if (state.fileBrowserVisible && state.selectedItem != null) ...[
+            MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
+                child: Container(
+                  height: 6,
+                  color: Colors.transparent,
+                  child: Center(
+                    child: Container(height: 1, color: Colors.black12),
+                  ),
                 ),
               ),
             ),
-          ),
-          FileBrowserPanel(
-            item: state.selectedItem!,
-            state: state,
-            height: filePanelHeight,
-          ),
+            FileBrowserPanel(
+              item: state.selectedItem!,
+              state: state,
+              height: filePanelHeight,
+            ),
+          ],
         ],
-      ],
       ),
     );
   }
 
-  void _showContextMenu(BuildContext context, LibraryItem tappedItem, Offset globalPos) {
+  // 把 LayoutBuilder + GridView 抽成独立方法,build 方法本身保持清晰,
+  // 也方便我们单独核对这一块的括号是否配对正确
+  Widget _buildGrid(BuildContext context) {
+    const maxCardWidth = 200.0;
+    const spacing = 10.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 算出这一行能放几列(逻辑和之前一样,这部分本身没有问题)
+        final crossAxisCount = (constraints.maxWidth / (maxCardWidth + spacing))
+            .floor()
+            .clamp(1, 999);
+        // 算出每张卡片实际应该多宽,让这一行卡片正好撑满,没有留白
+        final cardWidth =
+            (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+                crossAxisCount;
+
+        return SingleChildScrollView(
+          child: SizedBox(
+            width: constraints.maxWidth, // 用 LayoutBuilder 给的精确宽度撑满,而不是 double.infinity
+            child: Wrap(
+              alignment: WrapAlignment.start,
+              spacing: spacing,
+              runSpacing: spacing,
+              children: items.map((item) {
+                return SizedBox(
+                  width: cardWidth,
+                  child: ItemCard(
+                    item: item,
+                    isSelected: state.isItemSelected(item.path),
+                    onTap: () => state.setSelectedItem(item),
+                    onCtrlTap: () => state.toggleItemSelection(item),
+                    onShiftTap: () => state.selectRange(item, items),
+                    onRightClick: (globalPos) =>
+                        _showContextMenu(context, item, globalPos),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showContextMenu(
+      BuildContext context, LibraryItem tappedItem, Offset globalPos) {
     state.selectItemForContextMenu(tappedItem);
     final selectedItems = state.selectedItems;
     final isBatch = selectedItems.length > 1;
@@ -129,7 +130,6 @@ class GridArea extends StatelessWidget {
       globalPos.dx + 1,
       globalPos.dy + 1,
     );
-    // 其余不变...
 
     showMenu<String>(
       context: context,
@@ -174,12 +174,6 @@ class GridArea extends StatelessWidget {
   }
 
   void _openInExplorer(String path) {
-    // Windows 下用 explorer /select,"path" 打开并选中目标文件夹
     Process.run('explorer', ['/select,', path]);
-  }
-
-  void _openWithDefault(String path) {
-    // Windows 下 start 命令用默认程序打开文件夹
-    Process.run('explorer', [path]);
   }
 }

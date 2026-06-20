@@ -1,24 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HardwareKeyboard 用于检测 Ctrl 键
+import 'package:flutter/services.dart';
 import '../models/library_item.dart';
 
 class ItemCard extends StatelessWidget {
   final LibraryItem item;
   final bool isSelected;
-  final double imageHeight;  // 新增:图片区域精确高度,由父级算好传入
-  final double textHeight;   // 新增:文字区域精确高度,由父级算好传入
   final VoidCallback onTap;
-  final VoidCallback onCtrlTap;       // Ctrl+点击:多选
-  final VoidCallback onShiftTap; // 新增
-  final void Function(Offset globalPosition) onRightClick;  // 右键:弹出菜单(菜单本身在父级处理)
+  final VoidCallback onCtrlTap;
+  final VoidCallback onShiftTap;
+  final void Function(Offset globalPosition) onRightClick;
 
   const ItemCard({
     super.key,
     required this.item,
     required this.isSelected,
-    required this.imageHeight,
-    required this.textHeight,
     required this.onTap,
     required this.onCtrlTap,
     required this.onShiftTap,
@@ -36,8 +32,6 @@ class ItemCard extends StatelessWidget {
             : BorderSide.none,
       ),
       child: GestureDetector(
-        // onSecondaryTapUp:鼠标右键抬起,details 里有点击位置坐标
-        // 坐标用于在正确位置弹出上下文菜单
         onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
         child: InkWell(
           onTap: () {
@@ -52,16 +46,16 @@ class ItemCard extends StatelessWidget {
             }
           },
           child: Column(
+            mainAxisSize: MainAxisSize.min, // 整张卡片只占用内容实际需要的高度
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                height: imageHeight, // 不再自己用 AspectRatio 计算,完全听从父级传入的精确值
+              // AspectRatio 是 Flutter 内置机制,自己保证不会有任何溢出,
+              // 不再需要我们手动算任何数值
+              AspectRatio(
+                aspectRatio: 3 / 2,
                 child: _buildPreviewImage(),
               ),
-              SizedBox(
-                height: textHeight, // 同上
-                child: _buildInfo(),
-              ),
+              _buildInfo(), // 不再固定高度,让文字内容自己决定需要多高
             ],
           ),
         ),
@@ -88,16 +82,13 @@ class ItemCard extends StatelessWidget {
 
   Widget _buildInfo() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      child: Align(
-        alignment: Alignment.center,
-        child: Text(
-          item.info.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Text(
+        item.info.title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -13,18 +13,18 @@ class CategoryPanel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey.shade50,
-      child: ListView(
-        children: [
-          _buildItem(label: '全部', value: null),
-          const Divider(height: 1),
-          ...categories.map((cat) => _buildItem(label: cat, value: cat)),
-        ],
-      ),
-    );
-  }
+    Widget build(BuildContext context) {
+      return Material(
+        color: Colors.grey.shade50,
+        child: ListView(
+          children: [
+            _buildItem(label: '全部', value: null),
+            const Divider(height: 1),
+            ...categories.map((cat) => _buildItem(label: cat, value: cat)),
+          ],
+        ),
+      );
+    }
 
   Widget _buildItem({required String label, required String? value}) {
     final isSelected = selectedCategory == value;
