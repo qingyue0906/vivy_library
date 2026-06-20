@@ -5,6 +5,7 @@ import 'item_card.dart';
 import 'dart:io';
 import 'file_browser_panel.dart';
 import 'class_nav_bar.dart';
+import 'package:flutter/services.dart';
 
 class GridArea extends StatelessWidget {
   final List<LibraryItem> items;
@@ -29,16 +30,25 @@ class GridArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 顶部漂浮的 class 导航条,放在网格区域内部,即使筛选结果为空也要显示
-        ClassNavBar(state: state),
-
-        // 网格本体,占满剩余空间
-        Expanded(
-          child: items.isEmpty
-              ? const Center(child: Text('没有找到项目'))
-              : Padding(
+    return Focus(
+      autofocus: true, // 网格区域默认获取键盘焦点,这样不用先点一下才能用快捷键
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.keyA &&
+            HardwareKeyboard.instance.isControlPressed) {
+          state.selectAll(items);
+          return KeyEventResult.handled; // 告诉 Flutter 这个按键已经被处理了
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Column(
+        children: [
+          ClassNavBar(state: state),
+          Expanded(
+            child: items.isEmpty
+                ? const Center(child: Text('没有找到项目'))
+                : Padding(
+                    // ...GridView 保持不变...
                   padding: const EdgeInsets.all(12),
                   child: GridView.builder(
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -55,6 +65,7 @@ class GridArea extends StatelessWidget {
                         isSelected: state.isItemSelected(item.path),
                         onTap: () => state.setSelectedItem(item),
                         onCtrlTap: () => state.toggleItemSelection(item),
+                        onShiftTap: () => state.selectRange(item, items), // items 就是当前显示的列表
                         onRightClick: (globalPos) =>
                             _showContextMenu(context, item, globalPos),
                       );
@@ -85,6 +96,7 @@ class GridArea extends StatelessWidget {
           ),
         ],
       ],
+      ),
     );
   }
 

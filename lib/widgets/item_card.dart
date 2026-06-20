@@ -8,6 +8,7 @@ class ItemCard extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onCtrlTap;       // Ctrl+点击:多选
+  final VoidCallback onShiftTap; // 新增
   final void Function(Offset globalPosition) onRightClick;  // 右键:弹出菜单(菜单本身在父级处理)
 
   const ItemCard({
@@ -16,6 +17,7 @@ class ItemCard extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     required this.onCtrlTap,
+    required this.onShiftTap,
     required this.onRightClick,
   });
 
@@ -35,9 +37,11 @@ class ItemCard extends StatelessWidget {
         onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
         child: InkWell(
           onTap: () {
-            // 检测 Ctrl 键是否按下
             final isCtrl = HardwareKeyboard.instance.isControlPressed;
-            if (isCtrl) {
+            final isShift = HardwareKeyboard.instance.isShiftPressed;
+            if (isShift) {
+              onShiftTap();
+            } else if (isCtrl) {
               onCtrlTap();
             } else {
               onTap();

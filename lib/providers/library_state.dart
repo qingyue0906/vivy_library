@@ -29,6 +29,7 @@ class LibraryState extends ChangeNotifier {
   // 多选用 Set 存路径而不是存对象引用,原因和 isSelected 判断一样:
   // 路径是稳定的唯一标识符,不依赖对象引用相等。
   final Set<String> _selectedPaths = {};
+  String? _selectionAnchorPath; // Shift+点击区间选择的起点
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -186,6 +187,7 @@ class LibraryState extends ChangeNotifier {
     _selectedPaths
       ..clear()
       ..add(item.path);
+    _selectionAnchorPath = item.path; // 新增:更新锚点
     _fileBrowserVisible = true; // 选中时自动展开
     notifyListeners();
   }
@@ -199,7 +201,46 @@ class LibraryState extends ChangeNotifier {
     } else {
       _selectedPaths.add(item.path);
       _selectedItem = item; // 详情面板显示最后一个 Ctrl+点击的项
+      _selectionAnchorPath = item.path; // 新增:更新锚点
     }
+    notifyListeners();
+  }
+
+  /// Shift+点击:从锚点(上一次单击的项)到这次点击的项之间,
+  /// 按 currentList 给出的显示顺序整段选中。
+  /// currentList 由调用方传入当前网格实际显示的列表(已过滤排序后的),
+  /// 因为"区间"的含义依赖于用户当前看到的顺序,不是全量数据的顺序。
+  void selectRange(LibraryItem item, List<LibraryItem> currentList) {
+    if (_selectionAnchorPath == null) {
+      // 没有锚点(比如这是第一次操作就直接 Shift+点),退化成单选
+      setSelectedItem(item);
+      return;
+    }
+
+    final anchorIndex =
+        currentList.indexWhere((e) => e.path == _selectionAnchorPath);
+    final targetIndex = currentList.indexWhere((e) => e.path == item.path);
+    if (anchorIndex == -1 || targetIndex == -1) {
+      setSelectedItem(item);
+      return;
+    }
+
+    final start = anchorIndex < targetIndex ? anchorIndex : targetIndex;
+    final end = anchorIndex < targetIndex ? targetIndex : anchorIndex;
+
+    _selectedPaths
+      ..clear()
+      ..addAll(currentList.sublist(start, end + 1).map((e) => e.path));
+    _selectedItem = item;
+    notifyListeners();
+  }
+
+  /// Ctrl+A:全选当前网格显示的所有项
+  void selectAll(List<LibraryItem> currentList) {
+    _selectedPaths
+      ..clear()
+      ..addAll(currentList.map((e) => e.path));
+    _selectedItem = currentList.isNotEmpty ? currentList.last : null;
     notifyListeners();
   }
 
