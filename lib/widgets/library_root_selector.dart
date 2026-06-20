@@ -22,97 +22,65 @@ class LibraryRootSelector extends StatefulWidget {
 }
 
 class _LibraryRootSelectorState extends State<LibraryRootSelector> {
-  // LayerLink 是锚点和浮层之间"位置同步"的纽带,两边必须用同一个实例
-  final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _overlayEntry;
-
-  @override
-  void dispose() {
-    _removeOverlay(); // widget 销毁时记得清理浮层,避免残留
-    super.dispose();
-  }
-
-  void _toggleOverlay() {
-    if (_overlayEntry != null) {
-      _removeOverlay();
-    } else {
-      _showOverlay();
-    }
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _showOverlay() {
-    final overlay = Overlay.of(context);
-    _overlayEntry = OverlayEntry(
-      builder: (context) => _buildOverlayContent(),
-    );
-    overlay.insert(_overlayEntry!);
-  }
-
-  Widget _buildOverlayContent() {
-    return Stack(
-      children: [
-        // 一个铺满全屏的透明层,点击浮层以外的区域时关闭浮层,
-        // 这是下拉菜单/选择器类组件的标准交互:点外面自动收起
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: _removeOverlay,
-            child: Container(color: Colors.transparent),
+  void _showPanel() {
+    showGeneralDialog(
+      context: context,
+      barrierLabel: '资源库选择器',
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.05), // 很淡的遮罩,不会让背景明显变暗
+      transitionDuration: const Duration(milliseconds: 120),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        // 用 Align 把面板固定显示在屏幕左上区域,
+        // 大致对应资源库按钮在左侧栏顶部的位置,
+        // 不再追踪按钮的精确实时坐标,换取稳定性
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 100, left: 12),
+            child: _LibraryRootPanel(
+              currentPath: widget.currentPath,
+              onSelect: (path) {
+                widget.onRootSelected(path);
+                Navigator.of(context).pop();
+              },
+              onClose: () => Navigator.of(context).pop(),
+            ),
           ),
-        ),
-        // CompositedTransformFollower:真正紧贴锚点出现的浮层内容
-        CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: const Offset(0, 36), // 浮层出现在按钮下方,留出按钮自身高度的间距
-          child: _LibraryRootPanel(
-            currentPath: widget.currentPath,
-            onSelect: (path) {
-              widget.onRootSelected(path);
-              _removeOverlay();
-            },
-            onClose: _removeOverlay,
-          ),
-        ),
-      ],
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: InkWell(
-        onTap: _toggleOverlay,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: double.infinity, // 撑满父级给的宽度,不管父级多宽多窄都适配
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.video_library, size: 15),
-              const SizedBox(width: 6),
-              Expanded( // 改用 Expanded,而不是写死 maxWidth
-                child: Text(
-                  _displayLabel(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
+    return InkWell(
+      onTap: _showPanel,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.video_library, size: 15),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _displayLabel(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(width: 4),
-              const Icon(Icons.arrow_drop_down, size: 16),
-            ],
-          ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, size: 16),
+          ],
         ),
       ),
     );
@@ -121,7 +89,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   String _displayLabel() {
     if (widget.currentPath.isEmpty) return '选择资源库';
     final segments = widget.currentPath.replaceAll('\\', '/').split('/');
-    return segments.last; // 显示路径最后一段作为简短标签
+    return segments.last;
   }
 }
 
@@ -147,7 +115,9 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
 
   List<LibraryRoot> _allRoots = [];
   bool _isLoading = true;
-  String? _expandedPath; // 当前哪一项展开了菜单,null 表示都没展开
+  String? _expandedPath;
+  String? _renamingPath; // 当前正在原地重命名的项,null 表示没有
+  final TextEditingController _renameCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -158,6 +128,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _renameCtrl.dispose(); // 新增
     super.dispose();
   }
 
@@ -199,39 +170,24 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
     setState(() => _allRoots = updated);
   }
 
-  Future<void> _renameRoot(LibraryRoot root) async {
-    setState(() => _expandedPath = null);
-    final ctrl = TextEditingController(text: root.name);
+  void _startRename(LibraryRoot root) {
+    setState(() {
+      _expandedPath = null; // 进入重命名时,收起菜单
+      _renamingPath = root.path;
+      _renameCtrl.text = root.name;
+    });
+  }
 
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('命名资源库', style: TextStyle(fontSize: 15)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: '显示名称',
-            helperText: '仅修改在应用中显示的名称,不会重命名实际文件夹',
-            helperMaxLines: 2,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, ctrl.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
+  void _cancelRename() {
+    setState(() => _renamingPath = null);
+  }
 
-    if (newName == null || newName.isEmpty) return;
+  Future<void> _confirmRename(LibraryRoot root) async {
+    final newName = _renameCtrl.text.trim();
+    setState(() => _renamingPath = null);
+
+    if (newName.isEmpty || newName == root.name) return;
+
     final updated = await _service.renameRoot(root.path, newName);
     setState(() => _allRoots = updated);
   }
@@ -303,13 +259,15 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                                       root: root,
                                       isCurrent: root.path == widget.currentPath,
                                       isExpanded: _expandedPath == root.path,
+                                      isRenaming: _renamingPath == root.path,
+                                      renameController: _renameCtrl,
                                       onSelect: () => widget.onSelect(root.path),
-                                      onToggleExpanded: () =>
-                                          _toggleExpanded(root.path),
-                                      onRename: () => _renameRoot(root),
+                                      onToggleExpanded: () => _toggleExpanded(root.path),
+                                      onStartRename: () => _startRename(root),
+                                      onConfirmRename: () => _confirmRename(root),
+                                      onCancelRename: _cancelRename,
                                       onRemove: () => _removeRoot(root),
-                                      onOpenExplorer: () => Process.run(
-                                          'explorer', [root.path]),
+                                      onOpenExplorer: () => Process.run('explorer', [root.path]),
                                     ))
                                 .toList(),
                           ),
@@ -343,9 +301,13 @@ class _RootListTile extends StatelessWidget {
   final LibraryRoot root;
   final bool isCurrent;
   final bool isExpanded;
+  final bool isRenaming;
+  final TextEditingController renameController;
   final VoidCallback onSelect;
   final VoidCallback onToggleExpanded;
-  final VoidCallback onRename;
+  final VoidCallback onStartRename;
+  final VoidCallback onConfirmRename;
+  final VoidCallback onCancelRename;
   final VoidCallback onRemove;
   final VoidCallback onOpenExplorer;
 
@@ -354,68 +316,125 @@ class _RootListTile extends StatelessWidget {
     required this.root,
     required this.isCurrent,
     required this.isExpanded,
+    required this.isRenaming,
+    required this.renameController,
     required this.onSelect,
     required this.onToggleExpanded,
-    required this.onRename,
+    required this.onStartRename,
+    required this.onConfirmRename,
+    required this.onCancelRename,
     required this.onRemove,
     required this.onOpenExplorer,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 不再需要 StatefulWidget 了,展开状态完全由父级传入,
-    // 这个组件本身变成纯粹的"无状态展示",更简单也更不容易出问题
-    return Column(
-      children: [
-        ListTile(
-          dense: true,
-          selected: isCurrent,
-          selectedTileColor: Colors.blue.shade50,
-          leading: const Icon(Icons.folder, size: 16),
-          title: Text(root.name, style: const TextStyle(fontSize: 12.5)),
-          subtitle: Text(
-            root.path,
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onTap: onSelect,
-          trailing: GestureDetector(
-            onTap: onToggleExpanded,
-            child: Icon(
-              isExpanded ? Icons.expand_less : Icons.more_vert,
-              size: 16,
+      return Column(
+        children: [
+          ListTile(
+            dense: true,
+            selected: isCurrent,
+            selectedTileColor: Colors.blue.shade50,
+            leading: const Icon(Icons.folder, size: 16),
+            title: Text(root.name, style: const TextStyle(fontSize: 12.5)),
+            subtitle: Text(
+              root.path,
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onTap: onSelect,
+            trailing: InkWell(
+              onTap: onToggleExpanded,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  isExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                ),
+              ),
             ),
           ),
-        ),
-        // 展开的菜单内容,原地占用列表空间,跟随列表一起滚动/回收,
-        // 没有任何独立的浮层生命周期需要管理
-        if (isExpanded)
-          Container(
-            color: Colors.grey.shade50,
-            child: Column(
-              children: [
-                _menuItem(
-                  icon: Icons.drive_file_rename_outline,
-                  label: '命名资源库',
-                  onTap: onRename,
-                ),
-                Divider(height: 1, color: Colors.grey.shade200),
-                _menuItem(
-                  icon: Icons.folder_open,
-                  label: '在资源管理器中打开',
-                  onTap: onOpenExplorer,
-                ),
-                _menuItem(
-                  icon: Icons.delete_outline,
-                  label: '从列表中删除',
-                  onTap: onRemove,
-                  isDestructive: true,
-                ),
-              ],
+
+          // AnimatedSize 包裹这块会动态出现/消失的内容,
+          // 让高度变化平滑过渡,避免单帧内的尺寸跳变冲击外层 Follower 的布局计算
+          AnimatedSize(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: isRenaming
+                ? _buildRenameRow()
+                : (isExpanded ? _buildMenu() : const SizedBox(width: double.infinity)),
+          ),
+        ],
+      );
+    }
+
+  Widget _buildRenameRow() {
+    return Container(
+      color: Colors.grey.shade50,
+      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: renameController,
+              autofocus: true,
+              style: const TextStyle(fontSize: 12.5),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '资源库显示名称',
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onSubmitted: (_) => onConfirmRename(),
             ),
           ),
-      ],
+          IconButton(
+            icon: const Icon(Icons.check, size: 16, color: Colors.green),
+            onPressed: onConfirmRename,
+            tooltip: '保存',
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+            onPressed: onCancelRename,
+            tooltip: '取消',
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenu() {
+    return Container(
+      color: Colors.grey.shade50,
+      child: Column(
+        children: [
+          _menuItem(
+            icon: Icons.drive_file_rename_outline,
+            label: '命名资源库',
+            onTap: onStartRename,
+          ),
+          Divider(height: 1, color: Colors.grey.shade200),
+          _menuItem(
+            icon: Icons.folder_open,
+            label: '在资源管理器中打开',
+            onTap: onOpenExplorer,
+          ),
+          _menuItem(
+            icon: Icons.delete_outline,
+            label: '从列表中删除',
+            onTap: onRemove,
+            isDestructive: true,
+          ),
+        ],
+      ),
     );
   }
 
