@@ -44,6 +44,17 @@ class LibraryRootService {
     return current;
   }
 
+  /// 更新某个资源库的显示名称(不影响实际文件夹路径,纯粹是 App 内的别名)
+  Future<List<LibraryRoot>> renameRoot(String path, String newName) async {
+    final current = await loadAll();
+    final index = current.indexWhere((e) => e.path == path);
+    if (index != -1) {
+      current[index] = LibraryRoot(name: newName, path: path);
+      await saveAll(current);
+    }
+    return current;
+  }
+
   /// 记住"上次使用的资源库路径",下次启动应用直接用它,
   /// 不需要每次都重新选择
   Future<void> setCurrentRootPath(String path) async {

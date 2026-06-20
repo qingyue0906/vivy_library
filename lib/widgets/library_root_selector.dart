@@ -85,25 +85,23 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
 
   @override
   Widget build(BuildContext context) {
-    // CompositedTransformTarget 包住按钮本身,作为浮层定位的锚点
     return CompositedTransformTarget(
       link: _layerLink,
       child: InkWell(
         onTap: _toggleOverlay,
         borderRadius: BorderRadius.circular(6),
         child: Container(
+          width: double.infinity, // 撑满父级给的宽度,不管父级多宽多窄都适配
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.video_library, size: 15),
               const SizedBox(width: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 140),
+              Expanded( // 改用 Expanded,而不是写死 maxWidth
                 child: Text(
                   _displayLabel(),
                   maxLines: 1,
@@ -201,13 +199,83 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
     setState(() => _allRoots = updated);
   }
 
-  void _showItemMenu(BuildContext context, LibraryRoot root, Offset globalPos) {
-    showMenu<String>(
+  Future<void> _renameRoot(LibraryRoot root) async {
+    final ctrl = TextEditingController(text: root.name);
+
+    final newName = await showDialog<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-          globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1),
-      constraints: const BoxConstraints(minWidth: 140),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('命名资源库', style: TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: '显示名称',
+            helperText: '仅修改在应用中显示的名称,不会重命名实际文件夹',
+            helperMaxLines: 2,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, ctrl.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName == null || newName.isEmpty) return;
+
+    final updated = await _service.renameRoot(root.path, newName);
+    setState(() => _allRoots = updated);
+  }
+
+  void _showItemMenuAtWidget(BuildContext iconContext, LibraryRoot root) {
+    // 拿到这个"more"图标自己的渲染框,精确得到它在屏幕上的实际位置和尺寸
+    final iconBox = iconContext.findRenderObject() as RenderBox;
+    final iconPosition = iconBox.localToGlobal(Offset.zero);
+    final iconSize = iconBox.size;
+
+    // 找到当前 Navigator 的整体范围作为参照系
+    final overlayBox =
+        Navigator.of(iconContext).overlay!.context.findRenderObject()
+            as RenderBox;
+
+    showMenu<String>(
+      context: iconContext,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(
+          iconPosition.dx,
+          // 关键:用图标顶部(而不是底部)作为矩形的起点,
+          // 这样 showMenu 计算"向上还是向下展开"时,
+          // 会把这个矩形当成菜单应该贴着出现的参照位置,
+          // 配合矩形本身朝上的偏移,更倾向于向上弹出
+          iconPosition.dy - 200, // 往上预留 200 的"虚拟空间",引导菜单向上展开
+          iconSize.width,
+          iconSize.height,
+        ),
+        Offset.zero & overlayBox.size,
+      ),
+      constraints: const BoxConstraints(minWidth: 150),
       items: const [
+        PopupMenuItem(
+          value: 'rename',
+          height: 32,
+          child: Row(
+            children: [
+              Icon(Icons.drive_file_rename_outline, size: 14),
+              SizedBox(width: 8),
+              Text('命名资源库', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        PopupMenuDivider(),
         PopupMenuItem(
           value: 'open_explorer',
           height: 32,
@@ -233,12 +301,11 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
         ),
       ],
     ).then((value) {
-      if (value == 'remove') {
+      if (value == 'rename') {
+        _renameRoot(root);
+      } else if (value == 'remove') {
         _removeRoot(root);
       } else if (value == 'open_explorer') {
-        // 用 Process 打开资源管理器到该路径
-        // 这里复用之前已经熟悉的 dart:io Process 调用
-        // ignore: discarded_futures
         Process.run('explorer', [root.path]);
       }
     });
@@ -319,10 +386,13 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 onTap: () => widget.onSelect(root.path),
-                                trailing: GestureDetector(
-                                  onTapUp: (details) => _showItemMenu(
-                                      context, root, details.globalPosition),
-                                  child: const Icon(Icons.more_vert, size: 16),
+                                trailing: Builder(
+                                  builder: (iconContext) {
+                                    return GestureDetector(
+                                      onTap: () => _showItemMenuAtWidget(iconContext, root),
+                                      child: const Icon(Icons.more_vert, size: 16),
+                                    );
+                                  },
                                 ),
                               );
                             },

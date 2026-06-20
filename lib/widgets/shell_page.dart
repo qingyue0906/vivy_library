@@ -134,7 +134,7 @@ class _ShellPageState extends State<ShellPage> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                color: Colors.blue.shade50,
+                color: Colors.grey.shade50, // 改成跟 CategoryPanel 一致的颜色
                 child: LibraryRootSelector(
                   currentPath: _state.currentRootPath,
                   onRootSelected: _onRootSelected,
