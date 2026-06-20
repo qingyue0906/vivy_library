@@ -302,42 +302,6 @@ class FileBrowserPanel extends StatelessWidget {
     }
   }
 
-  /// 根据文件扩展名返回对应图标,对应原版 QFileIconProvider 的功能
-  Widget _buildFileIcon(String fileName) {
-    final ext = fileName.toLowerCase().split('.').last;
-    IconData icon;
-    Color color;
-
-    switch (ext) {
-      case 'mp4' || 'mkv' || 'avi' || 'mov' || 'wmv':
-        icon = Icons.video_file;
-        color = Colors.blue.shade400;
-      case 'mp3' || 'flac' || 'wav' || 'aac' || 'ogg':
-        icon = Icons.audio_file;
-        color = Colors.purple.shade400;
-      case 'pdf':
-        icon = Icons.picture_as_pdf;
-        color = Colors.red.shade400;
-      case 'zip' || 'rar' || '7z' || 'tar' || 'gz':
-        icon = Icons.folder_zip;
-        color = Colors.orange.shade400;
-      case 'exe' || 'msi' || 'bat' || 'sh':
-        icon = Icons.terminal;
-        color = Colors.green.shade400;
-      case 'txt' || 'md' || 'log':
-        icon = Icons.article;
-        color = Colors.grey.shade600;
-      case 'json' || 'xml' || 'yaml' || 'toml':
-        icon = Icons.data_object;
-        color = Colors.teal.shade400;
-      default:
-        icon = Icons.insert_drive_file;
-        color = Colors.grey.shade500;
-    }
-
-    return Icon(icon, size: 36, color: color);
-  }
-
   void _openFile(String path) {
     // Windows 下用 explorer 打开单个文件,会调用系统默认程序
     // 对应原版 os.startfile(filepath)
