@@ -6,6 +6,8 @@ import '../models/library_item.dart';
 class ItemCard extends StatelessWidget {
   final LibraryItem item;
   final bool isSelected;
+  final double imageHeight;  // 新增:图片区域精确高度,由父级算好传入
+  final double textHeight;   // 新增:文字区域精确高度,由父级算好传入
   final VoidCallback onTap;
   final VoidCallback onCtrlTap;       // Ctrl+点击:多选
   final VoidCallback onShiftTap; // 新增
@@ -15,6 +17,8 @@ class ItemCard extends StatelessWidget {
     super.key,
     required this.item,
     required this.isSelected,
+    required this.imageHeight,
+    required this.textHeight,
     required this.onTap,
     required this.onCtrlTap,
     required this.onShiftTap,
@@ -50,8 +54,14 @@ class ItemCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(flex: 65, child: _buildPreviewImage()),
-              Expanded(flex: 35, child: _buildInfo()),
+              SizedBox(
+                height: imageHeight, // 不再自己用 AspectRatio 计算,完全听从父级传入的精确值
+                child: _buildPreviewImage(),
+              ),
+              SizedBox(
+                height: textHeight, // 同上
+                child: _buildInfo(),
+              ),
             ],
           ),
         ),
@@ -78,24 +88,16 @@ class ItemCard extends StatelessWidget {
 
   Widget _buildInfo() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.info.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            item.category,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      child: Align(
+        alignment: Alignment.center,
+        child: Text(
+          item.info.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }

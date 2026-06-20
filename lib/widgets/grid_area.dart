@@ -50,24 +50,42 @@ class GridArea extends StatelessWidget {
                 : Padding(
                     // ...GridView 保持不变...
                   padding: const EdgeInsets.all(12),
-                  child: GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 200,
-                      childAspectRatio: 0.72,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return ItemCard(
-                        item: item,
-                        isSelected: state.isItemSelected(item.path),
-                        onTap: () => state.setSelectedItem(item),
-                        onCtrlTap: () => state.toggleItemSelection(item),
-                        onShiftTap: () => state.selectRange(item, items), // items 就是当前显示的列表
-                        onRightClick: (globalPos) =>
-                            _showContextMenu(context, item, globalPos),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const maxCardWidth = 200.0;
+                      const spacing = 10.0;
+                      const textAreaHeight = 40.0;
+
+                      final crossAxisCount =
+                          (constraints.maxWidth / (maxCardWidth + spacing)).floor().clamp(1, 999);
+                      final cardWidth =
+                          (constraints.maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final imageHeight = cardWidth * 2 / 3;
+                      final cardHeight = imageHeight + textAreaHeight;
+                      final aspectRatio = cardWidth / cardHeight;
+
+                      return GridView.builder(
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: maxCardWidth,
+                          childAspectRatio: aspectRatio,
+                          mainAxisSpacing: spacing,
+                          crossAxisSpacing: spacing,
+                        ),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return ItemCard(
+                            item: item,
+                            isSelected: state.isItemSelected(item.path),
+                            imageHeight: imageHeight,     // 新增
+                            textHeight: textAreaHeight,   // 新增
+                            onTap: () => state.setSelectedItem(item),
+                            onCtrlTap: () => state.toggleItemSelection(item),
+                            onShiftTap: () => state.selectRange(item, items),
+                            onRightClick: (globalPos) =>
+                                _showContextMenu(context, item, globalPos),
+                          );
+                        },
                       );
                     },
                   ),
@@ -116,35 +134,30 @@ class GridArea extends StatelessWidget {
     showMenu<String>(
       context: context,
       position: position,
+      constraints: const BoxConstraints(minWidth: 150),
       items: [
         PopupMenuItem(
           value: 'edit',
+          height: 32,
           child: Row(
             children: [
-              const Icon(Icons.edit, size: 16),
+              const Icon(Icons.edit, size: 14),
               const SizedBox(width: 8),
-              Text(isBatch ? '批量编辑 (${selectedItems.length} 项)' : '编辑'),
+              Text(
+                isBatch ? '批量编辑 (${selectedItems.length} 项)' : '编辑',
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'open_folder',
+          height: 32,
           child: Row(
-            children: [
-              Icon(Icons.folder_open, size: 16),
+            children: const [
+              Icon(Icons.folder_open, size: 14),
               SizedBox(width: 8),
-              Text('在资源管理器中显示'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'open',
-          child: Row(
-            children: [
-              Icon(Icons.launch, size: 16),
-              SizedBox(width: 8),
-              Text('用默认程序打开'),
+              Text('在资源管理器中显示', style: TextStyle(fontSize: 12)),
             ],
           ),
         ),
@@ -156,8 +169,6 @@ class GridArea extends StatelessWidget {
           onEditRequest(selectedItems, isBatch);
         case 'open_folder':
           _openInExplorer(tappedItem.path);
-        case 'open':
-          _openWithDefault(tappedItem.path);
       }
     });
   }

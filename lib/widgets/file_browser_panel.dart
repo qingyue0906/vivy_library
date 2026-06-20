@@ -138,7 +138,7 @@ class FileBrowserPanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 90,  // 每个文件项最大宽度,跟下面 _buildFileItem 里的宽度对应
-        mainAxisExtent: 100,     // 每行固定高度(图标+文字总高度),避免文字行数不同导致错位
+        mainAxisExtent: 108,     // 每行固定高度(图标+文字总高度),避免文字行数不同导致错位
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
       ),
@@ -149,45 +149,10 @@ class FileBrowserPanel extends StatelessWidget {
   }
 
   Widget _buildFileItem(BuildContext context, File file) {
-    final name = _baseName(file.path);
-    final isImage = previewExtensions.any(
-        (ext) => name.toLowerCase().endsWith(ext));
-
-    return GestureDetector(
+    return _FileGridItem(
+      file: file,
       onDoubleTap: () => _openFile(file.path),
-      onSecondaryTapUp: (details) => _showContextMenu(context, file, details.globalPosition),
-      child: Tooltip(
-        message: name, // 悬停时显示完整文件名
-        waitDuration: const Duration(milliseconds: 500), // 悬停 0.5 秒后才弹出
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // 图片文件显示缩略图,其他文件显示对应图标
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                color: Colors.grey.shade100,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: isImage
-                  ? Image.file(file, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          _buildFileIcon(name))
-                  : _buildFileIcon(name),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10),
-            ),
-          ],
-        ),
-      ),
+      onRightClick: (globalPos) => _showContextMenu(context, file, globalPos),
     );
   }
 
@@ -377,6 +342,124 @@ class FileBrowserPanel extends StatelessWidget {
     // Windows 下用 explorer 打开单个文件,会调用系统默认程序
     // 对应原版 os.startfile(filepath)
     Process.run('cmd', ['/c', 'start', '', path]);
+  }
+
+  String _baseName(String fullPath) {
+    return fullPath.replaceAll('\\', '/').split('/').last;
+  }
+}
+
+/// 单个文件图标项,带 hover 高亮反馈,效果对应 Windows 资源管理器
+/// 鼠标悬停在图标上时出现的浅色背景高亮。
+class _FileGridItem extends StatefulWidget {
+  final File file;
+  final VoidCallback onDoubleTap;
+  final void Function(Offset globalPosition) onRightClick;
+
+  const _FileGridItem({
+    required this.file,
+    required this.onDoubleTap,
+    required this.onRightClick,
+  });
+
+  @override
+  State<_FileGridItem> createState() => _FileGridItemState();
+}
+
+class _FileGridItemState extends State<_FileGridItem> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _baseName(widget.file.path);
+    final isImage =
+        previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onDoubleTap: widget.onDoubleTap,
+        onSecondaryTapUp: (details) =>
+            widget.onRightClick(details.globalPosition),
+        child: Tooltip(
+          message: name,
+          waitDuration: const Duration(milliseconds: 500),
+          child: Container(
+            // hover 时出现浅灰背景,效果对应 Windows 资源管理器的图标悬停反馈
+            decoration: BoxDecoration(
+              color: _isHovering
+                  ? Colors.black.withOpacity(0.06)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    color: Colors.grey.shade100,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: isImage
+                      ? Image.file(widget.file,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildFileIcon(name))
+                      : _buildFileIcon(name),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileIcon(String fileName) {
+    final ext = fileName.toLowerCase().split('.').last;
+    IconData icon;
+    Color color;
+
+    switch (ext) {
+      case 'mp4' || 'mkv' || 'avi' || 'mov' || 'wmv':
+        icon = Icons.video_file;
+        color = Colors.blue.shade400;
+      case 'mp3' || 'flac' || 'wav' || 'aac' || 'ogg':
+        icon = Icons.audio_file;
+        color = Colors.purple.shade400;
+      case 'pdf':
+        icon = Icons.picture_as_pdf;
+        color = Colors.red.shade400;
+      case 'zip' || 'rar' || '7z' || 'tar' || 'gz':
+        icon = Icons.folder_zip;
+        color = Colors.orange.shade400;
+      case 'exe' || 'msi' || 'bat' || 'sh':
+        icon = Icons.terminal;
+        color = Colors.green.shade400;
+      case 'txt' || 'md' || 'log':
+        icon = Icons.article;
+        color = Colors.grey.shade600;
+      case 'json' || 'xml' || 'yaml' || 'toml':
+        icon = Icons.data_object;
+        color = Colors.teal.shade400;
+      default:
+        icon = Icons.insert_drive_file;
+        color = Colors.grey.shade500;
+    }
+
+    return Icon(icon, size: 36, color: color);
   }
 
   String _baseName(String fullPath) {
