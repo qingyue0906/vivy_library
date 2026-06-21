@@ -12,6 +12,7 @@ class GridArea extends StatelessWidget {
   final LibraryState state;
   final double filePanelHeight;
   final void Function(double delta) onFilePanelResize;
+  final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
 
   const GridArea({
@@ -20,6 +21,7 @@ class GridArea extends StatelessWidget {
     required this.state,
     required this.filePanelHeight,
     required this.onFilePanelResize,
+    this.onFilePanelResizeEnd,
     required this.onEditRequest,
   });
 
@@ -53,6 +55,7 @@ class GridArea extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
+                onPanEnd: (_) => onFilePanelResizeEnd?.call(),
                 child: Container(
                   height: 6,
                   color: Colors.transparent,

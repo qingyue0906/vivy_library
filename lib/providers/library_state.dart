@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/library_item.dart';
 import '../models/item_info.dart';
 import '../services/library_scanner.dart';
+import '../services/settings_service.dart';
 
 enum SortField { name, size, date }
 enum SortOrder { ascending, descending }
@@ -22,6 +23,9 @@ class LibraryState extends ChangeNotifier {
   SortOrder _sortOrder = SortOrder.ascending;
 
   LibraryItem? _selectedItem;
+
+  // 标记 init() 是否已完成,确保排序持久化只加载一次
+  bool _initialized = false;
 
   bool _fileBrowserVisible = false;
   bool _showSystemFiles = false;
@@ -170,8 +174,19 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 从持久化存储中恢复排序选项,仅在首次加载时执行
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+    final (field, order) = await SettingsService.loadSortPreferences();
+    _sortField = field;
+    _sortOrder = order;
+    notifyListeners();
+  }
+
   void setSortField(SortField field) {
     _sortField = field;
+    SettingsService.saveSortPreferences(_sortField, _sortOrder);
     notifyListeners();
   }
 
@@ -179,6 +194,7 @@ class LibraryState extends ChangeNotifier {
     _sortOrder = _sortOrder == SortOrder.ascending
         ? SortOrder.descending
         : SortOrder.ascending;
+    SettingsService.saveSortPreferences(_sortField, _sortOrder);
     notifyListeners();
   }
 

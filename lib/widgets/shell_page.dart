@@ -6,6 +6,7 @@ import 'grid_area.dart';
 import 'top_bar.dart';
 import 'edit_dialog.dart';
 import '../services/library_root_service.dart';
+import '../services/settings_service.dart';
 import 'library_root_selector.dart';
 import 'dart:io';
 
@@ -17,12 +18,12 @@ class ShellPage extends StatefulWidget {
 }
 
 class _ShellPageState extends State<ShellPage> {
-  double _leftPanelWidth = 200;
-  double _rightPanelWidth = 280;
+  final ValueNotifier<double> _leftPanelWidth = ValueNotifier(200);
+  final ValueNotifier<double> _rightPanelWidth = ValueNotifier(280);
   static const double _minPanelWidth = 120;
   static const double _maxPanelWidth = 400;
 
-  double _filePanelHeight = 165;
+  final ValueNotifier<double> _filePanelHeight = ValueNotifier(165);
   static const double _minFilePanelHeight = 80;
   static const double _maxFilePanelHeight = 400;
 
@@ -37,6 +38,8 @@ class _ShellPageState extends State<ShellPage> {
   void initState() {
     super.initState();
     _initLibrary();
+    _state.init();
+    _initLayout();
   }
 
   /// 启动时尝试恢复上次使用的资源库,没有记录则不自动扫描,
@@ -51,6 +54,13 @@ class _ShellPageState extends State<ShellPage> {
     }
   }
 
+  Future<void> _initLayout() async {
+    final layout = await SettingsService.loadLayout();
+    _leftPanelWidth.value = layout.leftPanelWidth;
+    _rightPanelWidth.value = layout.rightPanelWidth;
+    _filePanelHeight.value = layout.filePanelHeight;
+  }
+
   Future<void> _onRootSelected(String path) async {
     await _rootService.setCurrentRootPath(path); // 记住这次选择,下次启动直接用
     await _state.scan(path);
@@ -58,6 +68,9 @@ class _ShellPageState extends State<ShellPage> {
 
   @override
   void dispose() {
+    _leftPanelWidth.dispose();
+    _rightPanelWidth.dispose();
+    _filePanelHeight.dispose();
     // StatefulWidget 被销毁时释放资源,对应 Python 里 __del__ 或 closeEvent 里的清理。
     // ChangeNotifier 持有监听者列表,不 dispose 会内存泄漏。
     _state.dispose();
@@ -128,63 +141,86 @@ class _ShellPageState extends State<ShellPage> {
   Widget _buildMainArea() {
     return Row(
       children: [
-        SizedBox(
-          width: _leftPanelWidth,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                color: Colors.grey.shade50, // 改成跟 CategoryPanel 一致的颜色
-                child: LibraryRootSelector(
-                  currentPath: _state.currentRootPath,
-                  onRootSelected: _onRootSelected,
-                ),
+        // 左面板：仅尺寸变化时重建
+        ValueListenableBuilder<double>(
+          valueListenable: _leftPanelWidth,
+          builder: (context, width, _) {
+            return SizedBox(
+              width: width,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    color: Colors.grey.shade50,
+                    child: LibraryRootSelector(
+                      currentPath: _state.currentRootPath,
+                      onRootSelected: _onRootSelected,
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: CategoryPanel(
+                      categories: _state.categories,
+                      selectedCategory: _state.selectedCategory,
+                      onCategorySelected: _state.setSelectedCategory,
+                    ),
+                  ),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: CategoryPanel(
-                  categories: _state.categories,
-                  selectedCategory: _state.selectedCategory,
-                  onCategorySelected: _state.setSelectedCategory,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
-        _buildDragHandle(onDrag: _resizeLeftPanel),
+        _buildDragHandle(onDrag: _resizeLeftPanel, onDragEnd: _saveLayout),
+        // 中间网格 + 文件面板：仅文件面板高度变化时重建
         Expanded(
-          child: GridArea(
-            items: _state.filteredAndSortedItems,
-            state: _state,
-            filePanelHeight: _filePanelHeight,      // 新增
-            onFilePanelResize: _resizeFilePanel,    // 新增
-            onEditRequest: (targets, isBatch) {
-              showDialog(
-                context: context,
-                builder: (_) => EditDialog(
-                  targets: targets,
-                  isBatch: isBatch,
-                  state: _state,
-                ),
+          child: ValueListenableBuilder<double>(
+            valueListenable: _filePanelHeight,
+            builder: (context, fileHeight, _) {
+              return GridArea(
+                items: _state.filteredAndSortedItems,
+                state: _state,
+                filePanelHeight: fileHeight,
+                onFilePanelResize: _resizeFilePanel,
+                onFilePanelResizeEnd: _saveLayout,
+                onEditRequest: (targets, isBatch) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => EditDialog(
+                      targets: targets,
+                      isBatch: isBatch,
+                      state: _state,
+                    ),
+                  );
+                },
               );
             },
           ),
         ),
-        _buildDragHandle(onDrag: _resizeRightPanel),
-        SizedBox(
-          width: _rightPanelWidth,
-          child: DetailPanel(item: _state.selectedItem),
+        _buildDragHandle(onDrag: _resizeRightPanel, onDragEnd: _saveLayout),
+        // 右面板：仅尺寸变化时重建
+        ValueListenableBuilder<double>(
+          valueListenable: _rightPanelWidth,
+          builder: (context, width, _) {
+            return SizedBox(
+              width: width,
+              child: DetailPanel(item: _state.selectedItem),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildDragHandle({required void Function(double) onDrag}) {
+  Widget _buildDragHandle({
+    required void Function(double) onDrag,
+    VoidCallback? onDragEnd,
+  }) {
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onPanUpdate: (details) => onDrag(details.delta.dx),
+        onPanEnd: (_) => onDragEnd?.call(),
         child: Container(
           width: 6,
           color: Colors.transparent,
@@ -195,25 +231,25 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _resizeLeftPanel(double dx) {
-    setState(() {
-      _leftPanelWidth =
-          (_leftPanelWidth + dx).clamp(_minPanelWidth, _maxPanelWidth);
-    });
+    _leftPanelWidth.value =
+        (_leftPanelWidth.value + dx).clamp(_minPanelWidth, _maxPanelWidth);
   }
 
   void _resizeRightPanel(double dx) {
-    setState(() {
-      _rightPanelWidth =
-          (_rightPanelWidth - dx).clamp(_minPanelWidth, _maxPanelWidth);
-    });
+    _rightPanelWidth.value =
+        (_rightPanelWidth.value - dx).clamp(_minPanelWidth, _maxPanelWidth);
   }
 
   void _resizeFilePanel(double dy) {
-    setState(() {
-      // 网格的分隔条在文件面板上方,往上拖(dy 为负)应该让面板变高,
-      // 所以这里是减去 dy,跟右侧面板"往左拖变宽"的算法是同一个道理
-      _filePanelHeight =
-          (_filePanelHeight - dy).clamp(_minFilePanelHeight, _maxFilePanelHeight);
-    });
+    _filePanelHeight.value =
+        (_filePanelHeight.value - dy).clamp(_minFilePanelHeight, _maxFilePanelHeight);
+  }
+
+  void _saveLayout() {
+    SettingsService.saveLayout(LayoutState(
+      leftPanelWidth: _leftPanelWidth.value,
+      rightPanelWidth: _rightPanelWidth.value,
+      filePanelHeight: _filePanelHeight.value,
+    ));
   }
 }
