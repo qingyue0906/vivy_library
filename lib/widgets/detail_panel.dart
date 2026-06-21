@@ -6,15 +6,16 @@ import 'compact_level.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
+  final double backgroundOpacity;
 
-  const DetailPanel({super.key, this.item});
+  const DetailPanel({super.key, this.item, this.backgroundOpacity = 1.0});
 
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return Container(
-      color: cs.surfaceContainerLow,
+      color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
       child: item == null ? _buildEmpty(cs, c) : _buildDetail(context, c, item!),
     );
   }

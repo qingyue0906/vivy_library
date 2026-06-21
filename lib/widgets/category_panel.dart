@@ -5,12 +5,14 @@ class CategoryPanel extends StatelessWidget {
   final List<String> categories;
   final String? selectedCategory;
   final void Function(String?) onCategorySelected;
+  final double backgroundOpacity;
 
   const CategoryPanel({
     super.key,
     required this.categories,
     required this.selectedCategory,
     required this.onCategorySelected,
+    this.backgroundOpacity = 1.0,
   });
 
   @override
@@ -18,7 +20,7 @@ class CategoryPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final c = CompactLevel.of(context);
     return Material(
-      color: cs.surfaceContainerLow,
+      color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [

@@ -17,12 +17,16 @@ class ShellPage extends StatefulWidget {
   final void Function(ThemeMode mode) onThemeChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
   final GridSettings gridSettings;
+  final BackgroundSettings backgroundSettings;
+  final void Function(BackgroundSettings settings) onBackgroundChanged;
 
   const ShellPage({
     super.key,
     required this.onThemeChanged,
     required this.onGridSettingsChanged,
     required this.gridSettings,
+    required this.backgroundSettings,
+    required this.onBackgroundChanged,
   });
 
   @override
@@ -85,6 +89,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           libraryRootPath: _state.currentRootPath,
           onThemeChanged: widget.onThemeChanged,
           onGridSettingsChanged: widget.onGridSettingsChanged,
+          backgroundSettings: widget.backgroundSettings,
+          onBackgroundChanged: widget.onBackgroundChanged,
         ),
       ),
     );
@@ -114,17 +120,31 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bg = widget.backgroundSettings;
+    final hasBg = bg.path != null;
     return CompactLevel(
       level: widget.gridSettings.compactLevel,
       child: Scaffold(
-        body: Column(
+        body: Stack(
           children: [
-            _buildTitleBar(cs),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: _state,
-                builder: (context, _) => _buildBody(),
+            if (hasBg)
+              Positioned.fill(
+                child: Image.file(
+                  File(bg.path!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
               ),
+            Column(
+              children: [
+                _buildTitleBar(cs),
+                Expanded(
+                  child: ListenableBuilder(
+                    listenable: _state,
+                    builder: (context, _) => _buildBody(),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -232,6 +252,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           state: _state,
           searchController: _searchController,
           onSettingsTap: _openSettings,
+          backgroundOpacity: widget.backgroundSettings.path != null
+              ? widget.backgroundSettings.middleOpacity
+              : 1.0,
         ),
         Expanded(child: _buildMainArea()),
       ],
@@ -240,6 +263,12 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
 
   Widget _buildMainArea() {
     final cs = Theme.of(context).colorScheme;
+    final bg = widget.backgroundSettings;
+    final hasBg = bg.path != null;
+    final leftAlpha = hasBg ? bg.leftOpacity : 1.0;
+    final middleAlpha = hasBg ? bg.middleOpacity : 1.0;
+    final rightAlpha = hasBg ? bg.rightOpacity : 1.0;
+    final cardAlpha = hasBg ? bg.cardOpacity : 1.0;
     return Row(
       children: [
         ValueListenableBuilder<double>(
@@ -251,7 +280,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(6),
-                    color: cs.surfaceContainerLow,
+                    color: cs.surfaceContainerLow.withValues(alpha: leftAlpha),
                     child: LibraryRootSelector(
                       currentPath: _state.currentRootPath,
                       onRootSelected: _onRootSelected,
@@ -263,6 +292,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       categories: _state.categories,
                       selectedCategory: _state.selectedCategory,
                       onCategorySelected: _state.setSelectedCategory,
+                      backgroundOpacity: leftAlpha,
                     ),
                   ),
                 ],
@@ -292,6 +322,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   );
                 },
                 gridSettings: widget.gridSettings,
+                cardOpacity: cardAlpha,
+                middleOpacity: middleAlpha,
               );
             },
           ),
@@ -302,7 +334,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           builder: (context, width, _) {
             return SizedBox(
               width: width,
-              child: DetailPanel(item: _state.selectedItem),
+              child: DetailPanel(
+                item: _state.selectedItem,
+                backgroundOpacity: rightAlpha,
+              ),
             );
           },
         ),

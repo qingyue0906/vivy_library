@@ -12,12 +12,14 @@ class FileBrowserPanel extends StatelessWidget {
   final LibraryItem item;
   final LibraryState state;
   final double height;
+  final double backgroundOpacity;
 
   const FileBrowserPanel({
     super.key,
     required this.item,
     required this.state,
     required this.height,
+    this.backgroundOpacity = 1.0,
   });
 
   @override
@@ -26,7 +28,7 @@ class FileBrowserPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       height: height,
-      color: cs.surface,
+      color: cs.surface.withValues(alpha: backgroundOpacity),
       child: Column(
         children: [
           _buildHeader(context, c),

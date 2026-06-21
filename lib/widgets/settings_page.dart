@@ -13,12 +13,16 @@ class SettingsPage extends StatefulWidget {
   final String libraryRootPath;
   final void Function(ThemeMode mode) onThemeChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
+  final BackgroundSettings backgroundSettings;
+  final void Function(BackgroundSettings settings) onBackgroundChanged;
 
   const SettingsPage({
     super.key,
     required this.libraryRootPath,
     required this.onThemeChanged,
     required this.onGridSettingsChanged,
+    required this.backgroundSettings,
+    required this.onBackgroundChanged,
   });
 
   @override
@@ -32,11 +36,13 @@ class _SettingsPageState extends State<SettingsPage>
   ThemeMode _themeMode = ThemeMode.system;
   GridSettings _gridSettings = const GridSettings();
   Map<String, List<String>> _presets = {};
+  late BackgroundSettings _bgSettings;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 5, vsync: this);
+    _bgSettings = widget.backgroundSettings;
     _load();
   }
 
@@ -157,7 +163,9 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildThemeTab() {
-    return Padding(
+    final cs = Theme.of(context).colorScheme;
+    final hasBg = _bgSettings.path != null;
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,12 +176,121 @@ class _SettingsPageState extends State<SettingsPage>
           _buildThemeOption('亮色', ThemeMode.light),
           _buildThemeOption('暗色', ThemeMode.dark),
           const SizedBox(height: 20),
-          const Text('自定义颜色', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const Text('自定义背景', style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 8),
-          const Text('（开发中）', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _pickBackgroundImage,
+                icon: const Icon(Icons.image, size: 16),
+                label: const Text('选择背景', style: TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(width: 8),
+              if (hasBg) ...[
+                OutlinedButton.icon(
+                  onPressed: _clearBackground,
+                  icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade700),
+                  label: Text('清除背景',
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                ),
+              ],
+            ],
+          ),
+          if (hasBg) ...[
+            const SizedBox(height: 4),
+            Text(
+              _bgSettings.path!.replaceAll('\\', '/').split('/').last,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ],
+          const SizedBox(height: 16),
+          const Text('面板不透明度', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 8),
+          _buildOpacitySlider('左面板', _bgSettings.leftOpacity, hasBg, (v) {
+            _bgSettings = _bgSettings.copyWith(leftOpacity: v);
+            _saveBackground();
+          }),
+          _buildOpacitySlider('中间区域', _bgSettings.middleOpacity, hasBg, (v) {
+            _bgSettings = _bgSettings.copyWith(middleOpacity: v);
+            _saveBackground();
+          }),
+          _buildOpacitySlider('右面板', _bgSettings.rightOpacity, hasBg, (v) {
+            _bgSettings = _bgSettings.copyWith(rightOpacity: v);
+            _saveBackground();
+          }),
+          _buildOpacitySlider('卡片', _bgSettings.cardOpacity, hasBg, (v) {
+            _bgSettings = _bgSettings.copyWith(cardOpacity: v);
+            _saveBackground();
+          }),
         ],
       ),
     );
+  }
+
+  Widget _buildOpacitySlider(String label, double value, bool enabled, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 70,
+              child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            ),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                ),
+                child: Slider(
+                  value: value,
+                  min: 0.0,
+                  max: 1.0,
+                  divisions: 10,
+                  onChanged: enabled
+                      ? (v) {
+                          setState(() => onChanged(v));
+                        }
+                      : null,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 40,
+              child: Text('${(value * 100).round()}%',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickBackgroundImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      dialogTitle: '选择背景图片',
+    );
+    if (result == null || result.files.single.path == null) return;
+    final path = result.files.single.path!;
+    setState(() {
+      _bgSettings = _bgSettings.copyWith(path: path);
+    });
+    _saveBackground();
+  }
+
+  void _clearBackground() {
+    setState(() {
+      _bgSettings = _bgSettings.copyWith(clearPath: true);
+    });
+    _saveBackground();
+  }
+
+  void _saveBackground() {
+    SettingsService.saveBackgroundSettings(_bgSettings);
+    widget.onBackgroundChanged(_bgSettings);
   }
 
   Widget _buildUiTab() {

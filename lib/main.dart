@@ -51,6 +51,7 @@ class VivyApp extends StatefulWidget {
 class _VivyAppState extends State<VivyApp> {
   late ThemeMode _themeMode;
   late GridSettings _gridSettings;
+  BackgroundSettings _backgroundSettings = const BackgroundSettings();
 
   @override
   void initState() {
@@ -58,11 +59,17 @@ class _VivyAppState extends State<VivyApp> {
     _themeMode = widget.initialThemeMode;
     _gridSettings = const GridSettings();
     _loadGridSettings();
+    _loadBackgroundSettings();
   }
 
   Future<void> _loadGridSettings() async {
     final gs = await SettingsService.loadGridSettings();
     setState(() => _gridSettings = gs);
+  }
+
+  Future<void> _loadBackgroundSettings() async {
+    final bg = await SettingsService.loadBackgroundSettings();
+    setState(() => _backgroundSettings = bg);
   }
 
   void _onThemeChanged(ThemeMode mode) {
@@ -71,6 +78,10 @@ class _VivyAppState extends State<VivyApp> {
 
   void _onGridSettingsChanged(GridSettings settings) {
     setState(() => _gridSettings = settings);
+  }
+
+  void _onBackgroundChanged(BackgroundSettings settings) {
+    setState(() => _backgroundSettings = settings);
   }
 
   // VS Code 暗色配色
@@ -114,6 +125,8 @@ class _VivyAppState extends State<VivyApp> {
         onThemeChanged: _onThemeChanged,
         onGridSettingsChanged: _onGridSettingsChanged,
         gridSettings: _gridSettings,
+        backgroundSettings: _backgroundSettings,
+        onBackgroundChanged: _onBackgroundChanged,
       ),
     );
   }

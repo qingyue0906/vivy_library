@@ -17,6 +17,8 @@ class GridArea extends StatelessWidget {
   final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
   final GridSettings gridSettings;
+  final double cardOpacity;
+  final double middleOpacity;
 
   const GridArea({
     super.key,
@@ -27,6 +29,8 @@ class GridArea extends StatelessWidget {
     this.onFilePanelResizeEnd,
     required this.onEditRequest,
     required this.gridSettings,
+    this.cardOpacity = 1.0,
+    this.middleOpacity = 1.0,
   });
 
   @override
@@ -71,6 +75,7 @@ class GridArea extends StatelessWidget {
               item: state.selectedItem!,
               state: state,
               height: filePanelHeight,
+              backgroundOpacity: middleOpacity,
             ),
           ],
         ],
@@ -126,6 +131,7 @@ class GridArea extends StatelessWidget {
                     onShiftTap: () => state.selectRange(item, items),
                     onRightClick: (globalPos) =>
                         _showContextMenu(context, item, globalPos),
+                    backgroundOpacity: cardOpacity,
                   ),
                 );
               }).toList(),

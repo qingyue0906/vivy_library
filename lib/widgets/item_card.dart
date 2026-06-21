@@ -12,6 +12,7 @@ class ItemCard extends StatelessWidget {
   final VoidCallback onCtrlTap;
   final VoidCallback onShiftTap;
   final void Function(Offset globalPosition) onRightClick;
+  final double backgroundOpacity;
 
   const ItemCard({
     super.key,
@@ -22,6 +23,7 @@ class ItemCard extends StatelessWidget {
     required this.onCtrlTap,
     required this.onShiftTap,
     required this.onRightClick,
+    this.backgroundOpacity = 1.0,
   });
 
   @override
@@ -30,7 +32,7 @@ class ItemCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
-      color: cs.surface,
+      color: cs.surface.withValues(alpha: backgroundOpacity),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4 * c),

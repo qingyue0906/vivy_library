@@ -6,12 +6,14 @@ class TopBar extends StatelessWidget {
   final LibraryState state;
   final TextEditingController searchController;
   final VoidCallback onSettingsTap;
+  final double backgroundOpacity;
 
   const TopBar({
     super.key,
     required this.state,
     required this.searchController,
     required this.onSettingsTap,
+    this.backgroundOpacity = 1.0,
   });
 
   @override
@@ -20,7 +22,7 @@ class TopBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       height: 32 * c,
-      color: cs.surfaceContainerLow,
+      color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
       padding: EdgeInsets.symmetric(horizontal: 8 * c),
       child: Row(
         children: [

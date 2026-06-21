@@ -96,6 +96,55 @@ class GridSettings {
       );
 }
 
+class BackgroundSettings {
+  final String? path;
+  final double leftOpacity;
+  final double middleOpacity;
+  final double rightOpacity;
+  final double cardOpacity;
+
+  const BackgroundSettings({
+    this.path,
+    this.leftOpacity = 1.0,
+    this.middleOpacity = 1.0,
+    this.rightOpacity = 1.0,
+    this.cardOpacity = 1.0,
+  });
+
+  BackgroundSettings copyWith({
+    String? path,
+    bool clearPath = false,
+    double? leftOpacity,
+    double? middleOpacity,
+    double? rightOpacity,
+    double? cardOpacity,
+  }) {
+    return BackgroundSettings(
+      path: clearPath ? null : (path ?? this.path),
+      leftOpacity: leftOpacity ?? this.leftOpacity,
+      middleOpacity: middleOpacity ?? this.middleOpacity,
+      rightOpacity: rightOpacity ?? this.rightOpacity,
+      cardOpacity: cardOpacity ?? this.cardOpacity,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'path': path,
+        'leftOpacity': leftOpacity,
+        'middleOpacity': middleOpacity,
+        'rightOpacity': rightOpacity,
+        'cardOpacity': cardOpacity,
+      };
+
+  factory BackgroundSettings.fromMap(Map<String, dynamic> map) => BackgroundSettings(
+        path: map['path'] as String?,
+        leftOpacity: (map['leftOpacity'] ?? 1.0).toDouble(),
+        middleOpacity: (map['middleOpacity'] ?? 1.0).toDouble(),
+        rightOpacity: (map['rightOpacity'] ?? 1.0).toDouble(),
+        cardOpacity: (map['cardOpacity'] ?? 1.0).toDouble(),
+      );
+}
+
 class SettingsService {
   static const _sortFieldKey = 'sort_field';
   static const _sortOrderKey = 'sort_order';
@@ -104,6 +153,7 @@ class SettingsService {
   static const _windowPrefix = 'window_';
   static const _themeKey = 'theme_mode';
   static const _gridPrefix = 'grid_';
+  static const _bgPrefix = 'bg_';
 
   static Future<(SortField, SortOrder)> loadSortPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -206,5 +256,31 @@ class SettingsService {
         await prefs.setString('$_gridPrefix${entry.key}', v);
       }
     }
+  }
+
+  // --- Background settings ---
+
+  static Future<BackgroundSettings> loadBackgroundSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    return BackgroundSettings(
+      path: prefs.getString('${_bgPrefix}path'),
+      leftOpacity: prefs.getDouble('${_bgPrefix}leftOpacity') ?? 1.0,
+      middleOpacity: prefs.getDouble('${_bgPrefix}middleOpacity') ?? 1.0,
+      rightOpacity: prefs.getDouble('${_bgPrefix}rightOpacity') ?? 1.0,
+      cardOpacity: prefs.getDouble('${_bgPrefix}cardOpacity') ?? 1.0,
+    );
+  }
+
+  static Future<void> saveBackgroundSettings(BackgroundSettings settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (settings.path != null) {
+      await prefs.setString('${_bgPrefix}path', settings.path!);
+    } else {
+      await prefs.remove('${_bgPrefix}path');
+    }
+    await prefs.setDouble('${_bgPrefix}leftOpacity', settings.leftOpacity);
+    await prefs.setDouble('${_bgPrefix}middleOpacity', settings.middleOpacity);
+    await prefs.setDouble('${_bgPrefix}rightOpacity', settings.rightOpacity);
+    await prefs.setDouble('${_bgPrefix}cardOpacity', settings.cardOpacity);
   }
 }
