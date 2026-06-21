@@ -75,6 +75,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
                 _displayLabel(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
               ),
             ),
