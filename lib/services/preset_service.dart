@@ -1,8 +1,10 @@
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 
 class PresetService {
-  static const _storageKey = 'edit_presets';
+  static const _fileName = 'presets.json';
+
+  static String _filePath(String libraryRoot) => '$libraryRoot/$_fileName';
 
   static const Map<String, List<String>> defaults = {
     'creator': ['未知', 'Accelerator'],
@@ -12,20 +14,20 @@ class PresetService {
     'tags': ['推荐', '最新', '经典', '视觉 lossy', 'AVIF'],
   };
 
-  static Future<Map<String, List<String>>> loadAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(_storageKey);
-    if (jsonStr == null) return Map.from(defaults);
+  static Future<Map<String, List<String>>> loadAll(String libraryRoot) async {
+    final file = File(_filePath(libraryRoot));
+    if (!file.existsSync()) return Map.from(defaults);
     try {
-      final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final decoded = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       return decoded.map((k, v) => MapEntry(k, List<String>.from(v as List)));
     } catch (_) {
       return Map.from(defaults);
     }
   }
 
-  static Future<void> saveAll(Map<String, List<String>> presets) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, jsonEncode(presets));
+  static Future<void> saveAll(String libraryRoot, Map<String, List<String>> presets) async {
+    final file = File(_filePath(libraryRoot));
+    await file.create(recursive: true);
+    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(presets));
   }
 }

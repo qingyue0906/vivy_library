@@ -82,6 +82,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       context,
       MaterialPageRoute(
         builder: (_) => SettingsPage(
+          libraryRootPath: _state.currentRootPath,
           onThemeChanged: widget.onThemeChanged,
           onGridSettingsChanged: widget.onGridSettingsChanged,
         ),

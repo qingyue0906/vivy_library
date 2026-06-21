@@ -10,11 +10,13 @@ import '../services/settings_service.dart';
 import '../services/preset_service.dart';
 
 class SettingsPage extends StatefulWidget {
+  final String libraryRootPath;
   final void Function(ThemeMode mode) onThemeChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
 
   const SettingsPage({
     super.key,
+    required this.libraryRootPath,
     required this.onThemeChanged,
     required this.onGridSettingsChanged,
   });
@@ -41,7 +43,7 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _load() async {
     final theme = await SettingsService.loadThemeMode();
     final grid = await SettingsService.loadGridSettings();
-    final presets = await PresetService.loadAll();
+    final presets = await PresetService.loadAll(widget.libraryRootPath);
     setState(() {
       _themeMode = theme;
       _gridSettings = grid;
@@ -497,7 +499,7 @@ class _SettingsPageState extends State<SettingsPage>
                   .where((e) => e.isNotEmpty)
                   .toList();
               _presets[key] = lines;
-              await PresetService.saveAll(Map.from(_presets));
+              await PresetService.saveAll(widget.libraryRootPath, Map.from(_presets));
               if (!ctx.mounted) return;
               if (mounted) setState(() {});
               Navigator.pop(ctx);
@@ -524,7 +526,7 @@ class _SettingsPageState extends State<SettingsPage>
       final layout = await SettingsService.loadLayout();
       final windowState = await SettingsService.loadWindowState();
       final roots = await LibraryRootService().loadAll();
-      final presets = await PresetService.loadAll();
+      final presets = await PresetService.loadAll(widget.libraryRootPath);
 
       final export = {
         'version': '0.1.0',
@@ -614,7 +616,7 @@ class _SettingsPageState extends State<SettingsPage>
       if (data['presets'] != null) {
         final presetsRaw = data['presets'] as Map<String, dynamic>;
         final converted = presetsRaw.map((k, v) => MapEntry(k, List<String>.from(v as List)));
-        await PresetService.saveAll(converted);
+        await PresetService.saveAll(widget.libraryRootPath, converted);
         _presets = converted;
       }
 
