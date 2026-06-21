@@ -90,10 +90,10 @@ class _SettingsPageState extends State<SettingsPage>
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
-                  width: 46,
+                  width: 60,
                   height: 30,
                   alignment: Alignment.center,
-                  child: Icon(Icons.arrow_back, size: 12, color: cs.onSurfaceVariant),
+                  child: Icon(Icons.arrow_back, size: 14, color: cs.onSurfaceVariant),
                 ),
               ),
               Expanded(
@@ -113,6 +113,7 @@ class _SettingsPageState extends State<SettingsPage>
               ),
             ],
           ),
+          Divider(height: 1, color: cs.outlineVariant),
           Expanded(
               child: TabBarView(
           controller: _tabCtrl,
