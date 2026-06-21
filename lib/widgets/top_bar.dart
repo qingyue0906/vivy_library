@@ -85,31 +85,49 @@ class TopBar extends StatelessWidget {
 
   Widget _buildSortFieldDropdown(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
+    final labels = {
+      SortField.name: '名称',
+      SortField.size: '大小',
+      SortField.date: '日期',
+    };
     return SizedBox(
       height: 22 * c,
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          visualDensity: VisualDensity.compact,
-          dropdownMenuTheme: const DropdownMenuThemeData(
-            menuStyle: MenuStyle(
-              shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.zero))),
-            ),
-          ),
+      child: PopupMenuButton<SortField>(
+        initialValue: state.sortField,
+        onSelected: (field) => state.setSortField(field),
+        offset: const Offset(0, 24),
+        color: cs.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+          side: BorderSide(color: cs.outlineVariant, width: 0.5),
         ),
-        child: DropdownButton<SortField>(
-          value: state.sortField,
-          isDense: true,
-          underline: const SizedBox.shrink(),
-          style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
-          dropdownColor: cs.surface,
-          items: [
-            DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
-            DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
-            DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
-          ],
-          onChanged: (field) {
-            if (field != null) state.setSortField(field);
-          },
+        itemBuilder: (_) => labels.entries.map((e) {
+          final selected = e.key == state.sortField;
+          return PopupMenuItem<SortField>(
+            value: e.key,
+            height: 22 * c,
+            child: Text(
+              e.value,
+              style: TextStyle(
+                fontSize: 10 * c,
+                color: selected ? cs.primary : cs.onSurface,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          );
+        }).toList(),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4 * c),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                labels[state.sortField] ?? '',
+                style: TextStyle(fontSize: 10 * c, color: cs.onSurface),
+              ),
+              Icon(Icons.arrow_drop_down, size: 14 * c, color: cs.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
