@@ -3,50 +3,61 @@ import '../providers/library_state.dart';
 
 class TopBar extends StatelessWidget {
   final LibraryState state;
-
   final TextEditingController searchController;
+  final VoidCallback onSettingsTap;
 
-  const TopBar({super.key, required this.state, required this.searchController});
+  const TopBar({
+    super.key,
+    required this.state,
+    required this.searchController,
+    required this.onSettingsTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: 56,
-      color: Colors.deepPurple.shade100,
+      color: cs.primaryContainer,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          // App 名称
-          const Text(
+          IconButton(
+            icon: Icon(Icons.settings, size: 18, color: cs.onPrimaryContainer),
+            tooltip: '设置',
+            onPressed: onSettingsTap,
+          ),
+          Text(
             'Vivy Library',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: cs.onPrimaryContainer,
+            ),
           ),
           const SizedBox(width: 16),
-
-          // 搜索框,占满剩余空间
-          Expanded(child: _buildSearchField()),
+          Expanded(child: _buildSearchField(context)),
           const SizedBox(width: 12),
-
-          // 排序字段下拉
           _buildSortFieldDropdown(),
           const SizedBox(width: 6),
-
-          // 升序/降序切换按钮
           _buildSortOrderButton(),
         ],
       ),
     );
   }
 
-  Widget _buildSearchField() {
+  Widget _buildSearchField(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return TextField(
-      controller: searchController, // 新增这一行
+      controller: searchController,
+      style: TextStyle(color: cs.onSurface, fontSize: 13),
       decoration: InputDecoration(
         hintText: '搜索标题、描述、标签...',
-        prefixIcon: const Icon(Icons.search, size: 18),
+        hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+        prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurfaceVariant),
         isDense: true,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainerHighest,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         border: OutlineInputBorder(
@@ -58,7 +69,7 @@ class TopBar extends StatelessWidget {
                 icon: const Icon(Icons.clear, size: 16),
                 onPressed: () {
                   state.setSearchQuery('');
-                  searchController.clear(); // 同步清空 TextField 显示的文字
+                  searchController.clear();
                 },
               )
             : null,
@@ -71,7 +82,7 @@ class TopBar extends StatelessWidget {
     return DropdownButton<SortField>(
       value: state.sortField,
       isDense: true,
-      underline: const SizedBox.shrink(), // 去掉默认下划线
+      underline: const SizedBox.shrink(),
       items: const [
         DropdownMenuItem(value: SortField.name, child: Text('名称')),
         DropdownMenuItem(value: SortField.size, child: Text('大小')),

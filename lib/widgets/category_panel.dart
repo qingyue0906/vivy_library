@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 class CategoryPanel extends StatelessWidget {
-  final List<String> categories;    // 所有分类名列表,由父级传入
-  final String? selectedCategory;   // 当前选中的分类,null 表示"全部"
-  final void Function(String?) onCategorySelected; // 回调:用户点了某个分类
+  final List<String> categories;
+  final String? selectedCategory;
+  final void Function(String?) onCategorySelected;
 
   const CategoryPanel({
     super.key,
@@ -13,26 +13,28 @@ class CategoryPanel extends StatelessWidget {
   });
 
   @override
-    Widget build(BuildContext context) {
-      return Material(
-        color: Colors.grey.shade50,
-        child: ListView(
-          children: [
-            _buildItem(label: '全部', value: null),
-            const Divider(height: 1),
-            ...categories.map((cat) => _buildItem(label: cat, value: cat)),
-          ],
-        ),
-      );
-    }
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      child: ListView(
+        children: [
+          _buildItem(context, label: '全部', value: null),
+          Divider(height: 1, color: cs.outlineVariant),
+          ...categories.map((cat) => _buildItem(context, label: cat, value: cat)),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildItem({required String label, required String? value}) {
+  Widget _buildItem(BuildContext context, {required String label, required String? value}) {
+    final cs = Theme.of(context).colorScheme;
     final isSelected = selectedCategory == value;
     return ListTile(
       dense: true,
       selected: isSelected,
-      selectedTileColor: Colors.deepPurple.shade50,
-      selectedColor: Colors.deepPurple,
+      selectedTileColor: cs.primaryContainer.withValues(alpha: 0.4),
+      selectedColor: cs.primary,
       title: Text(label, style: const TextStyle(fontSize: 13)),
       onTap: () => onCategorySelected(value),
     );

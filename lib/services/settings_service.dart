@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/library_state.dart';
 
@@ -53,12 +54,42 @@ class WindowState {
       );
 }
 
+class GridSettings {
+  final double minCardWidth;
+  final double maxCardWidth;
+  final String aspectRatio; // "1:1", "4:3", "16:9"
+  final int itemsPerRow; // 0 = auto
+
+  const GridSettings({
+    this.minCardWidth = 120,
+    this.maxCardWidth = 200,
+    this.aspectRatio = '4:3',
+    this.itemsPerRow = 0,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'minCardWidth': minCardWidth,
+        'maxCardWidth': maxCardWidth,
+        'aspectRatio': aspectRatio,
+        'itemsPerRow': itemsPerRow,
+      };
+
+  factory GridSettings.fromMap(Map<String, dynamic> map) => GridSettings(
+        minCardWidth: (map['minCardWidth'] ?? 120).toDouble(),
+        maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
+        aspectRatio: map['aspectRatio'] ?? '4:3',
+        itemsPerRow: map['itemsPerRow'] ?? 0,
+      );
+}
+
 class SettingsService {
   static const _sortFieldKey = 'sort_field';
   static const _sortOrderKey = 'sort_order';
 
   static const _layoutPrefix = 'layout_';
   static const _windowPrefix = 'window_';
+  static const _themeKey = 'theme_mode';
+  static const _gridPrefix = 'grid_';
 
   static Future<(SortField, SortOrder)> loadSortPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -117,6 +148,48 @@ class SettingsService {
     final prefs = await SharedPreferences.getInstance();
     for (final entry in state.toMap().entries) {
       await prefs.setDouble('$_windowPrefix${entry.key}', entry.value);
+    }
+  }
+
+  // --- Theme ---
+
+  static Future<ThemeMode> loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getString(_themeKey);
+    return ThemeMode.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => ThemeMode.system,
+    );
+  }
+
+  static Future<void> saveThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeKey, mode.name);
+  }
+
+  // --- Grid/UI settings ---
+
+  static Future<GridSettings> loadGridSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    return GridSettings.fromMap({
+      'minCardWidth': prefs.getDouble('${_gridPrefix}minCardWidth'),
+      'maxCardWidth': prefs.getDouble('${_gridPrefix}maxCardWidth'),
+      'aspectRatio': prefs.getString('${_gridPrefix}aspectRatio'),
+      'itemsPerRow': prefs.getInt('${_gridPrefix}itemsPerRow'),
+    });
+  }
+
+  static Future<void> saveGridSettings(GridSettings settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in settings.toMap().entries) {
+      final v = entry.value;
+      if (v is double) {
+        await prefs.setDouble('$_gridPrefix${entry.key}', v);
+      } else if (v is int) {
+        await prefs.setInt('$_gridPrefix${entry.key}', v);
+      } else if (v is String) {
+        await prefs.setString('$_gridPrefix${entry.key}', v);
+      }
     }
   }
 }

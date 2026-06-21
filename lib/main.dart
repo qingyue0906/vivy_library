@@ -7,6 +7,8 @@ import 'widgets/shell_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final savedTheme = await SettingsService.loadThemeMode();
+
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
 
@@ -18,7 +20,7 @@ void main() async {
     windowManager.addListener(_WindowStateListener());
   }
 
-  runApp(const VivyApp());
+  runApp(VivyApp(initialThemeMode: savedTheme));
 }
 
 class _WindowStateListener with WindowListener {
@@ -36,8 +38,39 @@ class _WindowStateListener with WindowListener {
   }
 }
 
-class VivyApp extends StatelessWidget {
-  const VivyApp({super.key});
+class VivyApp extends StatefulWidget {
+  final ThemeMode initialThemeMode;
+
+  const VivyApp({super.key, required this.initialThemeMode});
+
+  @override
+  State<VivyApp> createState() => _VivyAppState();
+}
+
+class _VivyAppState extends State<VivyApp> {
+  late ThemeMode _themeMode;
+  late GridSettings _gridSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeMode = widget.initialThemeMode;
+    _gridSettings = const GridSettings();
+    _loadGridSettings();
+  }
+
+  Future<void> _loadGridSettings() async {
+    final gs = await SettingsService.loadGridSettings();
+    setState(() => _gridSettings = gs);
+  }
+
+  void _onThemeChanged(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+  }
+
+  void _onGridSettingsChanged(GridSettings settings) {
+    setState(() => _gridSettings = settings);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +80,27 @@ class VivyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const ShellPage(),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+          surface: const Color(0xFF1A1E20),
+        ).copyWith(
+          surfaceContainerLow: const Color(0xFF212628),
+          surfaceContainer: const Color(0xFF282D2F),
+          surfaceContainerHigh: const Color(0xFF33383A),
+          surfaceContainerHighest: const Color(0xFF3E4345),
+          primaryContainer: const Color(0xFF1E2740),
+          onPrimaryContainer: const Color(0xFFC9CFFF),
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: _themeMode,
+      home: ShellPage(
+        onThemeChanged: _onThemeChanged,
+        onGridSettingsChanged: _onGridSettingsChanged,
+        gridSettings: _gridSettings,
+      ),
     );
   }
 }

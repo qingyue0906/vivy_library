@@ -56,6 +56,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: _showPanel,
       borderRadius: BorderRadius.circular(6),
@@ -63,7 +64,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
@@ -200,6 +201,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(10),
@@ -207,8 +209,9 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
         width: 320,
         constraints: const BoxConstraints(maxHeight: 360),
         decoration: BoxDecoration(
+          color: cs.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: _isLoading
             ? const SizedBox(
@@ -329,17 +332,18 @@ class _RootListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      final cs = Theme.of(context).colorScheme;
       return Column(
         children: [
           ListTile(
             dense: true,
             selected: isCurrent,
-            selectedTileColor: Colors.blue.shade50,
+            selectedTileColor: cs.primaryContainer.withValues(alpha: 0.4),
             leading: const Icon(Icons.folder, size: 16),
             title: Text(root.name, style: const TextStyle(fontSize: 12.5)),
             subtitle: Text(
               root.path,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -357,22 +361,21 @@ class _RootListTile extends StatelessWidget {
             ),
           ),
 
-          // AnimatedSize 包裹这块会动态出现/消失的内容,
-          // 让高度变化平滑过渡,避免单帧内的尺寸跳变冲击外层 Follower 的布局计算
           AnimatedSize(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             child: isRenaming
-                ? _buildRenameRow()
-                : (isExpanded ? _buildMenu() : const SizedBox(width: double.infinity)),
+                ? _buildRenameRow(context)
+                : (isExpanded ? _buildMenu(context) : const SizedBox(width: double.infinity)),
           ),
         ],
       );
     }
 
-  Widget _buildRenameRow() {
+  Widget _buildRenameRow(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.grey.shade50,
+      color: cs.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
         child: Row(
@@ -413,9 +416,10 @@ class _RootListTile extends StatelessWidget {
     );
   }
 
-  Widget _buildMenu() {
+  Widget _buildMenu(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.grey.shade50,
+      color: cs.surfaceContainerLow,
       child: Column(
         children: [
           _menuItem(
@@ -423,7 +427,7 @@ class _RootListTile extends StatelessWidget {
             label: '命名资源库',
             onTap: onStartRename,
           ),
-          Divider(height: 1, color: Colors.grey.shade200),
+          Divider(height: 1, color: cs.outlineVariant),
           _menuItem(
             icon: Icons.folder_open,
             label: '在资源管理器中打开',

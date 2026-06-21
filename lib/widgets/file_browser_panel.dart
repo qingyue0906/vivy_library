@@ -21,11 +21,12 @@ class FileBrowserPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
       ),
       child: Column(
         children: [
@@ -37,13 +38,14 @@ class FileBrowserPanel extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: cs.surfaceContainerLow,
         border:
-            Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         children: [

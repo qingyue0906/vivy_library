@@ -154,6 +154,7 @@ class _EditDialogState extends State<EditDialog> {
   List<String> get _ratingOptions => _presets['contentRating'] ?? PresetService.defaults['contentRating']!;
 
   Widget _buildCheckableField(String label, bool checked, Widget child) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -180,7 +181,7 @@ class _EditDialogState extends State<EditDialog> {
               if (label.isNotEmpty && label != 'types' && label != 'ratings')
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+                  child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                 ),
               child,
             ],
@@ -201,18 +202,19 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Widget _buildField(String label, TextEditingController ctrl, {int maxLines = 1}) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
-            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
         TextField(
           controller: ctrl,
           maxLines: maxLines,
-          style: const TextStyle(fontSize: 12, color: Colors.black87),
+          style: TextStyle(fontSize: 12, color: cs.onSurface),
           decoration: _inputDecoration(),
         ),
       ],
@@ -220,6 +222,7 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Widget _buildPresetField(String label, TextEditingController ctrl, String presetKey) {
+    final cs = Theme.of(context).colorScheme;
     final presets = _presets[presetKey] ?? [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,7 +230,7 @@ class _EditDialogState extends State<EditDialog> {
         if (label.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
-            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
         Autocomplete<String>(
           initialValue: TextEditingValue(text: ctrl.text),
@@ -251,13 +254,10 @@ class _EditDialogState extends State<EditDialog> {
             }
           },
           fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
-            if (acController.text != ctrl.text) {
-              acController.text = ctrl.text;
-            }
             return TextField(
               controller: acController,
               focusNode: focusNode,
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              style: TextStyle(fontSize: 12, color: cs.onSurface),
               onChanged: (v) => ctrl.text = v,
               decoration: _inputDecoration(),
             );
@@ -266,6 +266,7 @@ class _EditDialogState extends State<EditDialog> {
             return Align(
               alignment: Alignment.topLeft,
               child: Material(
+                color: cs.surface,
                 elevation: 4,
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
@@ -279,7 +280,7 @@ class _EditDialogState extends State<EditDialog> {
                         onTap: () => onSelected(option),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          child: Text(option, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          child: Text(option, style: TextStyle(fontSize: 12, color: cs.onSurface)),
                         ),
                       );
                     },
@@ -294,13 +295,14 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Widget _buildDropdownField(String label, String value, List<String> options, ValueChanged<String?> onChanged, bool isBatch) {
+    final cs = Theme.of(context).colorScheme;
     final content = DropdownButtonFormField<String>(
       initialValue: options.contains(value) ? value : null,
       isDense: true,
-      style: const TextStyle(fontSize: 12, color: Colors.black87),
+      style: TextStyle(fontSize: 12, color: cs.onSurface),
       decoration: _inputDecoration(),
       items: options
-          .map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12, color: Colors.black87))))
+          .map((o) => DropdownMenuItem(value: o, child: Text(o, style: TextStyle(fontSize: 12, color: cs.onSurface))))
           .toList(),
       onChanged: onChanged,
     );
@@ -314,7 +316,7 @@ class _EditDialogState extends State<EditDialog> {
         if (label.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
-            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
         content,
       ],
@@ -322,11 +324,12 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Widget _buildRatingSlider() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('评分：${(_rating / 2).toStringAsFixed(1)} / 5',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         const SizedBox(height: 4),
         SizedBox(
           height: 32,
@@ -404,6 +407,7 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Widget _buildRadio(String label, String value, String currentMode, ValueChanged<String> onChanged) {
+    final cs = Theme.of(context).colorScheme;
     final selected = currentMode == value;
     return InkWell(
       onTap: () => onChanged(value),
@@ -411,15 +415,15 @@ class _EditDialogState extends State<EditDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: selected ? Colors.deepPurple.shade50 : Colors.transparent,
+          color: selected ? cs.primaryContainer.withValues(alpha: 0.4) : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: selected ? Colors.deepPurple.shade200 : Colors.grey.shade300),
+          border: Border.all(color: selected ? cs.primary : cs.outlineVariant),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 11,
-            color: selected ? Colors.deepPurple : Colors.grey.shade700,
+            color: selected ? cs.primary : cs.onSurfaceVariant,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
@@ -428,10 +432,15 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   InputDecoration _inputDecoration() {
+    final cs = Theme.of(context).colorScheme;
     return InputDecoration(
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
     );
   }
 

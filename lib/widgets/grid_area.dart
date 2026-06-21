@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/library_item.dart';
 import '../providers/library_state.dart';
+import '../services/settings_service.dart';
 import 'item_card.dart';
 import 'dart:io';
 import 'file_browser_panel.dart';
@@ -14,6 +15,7 @@ class GridArea extends StatelessWidget {
   final void Function(double delta) onFilePanelResize;
   final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
+  final GridSettings gridSettings;
 
   const GridArea({
     super.key,
@@ -23,6 +25,7 @@ class GridArea extends StatelessWidget {
     required this.onFilePanelResize,
     this.onFilePanelResizeEnd,
     required this.onEditRequest,
+    required this.gridSettings,
   });
 
   @override
@@ -76,26 +79,38 @@ class GridArea extends StatelessWidget {
     );
   }
 
-  // 把 LayoutBuilder + GridView 抽成独立方法,build 方法本身保持清晰,
-  // 也方便我们单独核对这一块的括号是否配对正确
   Widget _buildGrid(BuildContext context) {
-    const maxCardWidth = 200.0;
-    const spacing = 10.0;
+    final minCardWidth = gridSettings.minCardWidth;
+    final maxCardWidth = gridSettings.maxCardWidth;
+    final spacing = 10.0;
+    final fixedPerRow = gridSettings.itemsPerRow;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 算出这一行能放几列(逻辑和之前一样,这部分本身没有问题)
-        final crossAxisCount = (constraints.maxWidth / (maxCardWidth + spacing))
-            .floor()
-            .clamp(1, 999);
-        // 算出每张卡片实际应该多宽,让这一行卡片正好撑满,没有留白
-        final cardWidth =
-            (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+        int crossAxisCount;
+        double cardWidth;
+
+        if (fixedPerRow > 0) {
+          crossAxisCount = fixedPerRow;
+          cardWidth = (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+              crossAxisCount;
+        } else {
+          crossAxisCount = (constraints.maxWidth / (maxCardWidth + spacing))
+              .floor()
+              .clamp(1, 999);
+          cardWidth =
+              (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+                  crossAxisCount;
+          if (cardWidth < minCardWidth && crossAxisCount > 1) {
+            crossAxisCount--;
+            cardWidth = (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
                 crossAxisCount;
+          }
+        }
 
         return SingleChildScrollView(
           child: SizedBox(
-            width: constraints.maxWidth, // 用 LayoutBuilder 给的精确宽度撑满,而不是 double.infinity
+            width: constraints.maxWidth,
             child: Wrap(
               alignment: WrapAlignment.start,
               spacing: spacing,

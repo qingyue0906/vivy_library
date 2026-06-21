@@ -53,7 +53,7 @@ class ItemCard extends StatelessWidget {
               // 不再需要我们手动算任何数值
               AspectRatio(
                 aspectRatio: 3 / 2,
-                child: _buildPreviewImage(),
+                child: _buildPreviewImage(context),
               ),
               _buildInfo(), // 不再固定高度,让文字内容自己决定需要多高
             ],
@@ -63,19 +63,20 @@ class ItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviewImage() {
+  Widget _buildPreviewImage(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     if (item.previewPath == null) {
       return Container(
-        color: Colors.grey.shade200,
-        child: const Icon(Icons.image_not_supported, color: Colors.grey),
+        color: cs.surfaceContainerHighest,
+        child: Icon(Icons.image_not_supported, color: cs.onSurfaceVariant),
       );
     }
     return Image.file(
       File(item.previewPath!),
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
-        color: Colors.grey.shade200,
-        child: const Icon(Icons.broken_image, color: Colors.grey),
+        color: cs.surfaceContainerHighest,
+        child: Icon(Icons.broken_image, color: cs.onSurfaceVariant),
       ),
     );
   }
