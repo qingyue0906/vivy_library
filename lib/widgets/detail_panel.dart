@@ -110,8 +110,8 @@ class DetailPanel extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(lastEnd)));
     }
 
-    return RichText(
-      text: TextSpan(style: TextStyle(fontSize: 11 * c, color: cs.onSurface), children: spans),
+    return SelectableText.rich(
+      TextSpan(style: TextStyle(fontSize: 11 * c, color: cs.onSurface), children: spans),
     );
   }
 
