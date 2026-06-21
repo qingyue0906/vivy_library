@@ -46,9 +46,9 @@ class GridArea extends StatelessWidget {
           ClassNavBar(state: state),
           Expanded(
             child: items.isEmpty
-                ? const Center(child: Text('没有找到项目'))
+                ? Center(child: Text('没有找到项目', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)))
                 : Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(8),
                     child: _buildGrid(context),
                   ),
           ),
@@ -60,11 +60,8 @@ class GridArea extends StatelessWidget {
                 onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
                 onPanEnd: (_) => onFilePanelResizeEnd?.call(),
                 child: Container(
-                  height: 6,
+                  height: 4,
                   color: Colors.transparent,
-                  child: Center(
-                    child: Container(height: 1, color: Colors.black12),
-                  ),
                 ),
               ),
             ),
@@ -82,7 +79,7 @@ class GridArea extends StatelessWidget {
   Widget _buildGrid(BuildContext context) {
     final minCardWidth = gridSettings.minCardWidth;
     final maxCardWidth = gridSettings.maxCardWidth;
-    final spacing = 10.0;
+    final spacing = 8.0;
     final fixedPerRow = gridSettings.itemsPerRow;
 
     return LayoutBuilder(
@@ -156,26 +153,26 @@ class GridArea extends StatelessWidget {
       items: [
         PopupMenuItem(
           value: 'edit',
-          height: 32,
+          height: 28,
           child: Row(
             children: [
-              const Icon(Icons.edit, size: 14),
-              const SizedBox(width: 8),
+              const Icon(Icons.edit, size: 13),
+              const SizedBox(width: 6),
               Text(
                 isBatch ? '批量编辑 (${selectedItems.length} 项)' : '编辑',
-                style: const TextStyle(fontSize: 12),
+                style: const TextStyle(fontSize: 11),
               ),
             ],
           ),
         ),
         PopupMenuItem(
           value: 'open_folder',
-          height: 32,
+          height: 28,
           child: Row(
             children: const [
-              Icon(Icons.folder_open, size: 14),
-              SizedBox(width: 8),
-              Text('在资源管理器中显示', style: TextStyle(fontSize: 12)),
+              Icon(Icons.folder_open, size: 13),
+              SizedBox(width: 6),
+              Text('在资源管理器中显示', style: TextStyle(fontSize: 11)),
             ],
           ),
         ),

@@ -17,29 +17,23 @@ class TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 56,
-      color: cs.primaryContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      height: 32,
+      color: cs.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.settings, size: 18, color: cs.onPrimaryContainer),
+            icon: Icon(Icons.settings, size: 14, color: cs.onSurface),
             tooltip: '设置',
             onPressed: onSettingsTap,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
           ),
-          Text(
-            'Vivy Library',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: cs.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           Expanded(child: _buildSearchField(context)),
-          const SizedBox(width: 12),
-          _buildSortFieldDropdown(),
           const SizedBox(width: 6),
+          _buildSortFieldDropdown(),
+          const SizedBox(width: 2),
           _buildSortOrderButton(),
         ],
       ),
@@ -48,49 +42,62 @@ class TopBar extends StatelessWidget {
 
   Widget _buildSearchField(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return TextField(
-      controller: searchController,
-      style: TextStyle(color: cs.onSurface, fontSize: 13),
-      decoration: InputDecoration(
-        hintText: '搜索标题、描述、标签...',
-        hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-        prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurfaceVariant),
-        isDense: true,
-        filled: true,
-        fillColor: cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainerHighest,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
+    return SizedBox(
+      height: 22,
+      child: TextField(
+        controller: searchController,
+        style: TextStyle(color: cs.onSurface, fontSize: 11),
+        decoration: InputDecoration(
+          hintText: '搜索...',
+          hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+          prefixIcon: Icon(Icons.search, size: 12, color: cs.onSurfaceVariant),
+          isDense: true,
+          filled: true,
+          fillColor: cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: cs.outlineVariant, width: 1),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: cs.outlineVariant, width: 1),
+          ),
+          suffixIcon: state.searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.clear, size: 12, color: cs.onSurfaceVariant),
+                  onPressed: () {
+                    state.setSearchQuery('');
+                    searchController.clear();
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                )
+              : null,
         ),
-        suffixIcon: state.searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 16),
-                onPressed: () {
-                  state.setSearchQuery('');
-                  searchController.clear();
-                },
-              )
-            : null,
+        onChanged: state.setSearchQuery,
       ),
-      onChanged: state.setSearchQuery,
     );
   }
 
   Widget _buildSortFieldDropdown() {
-    return DropdownButton<SortField>(
-      value: state.sortField,
-      isDense: true,
-      underline: const SizedBox.shrink(),
-      items: const [
-        DropdownMenuItem(value: SortField.name, child: Text('名称')),
-        DropdownMenuItem(value: SortField.size, child: Text('大小')),
-        DropdownMenuItem(value: SortField.date, child: Text('日期')),
-      ],
-      onChanged: (field) {
-        if (field != null) state.setSortField(field);
-      },
+    return SizedBox(
+      height: 22,
+      child: DropdownButton<SortField>(
+        value: state.sortField,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        style: const TextStyle(fontSize: 11),
+        items: const [
+          DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 11))),
+          DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 11))),
+          DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 11))),
+        ],
+        onChanged: (field) {
+          if (field != null) state.setSortField(field);
+        },
+      ),
     );
   }
 
@@ -100,8 +107,10 @@ class TopBar extends StatelessWidget {
       tooltip: isAsc ? '当前:升序' : '当前:降序',
       icon: Icon(
         isAsc ? Icons.arrow_upward : Icons.arrow_downward,
-        size: 18,
+        size: 12,
       ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
       onPressed: state.toggleSortOrder,
     );
   }

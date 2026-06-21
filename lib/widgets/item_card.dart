@@ -23,13 +23,16 @@ class ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: cs.surface,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(4),
         side: isSelected
-            ? BorderSide(color: Colors.deepPurple.shade400, width: 2.5)
-            : BorderSide.none,
+            ? BorderSide(color: cs.primary, width: 1.5)
+            : BorderSide(color: cs.outlineVariant, width: 0.5),
       ),
       child: GestureDetector(
         onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
@@ -46,16 +49,14 @@ class ItemCard extends StatelessWidget {
             }
           },
           child: Column(
-            mainAxisSize: MainAxisSize.min, // 整张卡片只占用内容实际需要的高度
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // AspectRatio 是 Flutter 内置机制,自己保证不会有任何溢出,
-              // 不再需要我们手动算任何数值
               AspectRatio(
                 aspectRatio: 3 / 2,
                 child: _buildPreviewImage(context),
               ),
-              _buildInfo(), // 不再固定高度,让文字内容自己决定需要多高
+              _buildInfo(),
             ],
           ),
         ),
@@ -68,7 +69,7 @@ class ItemCard extends StatelessWidget {
     if (item.previewPath == null) {
       return Container(
         color: cs.surfaceContainerHighest,
-        child: Icon(Icons.image_not_supported, color: cs.onSurfaceVariant),
+        child: Icon(Icons.image_not_supported, size: 20, color: cs.onSurfaceVariant),
       );
     }
     return Image.file(
@@ -76,20 +77,20 @@ class ItemCard extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
         color: cs.surfaceContainerHighest,
-        child: Icon(Icons.broken_image, color: cs.onSurfaceVariant),
+        child: Icon(Icons.broken_image, size: 20, color: cs.onSurfaceVariant),
       ),
     );
   }
 
   Widget _buildInfo() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       child: Text(
         item.info.title,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
       ),
     );
   }

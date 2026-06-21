@@ -24,10 +24,7 @@ class FileBrowserPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       height: height,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
-      ),
+      color: cs.surface,
       child: Column(
         children: [
           _buildHeader(context),
@@ -40,8 +37,8 @@ class FileBrowserPanel extends StatelessWidget {
   Widget _buildHeader(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         border:
@@ -49,12 +46,12 @@ class FileBrowserPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.folder_open, size: 15, color: Colors.grey),
-          const SizedBox(width: 6),
+          Icon(Icons.folder_open, size: 12, color: cs.onSurfaceVariant),
+          const SizedBox(width: 4),
           Text(
             '${item.info.title} 的内容',
-            style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w500, color: cs.onSurface),
           ),
           const Spacer(),
           // 显示/隐藏系统文件按钮

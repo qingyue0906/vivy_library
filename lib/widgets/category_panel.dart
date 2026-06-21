@@ -16,11 +16,11 @@ class CategoryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
-      color: cs.surface,
+      color: cs.surfaceContainerLow,
       child: ListView(
+        padding: EdgeInsets.zero,
         children: [
           _buildItem(context, label: '全部', value: null),
-          Divider(height: 1, color: cs.outlineVariant),
           ...categories.map((cat) => _buildItem(context, label: cat, value: cat)),
         ],
       ),
@@ -30,13 +30,25 @@ class CategoryPanel extends StatelessWidget {
   Widget _buildItem(BuildContext context, {required String label, required String? value}) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = selectedCategory == value;
-    return ListTile(
-      dense: true,
-      selected: isSelected,
-      selectedTileColor: cs.primaryContainer.withValues(alpha: 0.4),
-      selectedColor: cs.primary,
-      title: Text(label, style: const TextStyle(fontSize: 13)),
-      onTap: () => onCategorySelected(value),
+    return Container(
+      height: 28,
+      color: isSelected ? cs.primaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: () => onCategorySelected(value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

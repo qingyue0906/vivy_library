@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
 import 'category_panel.dart';
 import 'detail_panel.dart';
@@ -27,7 +28,7 @@ class ShellPage extends StatefulWidget {
   State<ShellPage> createState() => _ShellPageState();
 }
 
-class _ShellPageState extends State<ShellPage> {
+class _ShellPageState extends State<ShellPage> with WindowListener {
   final ValueNotifier<double> _leftPanelWidth = ValueNotifier(200);
   final ValueNotifier<double> _rightPanelWidth = ValueNotifier(280);
   static const double _minPanelWidth = 120;
@@ -43,9 +44,12 @@ class _ShellPageState extends State<ShellPage> {
 
   final LibraryRootService _rootService = LibraryRootService();
 
+  bool _isMaximized = false;
+
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     _initLibrary();
     _state.init();
     _initLayout();
@@ -86,6 +90,7 @@ class _ShellPageState extends State<ShellPage> {
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
     _leftPanelWidth.dispose();
     _rightPanelWidth.dispose();
     _filePanelHeight.dispose();
@@ -95,62 +100,131 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   @override
+  void onWindowMaximize() {
+    setState(() => _isMaximized = true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    setState(() => _isMaximized = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _state,
-      builder: (context, _) {
-        if (_state.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (_state.error != null) {
-          return Scaffold(
-            body: Center(
-              child: Text('扫描失败: ${_state.error}',
-                  style: const TextStyle(color: Colors.red)),
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildTitleBar(cs),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _state,
+              builder: (context, _) => _buildBody(),
             ),
-          );
-        }
-        if (_state.currentRootPath.isEmpty) {
-          return Scaffold(
-            body: Column(
-              children: [
-                Container(
-                  height: 56,
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.centerLeft,
-                  child: LibraryRootSelector(
-                    currentPath: '',
-                    onRootSelected: _onRootSelected,
-                  ),
-                ),
-                const Expanded(
-                  child: Center(
-                    child: Text(
-                      '请先选择一个资源库目录',
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-        return Scaffold(
-          body: Column(
-            children: [
-              TopBar(
-                state: _state,
-                searchController: _searchController,
-                onSettingsTap: _openSettings,
-              ),
-              Expanded(child: _buildMainArea()),
-            ],
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTitleBar(ColorScheme cs) {
+    return Container(
+      height: 30,
+      color: cs.surfaceContainerHigh,
+      child: Row(
+        children: [
+          Expanded(
+            child: DragToMoveArea(
+              child: Container(
+                height: 30,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.menu_book, size: 14, color: cs.onSurface),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Vivy Library',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _CaptionButton(
+            icon: Icons.horizontal_rule,
+            onTap: () => windowManager.minimize(),
+          ),
+          _CaptionButton(
+            icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+            onTap: () {
+              if (_isMaximized) {
+                windowManager.unmaximize();
+              } else {
+                windowManager.maximize();
+              }
+            },
+          ),
+          _CaptionButton(
+            icon: Icons.close,
+            onTap: () => windowManager.close(),
+            isClose: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_state.error != null) {
+      return Center(
+        child: Text('扫描失败: ${_state.error}',
+            style: const TextStyle(color: Colors.red)),
+      );
+    }
+    if (_state.currentRootPath.isEmpty) {
+      return Column(
+        children: [
+          Container(
+            height: 32,
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              height: 24,
+              child: LibraryRootSelector(
+                currentPath: '',
+                onRootSelected: _onRootSelected,
+              ),
+            ),
+          ),
+          const Expanded(
+            child: Center(
+              child: Text(
+                '请先选择一个资源库目录',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        TopBar(
+          state: _state,
+          searchController: _searchController,
+          onSettingsTap: _openSettings,
+        ),
+        Expanded(child: _buildMainArea()),
+      ],
     );
   }
 
@@ -166,7 +240,7 @@ class _ShellPageState extends State<ShellPage> {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(6),
                     color: cs.surfaceContainerLow,
                     child: LibraryRootSelector(
                       currentPath: _state.currentRootPath,
@@ -237,7 +311,7 @@ class _ShellPageState extends State<ShellPage> {
         onPanUpdate: (details) => onDrag(details.delta.dx),
         onPanEnd: (_) => onDragEnd?.call(),
         child: Container(
-          width: 6,
+          width: 5,
           color: Colors.transparent,
         ),
       ),
@@ -265,5 +339,35 @@ class _ShellPageState extends State<ShellPage> {
       rightPanelWidth: _rightPanelWidth.value,
       filePanelHeight: _filePanelHeight.value,
     ));
+  }
+}
+
+class _CaptionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isClose;
+
+  const _CaptionButton({
+    required this.icon,
+    required this.onTap,
+    this.isClose = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 46,
+      height: 30,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          color: Colors.transparent,
+          child: Center(
+            child: Icon(icon, size: 12, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+          ),
+        ),
+      ),
+    );
   }
 }

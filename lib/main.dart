@@ -16,6 +16,7 @@ void main() async {
     await windowManager.setPosition(Offset(saved.dx, saved.dy));
     await windowManager.setSize(Size(saved.width, saved.height));
     await windowManager.setPreventClose(true);
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
 
     windowManager.addListener(_WindowStateListener());
   }
@@ -72,6 +73,16 @@ class _VivyAppState extends State<VivyApp> {
     setState(() => _gridSettings = settings);
   }
 
+  // VS Code 暗色配色
+  static const _vscodeDarkSurface = Color(0xFF1E1E1E);
+  static const _vscodeDarkSidebar = Color(0xFF252526);
+  static const _vscodeDarkInactiveTab = Color(0xFF2D2D2D);
+  static const _vscodeDarkActivityBar = Color(0xFF333333);
+  static const _vscodeDarkBorder = Color(0xFF3C3C3C);
+  static const _vscodeDarkText = Color(0xFFCCCCCC);
+  static const _vscodeBlue = Color(0xFF007ACC);
+  static const _vscodeSelection = Color(0xFF264F78);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -81,19 +92,22 @@ class _VivyAppState extends State<VivyApp> {
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-          surface: const Color(0xFF1A1E20),
-        ).copyWith(
-          surfaceContainerLow: const Color(0xFF212628),
-          surfaceContainer: const Color(0xFF282D2F),
-          surfaceContainerHigh: const Color(0xFF33383A),
-          surfaceContainerHighest: const Color(0xFF3E4345),
-          primaryContainer: const Color(0xFF1E2740),
-          onPrimaryContainer: const Color(0xFFC9CFFF),
-        ),
         useMaterial3: true,
+        colorScheme: ColorScheme.dark(
+          primary: _vscodeBlue,
+          surface: _vscodeDarkSurface,
+          onSurface: _vscodeDarkText,
+          surfaceContainerLow: _vscodeDarkSidebar,
+          surfaceContainer: _vscodeDarkInactiveTab,
+          surfaceContainerHigh: _vscodeDarkActivityBar,
+          surfaceContainerHighest: _vscodeDarkBorder,
+          primaryContainer: _vscodeSelection,
+          onPrimaryContainer: _vscodeDarkText,
+          secondaryContainer: _vscodeDarkActivityBar,
+          outline: _vscodeDarkBorder,
+          outlineVariant: _vscodeDarkBorder,
+        ),
+        scaffoldBackgroundColor: _vscodeDarkSurface,
       ),
       themeMode: _themeMode,
       home: ShellPage(

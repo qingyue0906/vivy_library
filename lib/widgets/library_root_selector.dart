@@ -27,16 +27,13 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
       context: context,
       barrierLabel: '资源库选择器',
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.05), // 很淡的遮罩,不会让背景明显变暗
+      barrierColor: Colors.black.withValues(alpha: 0.05),
       transitionDuration: const Duration(milliseconds: 120),
       pageBuilder: (context, animation, secondaryAnimation) {
-        // 用 Align 把面板固定显示在屏幕左上区域,
-        // 大致对应资源库按钮在左侧栏顶部的位置,
-        // 不再追踪按钮的精确实时坐标,换取稳定性
         return Align(
           alignment: Alignment.topLeft,
           child: Padding(
-            padding: const EdgeInsets.only(top: 100, left: 12),
+            padding: const EdgeInsets.only(top: 65, left: 8),
             child: _LibraryRootPanel(
               currentPath: widget.currentPath,
               onSelect: (path) {
@@ -59,28 +56,28 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: _showPanel,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
           children: [
-            const Icon(Icons.video_library, size: 15),
-            const SizedBox(width: 6),
+            Icon(Icons.video_library, size: 12, color: cs.onSurfaceVariant),
+            const SizedBox(width: 4),
             Expanded(
               child: Text(
                 _displayLabel(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, color: cs.onSurface),
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.arrow_drop_down, size: 16),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 14, color: cs.onSurfaceVariant),
           ],
         ),
       ),
