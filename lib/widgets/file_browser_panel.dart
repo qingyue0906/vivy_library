@@ -134,8 +134,8 @@ class FileBrowserPanel extends StatelessWidget {
     return GridView.builder(
       padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 90 * c,
-        mainAxisExtent: 108 * c,
+        maxCrossAxisExtent: 82 * c,
+        mainAxisExtent: 96 * c,
         crossAxisSpacing: 4 * c,
         mainAxisSpacing: 4 * c,
       ),
@@ -357,8 +357,8 @@ class _FileGridItemState extends State<_FileGridItem> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 64 * c,
-                  height: 64 * c,
+                  width: 56 * c,
+                  height: 56 * c,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(6 * c),
                     color: cs.surfaceContainerHighest,
@@ -376,7 +376,7 @@ class _FileGridItemState extends State<_FileGridItem> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10 * c),
+                  style: TextStyle(fontSize: 9 * c),
                 ),
               ],
             ),
@@ -418,7 +418,7 @@ class _FileGridItemState extends State<_FileGridItem> {
         color = Colors.grey.shade500;
     }
 
-    return Icon(icon, size: 36 * c, color: color);
+    return Icon(icon, size: 28 * c, color: color);
   }
 
   String _baseName(String fullPath) {
