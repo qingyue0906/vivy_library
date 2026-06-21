@@ -34,7 +34,7 @@ class TopBar extends StatelessWidget {
           SizedBox(width: 8 * c),
           Expanded(child: _buildSearchField(context, c)),
           SizedBox(width: 6 * c),
-          _buildSortFieldDropdown(c),
+          _buildSortFieldDropdown(context, c),
           SizedBox(width: 2 * c),
           _buildSortOrderButton(c),
         ],
@@ -83,18 +83,20 @@ class TopBar extends StatelessWidget {
     );
   }
 
-  Widget _buildSortFieldDropdown(double c) {
+  Widget _buildSortFieldDropdown(BuildContext context, double c) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 22 * c,
       child: DropdownButton<SortField>(
         value: state.sortField,
         isDense: true,
         underline: const SizedBox.shrink(),
-        style: TextStyle(fontSize: 11 * c),
+        style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
+        dropdownColor: cs.surface,
         items: [
-          DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 11 * c))),
-          DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 11 * c))),
-          DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 11 * c))),
+          DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
+          DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
+          DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
         ],
         onChanged: (field) {
           if (field != null) state.setSortField(field);
