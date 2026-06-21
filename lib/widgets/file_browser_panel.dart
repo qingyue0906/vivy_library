@@ -330,6 +330,7 @@ class _FileGridItemState extends State<_FileGridItem> {
   @override
   Widget build(BuildContext context) {
     final c = widget.compactLevel;
+    final cs = Theme.of(context).colorScheme;
     final name = _baseName(widget.file.path);
     final isImage =
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
@@ -347,7 +348,7 @@ class _FileGridItemState extends State<_FileGridItem> {
           child: Container(
             decoration: BoxDecoration(
               color: _isHovering
-                  ? Colors.black.withOpacity(0.06)
+                  ? cs.onSurface.withValues(alpha: 0.08)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(6 * c),
             ),
@@ -360,7 +361,7 @@ class _FileGridItemState extends State<_FileGridItem> {
                   height: 64 * c,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(6 * c),
-                    color: Colors.grey.shade100,
+                    color: cs.surfaceContainerHighest,
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: isImage
