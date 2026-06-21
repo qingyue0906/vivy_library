@@ -44,7 +44,7 @@ class DetailPanel extends StatelessWidget {
           ),
         SizedBox(height: 12 * c),
         Center(
-          child: Text(
+          child: SelectableText(
             item.info.title,
             style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
           ),
@@ -57,8 +57,8 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, c, '类型', item.info.type),
         _buildRow(context, c, '分级', item.info.contentRating),
         _buildRow(context, c, '评分', '${item.info.rating / 2} / 5'),
-        _buildRow(context, c, '分类(Class)', item.info.classes.join('、')),
-        _buildRow(context, c, '标签(Tags)', item.info.tags.join('、')),
+        _buildRow(context, c, '分类', item.info.classes.join('、')),
+        _buildRow(context, c, '标签', item.info.tags.join('、')),
         _buildRow(context, c, '文件夹', item.category),
         SizedBox(height: 6 * c),
         Divider(height: 1 * c),
@@ -131,7 +131,7 @@ class DetailPanel extends StatelessWidget {
             child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
+            child: SelectableText(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
           ),
         ],
       ),
