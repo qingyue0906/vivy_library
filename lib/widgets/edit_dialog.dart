@@ -70,7 +70,7 @@ class _EditDialogState extends State<EditDialog> {
   }
 
   Future<void> _loadPresets() async {
-    final presets = await PresetService.loadAll();
+    final presets = await PresetService.loadAll(widget.state.currentRootPath);
     setState(() => _presets = presets);
   }
 
