@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../models/library_item.dart';
 
 class DetailPanel extends StatelessWidget {
@@ -58,7 +59,7 @@ class DetailPanel extends StatelessWidget {
         if (item.info.creator != null)
           _buildRow(context, '创建者', item.info.creator!),
         if (item.info.description != '无描述')
-          _buildRow(context, '描述', item.info.description),
+          _buildDescriptionRow(context, '描述', item.info.description),
         if (item.info.classes.isNotEmpty)
           _buildRow(context, '标签分类', item.info.classes.join('、')),
         if (item.info.tags.isNotEmpty)
@@ -73,6 +74,55 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, '路径', item.path),
       ],
     );
+  }
+
+  Widget _buildDescriptionRow(BuildContext context, String label, String text) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 64,
+            child: Text(label, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+          ),
+          Expanded(child: _buildUrlText(context, text)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUrlText(BuildContext context, String text) {
+    final cs = Theme.of(context).colorScheme;
+    final urlRegex = RegExp(r'https?://[^\s]+');
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in urlRegex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+        recognizer: TapGestureRecognizer()..onTap = () => _openUrl(url),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return RichText(
+      text: TextSpan(style: TextStyle(fontSize: 12, color: cs.onSurface), children: spans),
+    );
+  }
+
+  void _openUrl(String url) {
+    Process.run('cmd', ['/c', 'start', url]);
   }
 
   Widget _buildRow(BuildContext context, String label, String value) {
