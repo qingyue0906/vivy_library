@@ -86,12 +86,13 @@ class _SettingsPageState extends State<SettingsPage>
             ),
           ),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               GestureDetector(
                 onTap: () => Navigator.pop(context),
+                behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: 60,
+                  height: 48,
                   alignment: Alignment.center,
                   child: Icon(Icons.arrow_back, size: 14, color: cs.onSurfaceVariant),
                 ),
