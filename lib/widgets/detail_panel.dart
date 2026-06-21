@@ -54,14 +54,10 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, c, '类型', item.info.type),
         _buildRow(context, c, '分级', item.info.contentRating),
         _buildRow(context, c, '评分', '${item.info.rating / 2} / 5'),
-        if (item.info.creator != null)
-          _buildRow(context, c, '创建者', item.info.creator!),
-        if (item.info.description != '无描述')
-          _buildDescriptionRow(context, c, '描述', item.info.description),
-        if (item.info.classes.isNotEmpty)
-          _buildRow(context, c, '标签分类', item.info.classes.join('、')),
-        if (item.info.tags.isNotEmpty)
-          _buildRow(context, c, '标签', item.info.tags.join('、')),
+        _buildRow(context, c, '创建者', item.info.creator ?? ''),
+        _buildDescriptionRow(context, c, '描述', item.info.description),
+        _buildRow(context, c, '标签分类', item.info.classes.join('、')),
+        _buildRow(context, c, '标签', item.info.tags.join('、')),
         SizedBox(height: 6 * c),
         Divider(height: 1 * c),
         SizedBox(height: 6 * c),
