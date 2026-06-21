@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 import '../services/settings_service.dart';
 import '../services/preset_service.dart';
 
@@ -53,31 +54,53 @@ class _SettingsPageState extends State<SettingsPage>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('设置', style: TextStyle(fontSize: 14)),
-        bottom: TabBar(
+      body: Column(
+        children: [
+          Container(
+            height: 30,
+            color: cs.surfaceContainerHigh,
+            child: Row(
+              children: [
+                Expanded(
+                  child: DragToMoveArea(
+                    child: Container(
+                      height: 30,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.only(left: 12),
+                      child: const Text('设置', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TabBar(
+            controller: _tabCtrl,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelStyle: const TextStyle(fontSize: 12),
+            tabs: const [
+              Tab(text: '数据'),
+              Tab(text: '主题'),
+              Tab(text: '界面'),
+              Tab(text: '预设管理'),
+              Tab(text: '关于'),
+            ],
+          ),
+          Expanded(
+              child: TabBarView(
           controller: _tabCtrl,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          labelStyle: const TextStyle(fontSize: 12),
-          tabs: const [
-            Tab(text: '数据'),
-            Tab(text: '主题'),
-            Tab(text: '界面'),
-            Tab(text: '预设管理'),
-            Tab(text: '关于'),
+          children: [
+            _buildDataTab(),
+            _buildThemeTab(),
+            _buildUiTab(),
+            _buildPresetTab(),
+            _buildAboutTab(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          _buildDataTab(),
-          _buildThemeTab(),
-          _buildUiTab(),
-          _buildPresetTab(),
-          _buildAboutTab(),
+          ),
         ],
       ),
     );
