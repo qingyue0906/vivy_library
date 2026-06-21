@@ -63,16 +63,27 @@ class _SettingsPageState extends State<SettingsPage>
             color: cs.surfaceContainerHigh,
             child: Row(
               children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 46,
+                    height: 30,
+                    alignment: Alignment.center,
+                    child: Icon(Icons.arrow_back, size: 12, color: cs.onSurfaceVariant),
+                  ),
+                ),
                 Expanded(
                   child: DragToMoveArea(
                     child: Container(
                       height: 30,
                       alignment: Alignment.center,
-                      padding: const EdgeInsets.only(left: 12),
-                      child: const Text('设置', style: TextStyle(fontSize: 12)),
+                      child: Text('设置', style: TextStyle(fontSize: 12, color: cs.onSurface)),
                     ),
                   ),
                 ),
+                _windowButton(Icons.horizontal_rule, cs, () => windowManager.minimize()),
+                _windowButton(Icons.crop_square, cs, () => windowManager.maximize()),
+                _windowButton(Icons.close, cs, () => windowManager.close(), isClose: true),
               ],
             ),
           ),
@@ -346,6 +357,18 @@ class _SettingsPageState extends State<SettingsPage>
           onChanged: (v) => setState(() => onChanged(v)),
         ),
       ],
+    );
+  }
+
+  Widget _windowButton(IconData icon, ColorScheme cs, VoidCallback onTap, {bool isClose = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 46,
+        height: 30,
+        alignment: Alignment.center,
+        child: Icon(icon, size: 12, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+      ),
     );
   }
 
