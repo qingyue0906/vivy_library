@@ -86,7 +86,7 @@ class _SettingsPageState extends State<SettingsPage>
                 ),
                 _windowButton(Icons.horizontal_rule, cs, () => windowManager.minimize()),
                 _windowButton(Icons.crop_square, cs, () => windowManager.maximize()),
-                _windowButton(Icons.close, cs, () => windowManager.close(), isClose: true),
+                _windowButton(Icons.close, cs, () => exit(0), isClose: true),
               ],
             ),
           ),
