@@ -180,6 +180,7 @@ class SettingsService {
       'maxCardWidth': prefs.getDouble('${_gridPrefix}maxCardWidth'),
       'aspectRatio': prefs.getString('${_gridPrefix}aspectRatio'),
       'itemsPerRow': prefs.getInt('${_gridPrefix}itemsPerRow'),
+      'compactLevel': prefs.getDouble('${_gridPrefix}compactLevel'),
     });
   }
 
