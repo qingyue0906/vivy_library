@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'compact_level.dart';
 
 class CategoryPanel extends StatelessWidget {
   final List<String> categories;
@@ -15,34 +16,36 @@ class CategoryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final c = CompactLevel.of(context);
     return Material(
       color: cs.surfaceContainerLow,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          _buildItem(context, label: '全部', value: null),
-          ...categories.map((cat) => _buildItem(context, label: cat, value: cat)),
+          _buildItem(context, c, label: '全部', value: null),
+          ...categories.map((cat) => _buildItem(context, c, label: cat, value: cat)),
         ],
       ),
     );
   }
 
-  Widget _buildItem(BuildContext context, {required String label, required String? value}) {
+  Widget _buildItem(BuildContext context, double c,
+      {required String label, required String? value}) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = selectedCategory == value;
     return Container(
-      height: 28,
+      height: 28 * c,
       color: isSelected ? cs.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: () => onCategorySelected(value),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.symmetric(horizontal: 12 * c),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 12 * c,
                 color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
               ),
             ),

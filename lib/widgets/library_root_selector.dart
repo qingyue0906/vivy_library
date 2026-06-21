@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import 'dart:io';
+import 'compact_level.dart';
 
 /// 顶部"资源库选择"按钮 + 浮层。
 /// 按钮本身用 CompositedTransformTarget 包裹作为锚点,
@@ -53,31 +54,32 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: _showPanel,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(4 * c),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 4 * c),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4 * c),
         ),
         child: Row(
           children: [
-            Icon(Icons.video_library, size: 12, color: cs.onSurfaceVariant),
-            const SizedBox(width: 4),
+            Icon(Icons.video_library, size: 12 * c, color: cs.onSurfaceVariant),
+            SizedBox(width: 4 * c),
             Expanded(
               child: Text(
                 _displayLabel(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: cs.onSurface),
+                style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
               ),
             ),
-            const SizedBox(width: 2),
-            Icon(Icons.arrow_drop_down, size: 14, color: cs.onSurfaceVariant),
+            SizedBox(width: 2 * c),
+            Icon(Icons.arrow_drop_down, size: 14 * c, color: cs.onSurfaceVariant),
           ],
         ),
       ),

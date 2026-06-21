@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/library_item.dart';
+import 'compact_level.dart';
 
 class ItemCard extends StatelessWidget {
   final LibraryItem item;
@@ -23,13 +24,14 @@ class ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return Card(
       clipBehavior: Clip.antiAlias,
       color: cs.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(4 * c),
         side: isSelected
             ? BorderSide(color: cs.primary, width: 1.5)
             : BorderSide(color: cs.outlineVariant, width: 0.5),
@@ -54,9 +56,9 @@ class ItemCard extends StatelessWidget {
             children: [
               AspectRatio(
                 aspectRatio: 3 / 2,
-                child: _buildPreviewImage(context),
+                child: _buildPreviewImage(context, c),
               ),
-              _buildInfo(),
+              _buildInfo(c),
             ],
           ),
         ),
@@ -64,12 +66,12 @@ class ItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviewImage(BuildContext context) {
+  Widget _buildPreviewImage(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     if (item.previewPath == null) {
       return Container(
         color: cs.surfaceContainerHighest,
-        child: Icon(Icons.image_not_supported, size: 20, color: cs.onSurfaceVariant),
+        child: Icon(Icons.image_not_supported, size: 20 * c, color: cs.onSurfaceVariant),
       );
     }
     return Image.file(
@@ -77,20 +79,20 @@ class ItemCard extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => Container(
         color: cs.surfaceContainerHighest,
-        child: Icon(Icons.broken_image, size: 20, color: cs.onSurfaceVariant),
+        child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
       ),
     );
   }
 
-  Widget _buildInfo() {
+  Widget _buildInfo(double c) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      padding: EdgeInsets.symmetric(horizontal: 6 * c, vertical: 5 * c),
       child: Text(
         item.info.title,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w500),
       ),
     );
   }

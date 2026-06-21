@@ -135,7 +135,7 @@ class _SettingsPageState extends State<SettingsPage>
                     minCardWidth: v,
                     maxCardWidth: _gridSettings.maxCardWidth,
                     aspectRatio: _gridSettings.aspectRatio,
-                    itemsPerRow: _gridSettings.itemsPerRow,
+                    itemsPerRow: _gridSettings.itemsPerRow, compactLevel: _gridSettings.compactLevel,
                   )),
           const SizedBox(height: 16),
           _buildSliderField('卡片最大宽度', _gridSettings.maxCardWidth, 120, 400,
@@ -143,12 +143,14 @@ class _SettingsPageState extends State<SettingsPage>
                     minCardWidth: _gridSettings.minCardWidth,
                     maxCardWidth: v,
                     aspectRatio: _gridSettings.aspectRatio,
-                    itemsPerRow: _gridSettings.itemsPerRow,
+                    itemsPerRow: _gridSettings.itemsPerRow, compactLevel: _gridSettings.compactLevel,
                   )),
           const SizedBox(height: 16),
           _buildAspectRatioSelector(),
           const SizedBox(height: 16),
           _buildItemsPerRowField(),
+          const SizedBox(height: 20),
+          _buildCompactLevelSlider(),
           const SizedBox(height: 20),
           Align(
             alignment: Alignment.centerRight,
@@ -159,6 +161,45 @@ class _SettingsPageState extends State<SettingsPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompactLevelSlider() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('紧凑度', style: TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            const SizedBox(width: 8),
+            Text('${(_gridSettings.compactLevel * 100).round()}%',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
+          child: Slider(
+            value: _gridSettings.compactLevel,
+            min: 0.5,
+            max: 2.0,
+            divisions: 15,
+            onChanged: (v) => setState(() {
+              _gridSettings = GridSettings(
+                minCardWidth: _gridSettings.minCardWidth,
+                maxCardWidth: _gridSettings.maxCardWidth,
+                aspectRatio: _gridSettings.aspectRatio,
+                itemsPerRow: _gridSettings.itemsPerRow,
+                compactLevel: v,
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 
@@ -343,7 +384,7 @@ class _SettingsPageState extends State<SettingsPage>
                 minCardWidth: _gridSettings.minCardWidth,
                 maxCardWidth: _gridSettings.maxCardWidth,
                 aspectRatio: _gridSettings.aspectRatio,
-                itemsPerRow: n.clamp(0, 20),
+                itemsPerRow: n.clamp(0, 20), compactLevel: _gridSettings.compactLevel,
               );
             },
           ),

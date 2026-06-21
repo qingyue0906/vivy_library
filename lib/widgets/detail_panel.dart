@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../models/library_item.dart';
+import 'compact_level.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
@@ -10,84 +11,85 @@ class DetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return Container(
       color: cs.surfaceContainerLow,
-      child: item == null ? _buildEmpty(cs) : _buildDetail(context, item!),
+      child: item == null ? _buildEmpty(cs, c) : _buildDetail(context, c, item!),
     );
   }
 
-  Widget _buildEmpty(ColorScheme cs) {
+  Widget _buildEmpty(ColorScheme cs, double c) {
     return Center(
       child: Text(
         '选择一个项目\n查看详情',
         textAlign: TextAlign.center,
-        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12 * c),
       ),
     );
   }
 
-  Widget _buildDetail(BuildContext context, LibraryItem item) {
+  Widget _buildDetail(BuildContext context, double c, LibraryItem item) {
     return ListView(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(12 * c),
       children: [
         if (item.previewPath != null)
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(4 * c),
             child: Image.file(
               File(item.previewPath!),
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const SizedBox.shrink(),
             ),
           ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12 * c),
         Text(
           item.info.title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
-        const Divider(height: 1),
-        const SizedBox(height: 6),
-        _buildRow(context, '分类', item.category),
-        _buildRow(context, '类型', item.info.type),
-        _buildRow(context, '分级', item.info.contentRating),
-        _buildRow(context, '评分', '${item.info.rating / 2} / 5'),
+        SizedBox(height: 8 * c),
+        Divider(height: 1 * c),
+        SizedBox(height: 6 * c),
+        _buildRow(context, c, '分类', item.category),
+        _buildRow(context, c, '类型', item.info.type),
+        _buildRow(context, c, '分级', item.info.contentRating),
+        _buildRow(context, c, '评分', '${item.info.rating / 2} / 5'),
         if (item.info.creator != null)
-          _buildRow(context, '创建者', item.info.creator!),
+          _buildRow(context, c, '创建者', item.info.creator!),
         if (item.info.description != '无描述')
-          _buildDescriptionRow(context, '描述', item.info.description),
+          _buildDescriptionRow(context, c, '描述', item.info.description),
         if (item.info.classes.isNotEmpty)
-          _buildRow(context, '标签分类', item.info.classes.join('、')),
+          _buildRow(context, c, '标签分类', item.info.classes.join('、')),
         if (item.info.tags.isNotEmpty)
-          _buildRow(context, '标签', item.info.tags.join('、')),
-        const SizedBox(height: 6),
-        const Divider(height: 1),
-        const SizedBox(height: 6),
-        _buildRow(context, '大小', _formatSize(item.sizeInBytes)),
-        _buildRow(context, '修改时间', _formatDate(item.modifiedTime)),
-        _buildRow(context, '路径', item.path),
+          _buildRow(context, c, '标签', item.info.tags.join('、')),
+        SizedBox(height: 6 * c),
+        Divider(height: 1 * c),
+        SizedBox(height: 6 * c),
+        _buildRow(context, c, '大小', _formatSize(item.sizeInBytes)),
+        _buildRow(context, c, '修改时间', _formatDate(item.modifiedTime)),
+        _buildRow(context, c, '路径', item.path),
       ],
     );
   }
 
-  Widget _buildDescriptionRow(BuildContext context, String label, String text) {
+  Widget _buildDescriptionRow(BuildContext context, double c, String label, String text) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.only(bottom: 6 * c),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 56,
-            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            width: 56 * c,
+            child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
           ),
-          Expanded(child: _buildUrlText(context, text)),
+          Expanded(child: _buildUrlText(context, c, text)),
         ],
       ),
     );
   }
 
-  Widget _buildUrlText(BuildContext context, String text) {
+  Widget _buildUrlText(BuildContext context, double c, String text) {
     final cs = Theme.of(context).colorScheme;
     final urlRegex = RegExp(r'https?://[^\s]+');
     final spans = <InlineSpan>[];
@@ -111,7 +113,7 @@ class DetailPanel extends StatelessWidget {
     }
 
     return RichText(
-      text: TextSpan(style: TextStyle(fontSize: 11, color: cs.onSurface), children: spans),
+      text: TextSpan(style: TextStyle(fontSize: 11 * c, color: cs.onSurface), children: spans),
     );
   }
 
@@ -119,19 +121,19 @@ class DetailPanel extends StatelessWidget {
     Process.run('cmd', ['/c', 'start', url]);
   }
 
-  Widget _buildRow(BuildContext context, String label, String value) {
+  Widget _buildRow(BuildContext context, double c, String label, String value) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
+      padding: EdgeInsets.only(bottom: 5 * c),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 56,
-            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            width: 56 * c,
+            child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(fontSize: 11, color: cs.onSurface)),
+            child: Text(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
           ),
         ],
       ),

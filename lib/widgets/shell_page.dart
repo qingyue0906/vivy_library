@@ -11,6 +11,7 @@ import '../services/settings_service.dart';
 import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
+import 'compact_level.dart';
 
 class ShellPage extends StatefulWidget {
   final void Function(ThemeMode mode) onThemeChanged;
@@ -112,41 +113,45 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildTitleBar(cs),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: _state,
-              builder: (context, _) => _buildBody(),
+    return CompactLevel(
+      level: widget.gridSettings.compactLevel,
+      child: Scaffold(
+        body: Column(
+          children: [
+            _buildTitleBar(cs),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: _state,
+                builder: (context, _) => _buildBody(),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildTitleBar(ColorScheme cs) {
+    final c = CompactLevel.of(context);
     return Container(
-      height: 30,
+      height: 30 * c,
       color: cs.surfaceContainerHigh,
       child: Row(
         children: [
           Expanded(
             child: DragToMoveArea(
               child: Container(
-                height: 30,
+                height: 30 * c,
                 alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(left: 12),
+                padding: EdgeInsets.only(left: 12 * c),
                 child: Row(
                   children: [
-                    Icon(Icons.menu_book, size: 14, color: cs.onSurface),
-                    const SizedBox(width: 6),
+                    Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
+                    SizedBox(width: 6 * c),
                     Text(
                       'Vivy Library',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 12 * c,
                         color: cs.onSurface,
                       ),
                     ),
@@ -158,6 +163,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           _CaptionButton(
             icon: Icons.horizontal_rule,
             onTap: () => windowManager.minimize(),
+            compactLevel: c,
           ),
           _CaptionButton(
             icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
@@ -168,11 +174,13 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 windowManager.maximize();
               }
             },
+            compactLevel: c,
           ),
           _CaptionButton(
             icon: Icons.close,
             onTap: () => windowManager.close(),
             isClose: true,
+            compactLevel: c,
           ),
         ],
       ),
@@ -190,15 +198,16 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       );
     }
     if (_state.currentRootPath.isEmpty) {
+      final c = CompactLevel.of(context);
       return Column(
         children: [
           Container(
-            height: 32,
+            height: 32 * c,
             color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.symmetric(horizontal: 12 * c),
             alignment: Alignment.centerLeft,
             child: SizedBox(
-              height: 24,
+              height: 24 * c,
               child: LibraryRootSelector(
                 currentPath: '',
                 onRootSelected: _onRootSelected,
@@ -346,25 +355,27 @@ class _CaptionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool isClose;
+  final double compactLevel;
 
   const _CaptionButton({
     required this.icon,
     required this.onTap,
     this.isClose = false,
+    this.compactLevel = 1.0,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
-      width: 46,
-      height: 30,
+      width: 46 * compactLevel,
+      height: 30 * compactLevel,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           color: Colors.transparent,
           child: Center(
-            child: Icon(icon, size: 12, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+            child: Icon(icon, size: 12 * compactLevel, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
           ),
         ),
       ),

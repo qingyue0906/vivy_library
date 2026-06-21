@@ -7,6 +7,7 @@ import 'dart:io';
 import 'file_browser_panel.dart';
 import 'class_nav_bar.dart';
 import 'package:flutter/services.dart';
+import 'compact_level.dart';
 
 class GridArea extends StatelessWidget {
   final List<LibraryItem> items;
@@ -30,6 +31,7 @@ class GridArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = CompactLevel.of(context);
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -46,10 +48,10 @@ class GridArea extends StatelessWidget {
           ClassNavBar(state: state),
           Expanded(
             child: items.isEmpty
-                ? Center(child: Text('没有找到项目', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)))
+                ? Center(child: Text('没有找到项目', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
                 : Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: _buildGrid(context),
+                    padding: EdgeInsets.all(8 * c),
+                    child: _buildGrid(context, c),
                   ),
           ),
           if (state.fileBrowserVisible && state.selectedItem != null) ...[
@@ -76,10 +78,10 @@ class GridArea extends StatelessWidget {
     );
   }
 
-  Widget _buildGrid(BuildContext context) {
+  Widget _buildGrid(BuildContext context, double c) {
     final minCardWidth = gridSettings.minCardWidth;
     final maxCardWidth = gridSettings.maxCardWidth;
-    final spacing = 8.0;
+    final spacing = 8.0 * c;
     final fixedPerRow = gridSettings.itemsPerRow;
 
     return LayoutBuilder(
@@ -135,6 +137,7 @@ class GridArea extends StatelessWidget {
 
   void _showContextMenu(
       BuildContext context, LibraryItem tappedItem, Offset globalPos) {
+    final c = CompactLevel.of(context);
     state.selectItemForContextMenu(tappedItem);
     final selectedItems = state.selectedItems;
     final isBatch = selectedItems.length > 1;
@@ -149,30 +152,30 @@ class GridArea extends StatelessWidget {
     showMenu<String>(
       context: context,
       position: position,
-      constraints: const BoxConstraints(minWidth: 150),
+      constraints: BoxConstraints(minWidth: 150 * c),
       items: [
         PopupMenuItem(
           value: 'edit',
-          height: 28,
+          height: 28 * c,
           child: Row(
             children: [
-              const Icon(Icons.edit, size: 13),
-              const SizedBox(width: 6),
+              Icon(Icons.edit, size: 13 * c),
+              SizedBox(width: 6 * c),
               Text(
                 isBatch ? '批量编辑 (${selectedItems.length} 项)' : '编辑',
-                style: const TextStyle(fontSize: 11),
+                style: TextStyle(fontSize: 11 * c),
               ),
             ],
           ),
         ),
         PopupMenuItem(
           value: 'open_folder',
-          height: 28,
+          height: 28 * c,
           child: Row(
-            children: const [
-              Icon(Icons.folder_open, size: 13),
-              SizedBox(width: 6),
-              Text('在资源管理器中显示', style: TextStyle(fontSize: 11)),
+            children: [
+              Icon(Icons.folder_open, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
             ],
           ),
         ),

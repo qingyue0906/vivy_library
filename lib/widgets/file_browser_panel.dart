@@ -6,39 +6,41 @@ import '../services/library_scanner.dart';
 import 'exe_picker_dialog.dart';
 import '../models/exe_record.dart';
 import 'file_properties_dialog.dart';
+import 'compact_level.dart';
 
 class FileBrowserPanel extends StatelessWidget {
   final LibraryItem item;
   final LibraryState state;
-  final double height; // 新增
+  final double height;
 
   const FileBrowserPanel({
     super.key,
     required this.item,
     required this.state,
-    required this.height, // 新增
+    required this.height,
   });
 
   @override
   Widget build(BuildContext context) {
+    final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return Container(
       height: height,
       color: cs.surface,
       child: Column(
         children: [
-          _buildHeader(context),
-          Expanded(child: _buildFileGrid()),
+          _buildHeader(context, c),
+          Expanded(child: _buildFileGrid(c)),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: 30 * c,
+      padding: EdgeInsets.symmetric(horizontal: 8 * c),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         border:
@@ -46,51 +48,49 @@ class FileBrowserPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.folder_open, size: 12, color: cs.onSurfaceVariant),
-          const SizedBox(width: 4),
+          Icon(Icons.folder_open, size: 12 * c, color: cs.onSurfaceVariant),
+          SizedBox(width: 4 * c),
           Text(
             '${item.info.title} 的内容',
             style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w500, color: cs.onSurface),
+                fontSize: 11 * c, fontWeight: FontWeight.w500, color: cs.onSurface),
           ),
           const Spacer(),
-          // 显示/隐藏系统文件按钮
           TextButton.icon(
             onPressed: state.toggleSystemFiles,
             icon: Icon(
               state.showSystemFiles
                   ? Icons.visibility_off
                   : Icons.visibility,
-              size: 14,
+              size: 14 * c,
             ),
             label: Text(
               state.showSystemFiles ? '隐藏 Info/Preview' : '显示 Info/Preview',
-              style: const TextStyle(fontSize: 11),
+              style: TextStyle(fontSize: 11 * c),
             ),
             style: TextButton.styleFrom(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  EdgeInsets.symmetric(horizontal: 10 * c, vertical: 4 * c),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
-          const SizedBox(width: 8),
-          // 关闭按钮
+          SizedBox(width: 8 * c),
           InkWell(
             onTap: state.hideFileBrowser,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12 * c),
             child: Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  EdgeInsets.symmetric(horizontal: 10 * c, vertical: 4 * c),
               decoration: BoxDecoration(
                 color: Colors.red.shade400,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12 * c),
               ),
-              child: const Text(
+              child: Text(
                 '✕ 关闭',
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 11,
+                    fontSize: 11 * c,
                     fontWeight: FontWeight.bold),
               ),
             ),
@@ -100,20 +100,18 @@ class FileBrowserPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildFileGrid() {
+  Widget _buildFileGrid(double c) {
     final dir = Directory(item.path);
     if (!dir.existsSync()) {
-      return const Center(child: Text('文件夹不存在'));
+      return Center(child: Text('文件夹不存在'));
     }
 
-    // 读取文件列表,只取第一层(不递归),按文件名排序
     final entries = dir
         .listSync()
         .whereType<File>()
         .toList()
       ..sort((a, b) => _baseName(a.path).compareTo(_baseName(b.path)));
 
-    // 根据 showSystemFiles 决定是否过滤 info.json 和预览图
     final visible = state.showSystemFiles
         ? entries
         : entries.where((f) {
@@ -128,28 +126,29 @@ class FileBrowserPanel extends StatelessWidget {
       return Center(
         child: Text(
           '没有可显示的文件',
-          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          style: TextStyle(color: Colors.grey.shade500, fontSize: 12 * c),
         ),
       );
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 90,  // 每个文件项最大宽度,跟下面 _buildFileItem 里的宽度对应
-        mainAxisExtent: 108,     // 每行固定高度(图标+文字总高度),避免文字行数不同导致错位
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
+      padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 90 * c,
+        mainAxisExtent: 108 * c,
+        crossAxisSpacing: 4 * c,
+        mainAxisSpacing: 4 * c,
       ),
       itemCount: visible.length,
       itemBuilder: (context, index) =>
-          _buildFileItem(context, visible[index]),
+          _buildFileItem(context, visible[index], c),
     );
   }
 
-  Widget _buildFileItem(BuildContext context, File file) {
+  Widget _buildFileItem(BuildContext context, File file, double c) {
     return _FileGridItem(
       file: file,
+      compactLevel: c,
       onDoubleTap: () => _openFile(file.path),
       onRightClick: (globalPos) => _showContextMenu(context, file, globalPos),
     );
@@ -167,7 +166,7 @@ class FileBrowserPanel extends StatelessWidget {
       items: const [
         PopupMenuItem(
           value: 'open',
-          height: 32, // 默认是 48,这里调小
+          height: 32,
           child: Row(
             children: [
               Icon(Icons.open_in_new, size: 14),
@@ -251,8 +250,6 @@ class FileBrowserPanel extends StatelessWidget {
 
   void _showRenameDialog(BuildContext context, File file) {
     final currentName = _baseName(file.path);
-    // 把扩展名之前的部分预选中,符合 Windows 重命名时只选中文件名、
-    // 不选扩展名的习惯,方便用户直接打字替换文件名主体部分
     final dotIndex = currentName.lastIndexOf('.');
     final nameWithoutExt =
         dotIndex > 0 ? currentName.substring(0, dotIndex) : currentName;
@@ -291,7 +288,7 @@ class FileBrowserPanel extends StatelessWidget {
   Future<void> _doRename(
       BuildContext dialogContext, File file, String newName) async {
     if (newName.isEmpty) return;
-    Navigator.pop(dialogContext); // 先关闭重命名对话框
+    Navigator.pop(dialogContext);
 
     final error = await state.renameFile(file.path, newName);
     if (error != null && dialogContext.mounted) {
@@ -302,8 +299,6 @@ class FileBrowserPanel extends StatelessWidget {
   }
 
   void _openFile(String path) {
-    // Windows 下用 explorer 打开单个文件,会调用系统默认程序
-    // 对应原版 os.startfile(filepath)
     Process.run('cmd', ['/c', 'start', '', path]);
   }
 
@@ -312,15 +307,15 @@ class FileBrowserPanel extends StatelessWidget {
   }
 }
 
-/// 单个文件图标项,带 hover 高亮反馈,效果对应 Windows 资源管理器
-/// 鼠标悬停在图标上时出现的浅色背景高亮。
 class _FileGridItem extends StatefulWidget {
   final File file;
+  final double compactLevel;
   final VoidCallback onDoubleTap;
   final void Function(Offset globalPosition) onRightClick;
 
   const _FileGridItem({
     required this.file,
+    required this.compactLevel,
     required this.onDoubleTap,
     required this.onRightClick,
   });
@@ -334,6 +329,7 @@ class _FileGridItemState extends State<_FileGridItem> {
 
   @override
   Widget build(BuildContext context) {
+    final c = widget.compactLevel;
     final name = _baseName(widget.file.path);
     final isImage =
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
@@ -349,38 +345,37 @@ class _FileGridItemState extends State<_FileGridItem> {
           message: name,
           waitDuration: const Duration(milliseconds: 500),
           child: Container(
-            // hover 时出现浅灰背景,效果对应 Windows 资源管理器的图标悬停反馈
             decoration: BoxDecoration(
               color: _isHovering
                   ? Colors.black.withOpacity(0.06)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(6 * c),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.symmetric(vertical: 4 * c),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 64 * c,
+                  height: 64 * c,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(6 * c),
                     color: Colors.grey.shade100,
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: isImage
                       ? Image.file(widget.file,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildFileIcon(name))
-                      : _buildFileIcon(name),
+                          errorBuilder: (_, __, ___) => _buildFileIcon(name, c))
+                      : _buildFileIcon(name, c),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4 * c),
                 Text(
                   name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 10),
+                  style: TextStyle(fontSize: 10 * c),
                 ),
               ],
             ),
@@ -390,7 +385,7 @@ class _FileGridItemState extends State<_FileGridItem> {
     );
   }
 
-  Widget _buildFileIcon(String fileName) {
+  Widget _buildFileIcon(String fileName, double c) {
     final ext = fileName.toLowerCase().split('.').last;
     IconData icon;
     Color color;
@@ -422,7 +417,7 @@ class _FileGridItemState extends State<_FileGridItem> {
         color = Colors.grey.shade500;
     }
 
-    return Icon(icon, size: 36, color: color);
+    return Icon(icon, size: 36 * c, color: color);
   }
 
   String _baseName(String fullPath) {

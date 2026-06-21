@@ -59,12 +59,14 @@ class GridSettings {
   final double maxCardWidth;
   final String aspectRatio; // "1:1", "4:3", "16:9"
   final int itemsPerRow; // 0 = auto
+  final double compactLevel; // 0.5~2.0, 1.0 = current baseline
 
   const GridSettings({
     this.minCardWidth = 120,
     this.maxCardWidth = 200,
     this.aspectRatio = '4:3',
     this.itemsPerRow = 0,
+    this.compactLevel = 1.0,
   });
 
   Map<String, dynamic> toMap() => {
@@ -72,6 +74,7 @@ class GridSettings {
         'maxCardWidth': maxCardWidth,
         'aspectRatio': aspectRatio,
         'itemsPerRow': itemsPerRow,
+        'compactLevel': compactLevel,
       };
 
   factory GridSettings.fromMap(Map<String, dynamic> map) => GridSettings(
@@ -79,6 +82,7 @@ class GridSettings {
         maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
         aspectRatio: map['aspectRatio'] ?? '4:3',
         itemsPerRow: map['itemsPerRow'] ?? 0,
+        compactLevel: (map['compactLevel'] ?? 1.0).toDouble(),
       );
 }
 
