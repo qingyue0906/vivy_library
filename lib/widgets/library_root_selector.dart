@@ -423,17 +423,20 @@ class _RootListTile extends StatelessWidget {
       child: Column(
         children: [
           _menuItem(
+            context,
             icon: Icons.drive_file_rename_outline,
             label: '命名资源库',
             onTap: onStartRename,
           ),
           Divider(height: 1, color: cs.outlineVariant),
           _menuItem(
+            context,
             icon: Icons.folder_open,
             label: '在资源管理器中打开',
             onTap: onOpenExplorer,
           ),
           _menuItem(
+            context,
             icon: Icons.delete_outline,
             label: '从列表中删除',
             onTap: onRemove,
@@ -444,13 +447,14 @@ class _RootListTile extends StatelessWidget {
     );
   }
 
-  Widget _menuItem({
+  Widget _menuItem(BuildContext context, {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? Colors.red : const Color(0xFF333333);
+    final cs = Theme.of(context).colorScheme;
+    final color = isDestructive ? Colors.red : cs.onSurface;
     return InkWell(
       onTap: onTap,
       child: Padding(

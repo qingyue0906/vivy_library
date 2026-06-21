@@ -36,6 +36,9 @@ class ItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
+    final selectedColor = cs.brightness == Brightness.light
+        ? const Color(0xFF7B49E0)
+        : cs.primary;
     final radius = BorderRadius.circular(4 * c);
     return GestureDetector(
       onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
@@ -55,21 +58,21 @@ class ItemCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
+            Container(
               height: displayHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: radius,
-                  border: Border.all(
-                    color: isSelected ? cs.primary : cs.outlineVariant,
-                    width: isSelected ? 1.5 : 0.5,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: radius,
-                  child: _buildPreviewImage(context, c),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                image: null,
+              ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(
+                  color: isSelected ? selectedColor : cs.outlineVariant,
+                  width: isSelected ? 1.5 : 0.5,
                 ),
               ),
+              child: _buildPreviewImage(context, c),
             ),
             _buildInfo(c),
           ],

@@ -36,6 +36,9 @@ class ClassNavBar extends StatelessWidget {
 
   Widget _buildChip(String label, int count, ColorScheme cs, double c) {
     final isSelected = state.selectedClass == label;
+    final chipBg = isSelected
+        ? cs.primary
+        : (cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer);
 
     return InkWell(
       onTap: () => state.setSelectedClass(label),
@@ -43,7 +46,7 @@ class ClassNavBar extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
         decoration: BoxDecoration(
-          color: isSelected ? cs.primary : Colors.transparent,
+          color: chipBg,
           borderRadius: BorderRadius.circular(3 * c),
           border: Border.all(
             color: isSelected ? cs.primary : cs.outlineVariant,
