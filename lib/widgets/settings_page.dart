@@ -63,21 +63,19 @@ class _SettingsPageState extends State<SettingsPage>
             color: cs.surfaceContainerHigh,
             child: Row(
               children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 46,
-                    height: 30,
-                    alignment: Alignment.center,
-                    child: Icon(Icons.arrow_back, size: 12, color: cs.onSurfaceVariant),
-                  ),
-                ),
                 Expanded(
                   child: DragToMoveArea(
                     child: Container(
                       height: 30,
-                      alignment: Alignment.center,
-                      child: Text('设置', style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.menu_book, size: 14, color: cs.onSurface),
+                          const SizedBox(width: 6),
+                          Text('Vivy Library', style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -87,7 +85,19 @@ class _SettingsPageState extends State<SettingsPage>
               ],
             ),
           ),
-          TabBar(
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 46,
+                  height: 30,
+                  alignment: Alignment.center,
+                  child: Icon(Icons.arrow_back, size: 12, color: cs.onSurfaceVariant),
+                ),
+              ),
+              Expanded(
+                child: TabBar(
             controller: _tabCtrl,
             isScrollable: true,
             tabAlignment: TabAlignment.start,
@@ -98,6 +108,9 @@ class _SettingsPageState extends State<SettingsPage>
               Tab(text: '界面'),
               Tab(text: '预设管理'),
               Tab(text: '关于'),
+            ],
+          ),
+              ),
             ],
           ),
           Expanded(
