@@ -101,6 +101,7 @@ class TopBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           side: BorderSide(color: cs.outlineVariant, width: 0.5),
         ),
+        constraints: BoxConstraints(minWidth: 60 * c, maxWidth: 100 * c),
         itemBuilder: (_) => labels.entries.map((e) {
           final selected = e.key == state.sortField;
           return PopupMenuItem<SortField>(
