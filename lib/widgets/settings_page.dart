@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+import '../models/library_root.dart';
+import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/preset_service.dart';
 
@@ -508,20 +511,41 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _exportData() async {
     try {
+      final dir = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: '选择导出目录',
+      );
+      if (dir == null) return;
+
       final prefs = await SharedPreferences.getInstance();
-      final all = prefs.getString('edit_presets') ?? '{}';
+      final theme = prefs.getString('theme_mode') ?? 'system';
+      final sortField = prefs.getString('sort_field') ?? 'name';
+      final sortOrder = prefs.getString('sort_order') ?? 'ascending';
+      final gridSettings = await SettingsService.loadGridSettings();
+      final layout = await SettingsService.loadLayout();
+      final windowState = await SettingsService.loadWindowState();
+      final roots = await LibraryRootService().loadAll();
+      final presets = await PresetService.loadAll();
+
       final export = {
         'version': '0.1.0',
         'exported_at': DateTime.now().toIso8601String(),
-        'presets': jsonDecode(all),
+        'theme_mode': theme,
+        'sort_field': sortField,
+        'sort_order': sortOrder,
+        'grid_settings': gridSettings.toMap(),
+        'layout': layout.toMap(),
+        'window_state': windowState.toMap(),
+        'library_roots': roots.map((r) => {'name': r.name, 'path': r.path}).toList(),
+        'presets': presets.map((k, v) => MapEntry(k, v)),
       };
-      final file = File('vivy_library_export.json');
+
+      final file = File('$dir/vivy_library_export.json');
       await file.writeAsString(
           const JsonEncoder.withIndent('  ').convert(export));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('已导出到 ${file.absolute.path}'),
+            content: Text('已导出到 $dir/vivy_library_export.json'),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -537,20 +561,63 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _importData() async {
     try {
-      final file = File('vivy_library_export.json');
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: '选择导入文件',
+        type: FileType.any,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.single.path!;
+
+      final file = File(path);
       if (!file.existsSync()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('未找到 vivy_library_export.json'), duration: Duration(seconds: 2)),
+            const SnackBar(content: Text('文件不存在'), duration: Duration(seconds: 2)),
           );
         }
         return;
       }
+
       final data = jsonDecode(await file.readAsString()) as Map;
-      final presets = data['presets'] as Map<String, dynamic>;
-      final converted = presets.map((k, v) => MapEntry(k, List<String>.from(v as List)));
-      await PresetService.saveAll(converted);
-      _presets = converted;
+      final prefs = await SharedPreferences.getInstance();
+
+      if (data['theme_mode'] != null) {
+        await prefs.setString('theme_mode', data['theme_mode'] as String);
+      }
+      if (data['sort_field'] != null) {
+        await prefs.setString('sort_field', data['sort_field'] as String);
+      }
+      if (data['sort_order'] != null) {
+        await prefs.setString('sort_order', data['sort_order'] as String);
+      }
+      if (data['grid_settings'] != null) {
+        final gs = GridSettings.fromMap(data['grid_settings'] as Map<String, dynamic>);
+        await SettingsService.saveGridSettings(gs);
+        widget.onGridSettingsChanged(gs);
+      }
+      if (data['layout'] != null) {
+        final l = LayoutState.fromMap(
+            (data['layout'] as Map).map((k, v) => MapEntry(k as String, (v as num).toDouble())));
+        await SettingsService.saveLayout(l);
+      }
+      if (data['window_state'] != null) {
+        final w = WindowState.fromMap(
+            (data['window_state'] as Map).map((k, v) => MapEntry(k as String, (v as num).toDouble())));
+        await SettingsService.saveWindowState(w);
+      }
+      if (data['library_roots'] != null) {
+        final roots = (data['library_roots'] as List)
+            .map((r) => LibraryRoot(name: r['name'] as String, path: r['path'] as String))
+            .toList();
+        await LibraryRootService().saveAll(roots);
+      }
+      if (data['presets'] != null) {
+        final presetsRaw = data['presets'] as Map<String, dynamic>;
+        final converted = presetsRaw.map((k, v) => MapEntry(k, List<String>.from(v as List)));
+        await PresetService.saveAll(converted);
+        _presets = converted;
+      }
+
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
