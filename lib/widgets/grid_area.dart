@@ -17,7 +17,6 @@ class GridArea extends StatelessWidget {
   final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
   final GridSettings gridSettings;
-  final double cardOpacity;
   final double middleOpacity;
 
   const GridArea({
@@ -29,7 +28,6 @@ class GridArea extends StatelessWidget {
     this.onFilePanelResizeEnd,
     required this.onEditRequest,
     required this.gridSettings,
-    this.cardOpacity = 1.0,
     this.middleOpacity = 1.0,
   });
 
@@ -76,6 +74,7 @@ class GridArea extends StatelessWidget {
               state: state,
               height: filePanelHeight,
               backgroundOpacity: middleOpacity,
+              gifMode: gridSettings.fileGifMode,
             ),
           ],
         ],
@@ -88,6 +87,7 @@ class GridArea extends StatelessWidget {
     final maxCardWidth = gridSettings.maxCardWidth;
     final spacing = 8.0 * c;
     final fixedPerRow = gridSettings.itemsPerRow;
+    final aspectRatio = gridSettings.aspectRatioValue;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -112,31 +112,34 @@ class GridArea extends StatelessWidget {
           }
         }
 
-        return SingleChildScrollView(
-          child: SizedBox(
-            width: constraints.maxWidth,
-            child: Wrap(
-              alignment: WrapAlignment.start,
-              spacing: spacing,
-              runSpacing: spacing,
-              children: items.map((item) {
-                return SizedBox(
-                  width: cardWidth,
-                  child: ItemCard(
-                    item: item,
-                    aspectRatio: gridSettings.aspectRatioValue,
-                    isSelected: state.isItemSelected(item.path),
-                    onTap: () => state.setSelectedItem(item),
-                    onCtrlTap: () => state.toggleItemSelection(item),
-                    onShiftTap: () => state.selectRange(item, items),
-                    onRightClick: (globalPos) =>
-                        _showContextMenu(context, item, globalPos),
-                    backgroundOpacity: cardOpacity,
-                  ),
-                );
-              }).toList(),
-            ),
+        final imgHeight = cardWidth / aspectRatio;
+        final mainAxisExtent = imgHeight + 36 * c;
+
+        return GridView.builder(
+          padding: EdgeInsets.all(8 * c),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisExtent: mainAxisExtent,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
           ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return ItemCard(
+              item: item,
+              aspectRatio: aspectRatio,
+              displayWidth: cardWidth,
+              displayHeight: imgHeight,
+              isSelected: state.isItemSelected(item.path),
+              onTap: () => state.setSelectedItem(item),
+              onCtrlTap: () => state.toggleItemSelection(item),
+              onShiftTap: () => state.selectRange(item, items),
+              onRightClick: (globalPos) =>
+                  _showContextMenu(context, item, globalPos),
+              gifMode: gridSettings.cardGifMode,
+            );
+          },
         );
       },
     );

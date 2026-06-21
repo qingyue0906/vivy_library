@@ -268,7 +268,6 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     final leftAlpha = hasBg ? bg.leftOpacity : 1.0;
     final middleAlpha = hasBg ? bg.middleOpacity : 1.0;
     final rightAlpha = hasBg ? bg.rightOpacity : 1.0;
-    final cardAlpha = hasBg ? bg.cardOpacity : 1.0;
     return Row(
       children: [
         ValueListenableBuilder<double>(
@@ -322,7 +321,6 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   );
                 },
                 gridSettings: widget.gridSettings,
-                cardOpacity: cardAlpha,
                 middleOpacity: middleAlpha,
               );
             },

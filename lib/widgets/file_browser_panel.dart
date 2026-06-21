@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import '../models/library_item.dart';
 import '../providers/library_state.dart';
 import '../services/library_scanner.dart';
+import '../services/settings_service.dart';
 import 'exe_picker_dialog.dart';
 import '../models/exe_record.dart';
 import 'file_properties_dialog.dart';
 import 'compact_level.dart';
+import 'gif_image.dart';
 
 class FileBrowserPanel extends StatelessWidget {
   final LibraryItem item;
   final LibraryState state;
   final double height;
   final double backgroundOpacity;
+  final GifDisplayMode gifMode;
 
   const FileBrowserPanel({
     super.key,
@@ -20,6 +23,7 @@ class FileBrowserPanel extends StatelessWidget {
     required this.state,
     required this.height,
     this.backgroundOpacity = 1.0,
+    this.gifMode = GifDisplayMode.hover,
   });
 
   @override
@@ -151,6 +155,7 @@ class FileBrowserPanel extends StatelessWidget {
     return _FileGridItem(
       file: file,
       compactLevel: c,
+      gifMode: gifMode,
       onDoubleTap: () => _openFile(file.path),
       onRightClick: (globalPos) => _showContextMenu(context, file, globalPos),
     );
@@ -312,12 +317,14 @@ class FileBrowserPanel extends StatelessWidget {
 class _FileGridItem extends StatefulWidget {
   final File file;
   final double compactLevel;
+  final GifDisplayMode gifMode;
   final VoidCallback onDoubleTap;
   final void Function(Offset globalPosition) onRightClick;
 
   const _FileGridItem({
     required this.file,
     required this.compactLevel,
+    required this.gifMode,
     required this.onDoubleTap,
     required this.onRightClick,
   });
@@ -336,6 +343,7 @@ class _FileGridItemState extends State<_FileGridItem> {
     final name = _baseName(widget.file.path);
     final isImage =
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
+    final isGif = name.toLowerCase().endsWith('.gif');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -367,9 +375,19 @@ class _FileGridItemState extends State<_FileGridItem> {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: isImage
-                      ? Image.file(widget.file,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildFileIcon(name, c))
+                      ? (isGif
+                          ? GifImage(
+                              file: widget.file,
+                              gifMode: widget.gifMode,
+                              cacheWidth: 120,
+                              fit: BoxFit.cover,
+                              placeholderColor: cs.surfaceContainerHighest,
+                              errorBuilder: (_) => _buildFileIcon(name, c),
+                            )
+                          : Image.file(widget.file,
+                              cacheWidth: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _buildFileIcon(name, c)))
                       : _buildFileIcon(name, c),
                 ),
                 SizedBox(height: 4 * c),

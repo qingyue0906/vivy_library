@@ -2,69 +2,77 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/library_item.dart';
+import '../services/settings_service.dart';
 import 'compact_level.dart';
+import 'gif_image.dart';
 
 class ItemCard extends StatelessWidget {
   final LibraryItem item;
   final double aspectRatio;
+  final double displayWidth;
+  final double displayHeight;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onCtrlTap;
   final VoidCallback onShiftTap;
   final void Function(Offset globalPosition) onRightClick;
-  final double backgroundOpacity;
+  final GifDisplayMode gifMode;
 
   const ItemCard({
     super.key,
     required this.item,
     this.aspectRatio = 4 / 3,
+    this.displayWidth = 150,
+    this.displayHeight = 112.5,
     required this.isSelected,
     required this.onTap,
     required this.onCtrlTap,
     required this.onShiftTap,
     required this.onRightClick,
-    this.backgroundOpacity = 1.0,
+    this.gifMode = GifDisplayMode.hover,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      color: cs.surface.withValues(alpha: backgroundOpacity),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4 * c),
-        side: isSelected
-            ? BorderSide(color: cs.primary, width: 1.5)
-            : BorderSide(color: cs.outlineVariant, width: 0.5),
-      ),
-      child: GestureDetector(
-        onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
-        child: InkWell(
-          onTap: () {
-            final isCtrl = HardwareKeyboard.instance.isControlPressed;
-            final isShift = HardwareKeyboard.instance.isShiftPressed;
-            if (isShift) {
-              onShiftTap();
-            } else if (isCtrl) {
-              onCtrlTap();
-            } else {
-              onTap();
-            }
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AspectRatio(
-                aspectRatio: aspectRatio,
-                child: _buildPreviewImage(context, c),
+    final radius = BorderRadius.circular(4 * c);
+    return GestureDetector(
+      onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
+      child: InkWell(
+        onTap: () {
+          final isCtrl = HardwareKeyboard.instance.isControlPressed;
+          final isShift = HardwareKeyboard.instance.isShiftPressed;
+          if (isShift) {
+            onShiftTap();
+          } else if (isCtrl) {
+            onCtrlTap();
+          } else {
+            onTap();
+          }
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: displayHeight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(
+                    color: isSelected ? cs.primary : cs.outlineVariant,
+                    width: isSelected ? 1.5 : 0.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: radius,
+                  child: _buildPreviewImage(context, c),
+                ),
               ),
-              _buildInfo(c),
-            ],
-          ),
+            ),
+            _buildInfo(c),
+          ],
         ),
       ),
     );
@@ -73,24 +81,36 @@ class ItemCard extends StatelessWidget {
   Widget _buildPreviewImage(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     if (item.previewPath == null) {
-      return Container(
-        color: cs.surfaceContainerHighest,
+      return Center(
         child: Icon(Icons.image_not_supported, size: 20 * c, color: cs.onSurfaceVariant),
+      );
+    }
+    final cacheW = ((displayWidth * 2) ~/ 100 * 100).clamp(100, 800).toInt();
+    final isGif = item.previewPath!.toLowerCase().endsWith('.gif');
+    final errorWidget = Center(
+      child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
+    );
+    if (isGif) {
+      return GifImage(
+        file: File(item.previewPath!),
+        gifMode: gifMode,
+        cacheWidth: cacheW,
+        fit: BoxFit.cover,
+        placeholderColor: Colors.transparent,
+        errorBuilder: (_) => errorWidget,
       );
     }
     return Image.file(
       File(item.previewPath!),
+      cacheWidth: cacheW,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        color: cs.surfaceContainerHighest,
-        child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
-      ),
+      errorBuilder: (_, __, ___) => errorWidget,
     );
   }
 
   Widget _buildInfo(double c) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6 * c, vertical: 5 * c),
+      padding: EdgeInsets.only(top: 4 * c, left: 2 * c, right: 2 * c),
       child: Text(
         item.info.title,
         maxLines: 2,

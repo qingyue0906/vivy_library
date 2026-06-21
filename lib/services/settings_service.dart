@@ -54,12 +54,16 @@ class WindowState {
       );
 }
 
+enum GifDisplayMode { unlimited, hover, static }
+
 class GridSettings {
   final double minCardWidth;
   final double maxCardWidth;
   final String aspectRatio; // "1:1", "4:3", "16:9"
   final int itemsPerRow; // 0 = auto
   final double compactLevel; // 0.5~2.0, 1.0 = current baseline
+  final GifDisplayMode cardGifMode;
+  final GifDisplayMode fileGifMode;
 
   double get aspectRatioValue {
     final parts = aspectRatio.split(':');
@@ -77,7 +81,29 @@ class GridSettings {
     this.aspectRatio = '4:3',
     this.itemsPerRow = 0,
     this.compactLevel = 1.0,
+    this.cardGifMode = GifDisplayMode.hover,
+    this.fileGifMode = GifDisplayMode.hover,
   });
+
+  GridSettings copyWith({
+    double? minCardWidth,
+    double? maxCardWidth,
+    String? aspectRatio,
+    int? itemsPerRow,
+    double? compactLevel,
+    GifDisplayMode? cardGifMode,
+    GifDisplayMode? fileGifMode,
+  }) {
+    return GridSettings(
+      minCardWidth: minCardWidth ?? this.minCardWidth,
+      maxCardWidth: maxCardWidth ?? this.maxCardWidth,
+      aspectRatio: aspectRatio ?? this.aspectRatio,
+      itemsPerRow: itemsPerRow ?? this.itemsPerRow,
+      compactLevel: compactLevel ?? this.compactLevel,
+      cardGifMode: cardGifMode ?? this.cardGifMode,
+      fileGifMode: fileGifMode ?? this.fileGifMode,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'minCardWidth': minCardWidth,
@@ -85,6 +111,8 @@ class GridSettings {
         'aspectRatio': aspectRatio,
         'itemsPerRow': itemsPerRow,
         'compactLevel': compactLevel,
+        'cardGifMode': cardGifMode.name,
+        'fileGifMode': fileGifMode.name,
       };
 
   factory GridSettings.fromMap(Map<String, dynamic> map) => GridSettings(
@@ -93,6 +121,14 @@ class GridSettings {
         aspectRatio: map['aspectRatio'] ?? '4:3',
         itemsPerRow: map['itemsPerRow'] ?? 0,
         compactLevel: (map['compactLevel'] ?? 1.0).toDouble(),
+        cardGifMode: GifDisplayMode.values.firstWhere(
+          (e) => e.name == map['cardGifMode'],
+          orElse: () => GifDisplayMode.hover,
+        ),
+        fileGifMode: GifDisplayMode.values.firstWhere(
+          (e) => e.name == map['fileGifMode'],
+          orElse: () => GifDisplayMode.hover,
+        ),
       );
 }
 
@@ -101,14 +137,12 @@ class BackgroundSettings {
   final double leftOpacity;
   final double middleOpacity;
   final double rightOpacity;
-  final double cardOpacity;
 
   const BackgroundSettings({
     this.path,
     this.leftOpacity = 1.0,
     this.middleOpacity = 1.0,
     this.rightOpacity = 1.0,
-    this.cardOpacity = 1.0,
   });
 
   BackgroundSettings copyWith({
@@ -117,14 +151,12 @@ class BackgroundSettings {
     double? leftOpacity,
     double? middleOpacity,
     double? rightOpacity,
-    double? cardOpacity,
   }) {
     return BackgroundSettings(
       path: clearPath ? null : (path ?? this.path),
       leftOpacity: leftOpacity ?? this.leftOpacity,
       middleOpacity: middleOpacity ?? this.middleOpacity,
       rightOpacity: rightOpacity ?? this.rightOpacity,
-      cardOpacity: cardOpacity ?? this.cardOpacity,
     );
   }
 
@@ -133,7 +165,6 @@ class BackgroundSettings {
         'leftOpacity': leftOpacity,
         'middleOpacity': middleOpacity,
         'rightOpacity': rightOpacity,
-        'cardOpacity': cardOpacity,
       };
 
   factory BackgroundSettings.fromMap(Map<String, dynamic> map) => BackgroundSettings(
@@ -141,7 +172,6 @@ class BackgroundSettings {
         leftOpacity: (map['leftOpacity'] ?? 1.0).toDouble(),
         middleOpacity: (map['middleOpacity'] ?? 1.0).toDouble(),
         rightOpacity: (map['rightOpacity'] ?? 1.0).toDouble(),
-        cardOpacity: (map['cardOpacity'] ?? 1.0).toDouble(),
       );
 }
 
@@ -241,6 +271,8 @@ class SettingsService {
       'aspectRatio': prefs.getString('${_gridPrefix}aspectRatio'),
       'itemsPerRow': prefs.getInt('${_gridPrefix}itemsPerRow'),
       'compactLevel': prefs.getDouble('${_gridPrefix}compactLevel'),
+      'cardGifMode': prefs.getString('${_gridPrefix}cardGifMode'),
+      'fileGifMode': prefs.getString('${_gridPrefix}fileGifMode'),
     });
   }
 
@@ -267,7 +299,6 @@ class SettingsService {
       leftOpacity: prefs.getDouble('${_bgPrefix}leftOpacity') ?? 1.0,
       middleOpacity: prefs.getDouble('${_bgPrefix}middleOpacity') ?? 1.0,
       rightOpacity: prefs.getDouble('${_bgPrefix}rightOpacity') ?? 1.0,
-      cardOpacity: prefs.getDouble('${_bgPrefix}cardOpacity') ?? 1.0,
     );
   }
 
@@ -281,6 +312,5 @@ class SettingsService {
     await prefs.setDouble('${_bgPrefix}leftOpacity', settings.leftOpacity);
     await prefs.setDouble('${_bgPrefix}middleOpacity', settings.middleOpacity);
     await prefs.setDouble('${_bgPrefix}rightOpacity', settings.rightOpacity);
-    await prefs.setDouble('${_bgPrefix}cardOpacity', settings.cardOpacity);
   }
 }

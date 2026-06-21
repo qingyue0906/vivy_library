@@ -210,16 +210,12 @@ class _SettingsPageState extends State<SettingsPage>
             _bgSettings = _bgSettings.copyWith(leftOpacity: v);
             _saveBackground();
           }),
-          _buildOpacitySlider('中间区域', _bgSettings.middleOpacity, hasBg, (v) {
+          _buildOpacitySlider('底部区域', _bgSettings.middleOpacity, hasBg, (v) {
             _bgSettings = _bgSettings.copyWith(middleOpacity: v);
             _saveBackground();
           }),
           _buildOpacitySlider('右面板', _bgSettings.rightOpacity, hasBg, (v) {
             _bgSettings = _bgSettings.copyWith(rightOpacity: v);
-            _saveBackground();
-          }),
-          _buildOpacitySlider('卡片', _bgSettings.cardOpacity, hasBg, (v) {
-            _bgSettings = _bgSettings.copyWith(cardOpacity: v);
             _saveBackground();
           }),
         ],
@@ -302,26 +298,26 @@ class _SettingsPageState extends State<SettingsPage>
           const Text('网格设置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           _buildSliderField('卡片最小宽度', _gridSettings.minCardWidth, 80, 300,
-              (v) => _gridSettings = GridSettings(
-                    minCardWidth: v,
-                    maxCardWidth: _gridSettings.maxCardWidth,
-                    aspectRatio: _gridSettings.aspectRatio,
-                    itemsPerRow: _gridSettings.itemsPerRow, compactLevel: _gridSettings.compactLevel,
-                  )),
+              (v) => _gridSettings = _gridSettings.copyWith(minCardWidth: v)),
           const SizedBox(height: 16),
           _buildSliderField('卡片最大宽度', _gridSettings.maxCardWidth, 120, 400,
-              (v) => _gridSettings = GridSettings(
-                    minCardWidth: _gridSettings.minCardWidth,
-                    maxCardWidth: v,
-                    aspectRatio: _gridSettings.aspectRatio,
-                    itemsPerRow: _gridSettings.itemsPerRow, compactLevel: _gridSettings.compactLevel,
-                  )),
+              (v) => _gridSettings = _gridSettings.copyWith(maxCardWidth: v)),
           const SizedBox(height: 16),
           _buildAspectRatioSelector(),
           const SizedBox(height: 16),
           _buildItemsPerRowField(),
           const SizedBox(height: 20),
           _buildCompactLevelSlider(),
+          const SizedBox(height: 20),
+          const Text('动图展示方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          _buildGifModeSelector('卡片动图', _gridSettings.cardGifMode, (v) {
+            setState(() => _gridSettings = _gridSettings.copyWith(cardGifMode: v));
+          }),
+          const SizedBox(height: 12),
+          _buildGifModeSelector('底部区域动图', _gridSettings.fileGifMode, (v) {
+            setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
+          }),
           const SizedBox(height: 20),
           Align(
             alignment: Alignment.centerRight,
@@ -360,14 +356,47 @@ class _SettingsPageState extends State<SettingsPage>
             max: 2.0,
             divisions: 15,
             onChanged: (v) => setState(() {
-              _gridSettings = GridSettings(
-                minCardWidth: _gridSettings.minCardWidth,
-                maxCardWidth: _gridSettings.maxCardWidth,
-                aspectRatio: _gridSettings.aspectRatio,
-                itemsPerRow: _gridSettings.itemsPerRow,
-                compactLevel: v,
-              );
+              _gridSettings = _gridSettings.copyWith(compactLevel: v);
             }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGifModeSelector(String label, GifDisplayMode current, ValueChanged<GifDisplayMode> onChanged) {
+    const labels = {
+      GifDisplayMode.unlimited: '无限制',
+      GifDisplayMode.hover: 'hover时播放',
+      GifDisplayMode.static: '展示为静态图',
+    };
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+        ),
+        Expanded(
+          child: DropdownButtonFormField<GifDisplayMode>(
+            key: ValueKey(current),
+            initialValue: current,
+            isDense: true,
+            style: TextStyle(fontSize: 12, color: cs.onSurface),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            items: GifDisplayMode.values
+                .map((mode) => DropdownMenuItem(
+                      value: mode,
+                      child: Text(labels[mode]!, style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                    ))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
           ),
         ),
       ],
@@ -526,12 +555,7 @@ class _SettingsPageState extends State<SettingsPage>
                 label: Text(r, style: const TextStyle(fontSize: 11)),
                 selected: selected,
                 onSelected: (_) => setState(() {
-                  _gridSettings = GridSettings(
-                    minCardWidth: _gridSettings.minCardWidth,
-                    maxCardWidth: _gridSettings.maxCardWidth,
-                    aspectRatio: r,
-                    itemsPerRow: _gridSettings.itemsPerRow,
-                  );
+                  _gridSettings = _gridSettings.copyWith(aspectRatio: r);
                 }),
                 visualDensity: VisualDensity.compact,
               ),
@@ -563,12 +587,7 @@ class _SettingsPageState extends State<SettingsPage>
             ),
             onChanged: (v) {
               final n = int.tryParse(v) ?? 0;
-              _gridSettings = GridSettings(
-                minCardWidth: _gridSettings.minCardWidth,
-                maxCardWidth: _gridSettings.maxCardWidth,
-                aspectRatio: _gridSettings.aspectRatio,
-                itemsPerRow: n.clamp(0, 20), compactLevel: _gridSettings.compactLevel,
-              );
+              _gridSettings = _gridSettings.copyWith(itemsPerRow: n.clamp(0, 20));
             },
           ),
         ),
