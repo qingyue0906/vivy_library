@@ -87,20 +87,30 @@ class TopBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 22 * c,
-      child: DropdownButton<SortField>(
-        value: state.sortField,
-        isDense: true,
-        underline: const SizedBox.shrink(),
-        style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
-        dropdownColor: cs.surface,
-        items: [
-          DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
-          DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
-          DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 11 * c, color: cs.onSurface))),
-        ],
-        onChanged: (field) {
-          if (field != null) state.setSortField(field);
-        },
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          visualDensity: VisualDensity.compact,
+          dropdownMenuTheme: const DropdownMenuThemeData(
+            menuStyle: MenuStyle(
+              shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.zero))),
+            ),
+          ),
+        ),
+        child: DropdownButton<SortField>(
+          value: state.sortField,
+          isDense: true,
+          underline: const SizedBox.shrink(),
+          style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
+          dropdownColor: cs.surface,
+          items: [
+            DropdownMenuItem(value: SortField.name, child: Text('名称', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
+            DropdownMenuItem(value: SortField.size, child: Text('大小', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
+            DropdownMenuItem(value: SortField.date, child: Text('日期', style: TextStyle(fontSize: 10 * c, color: cs.onSurface))),
+          ],
+          onChanged: (field) {
+            if (field != null) state.setSortField(field);
+          },
+        ),
       ),
     );
   }
