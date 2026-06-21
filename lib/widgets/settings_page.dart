@@ -327,7 +327,7 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildAspectRatioSelector() {
-    const ratios = ['1:1', '4:3', '16:9'];
+    const ratios = ['1:1', '4:3', '3:2', '16:9'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
