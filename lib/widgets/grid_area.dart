@@ -193,6 +193,6 @@ class GridArea extends StatelessWidget {
   }
 
   void _openInExplorer(String path) {
-    Process.run('explorer', ['/select,', path]);
+    Process.run('explorer', [path]);
   }
 }
