@@ -203,13 +203,13 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
+      color: cs.surface,
       elevation: 8,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: 320,
         constraints: const BoxConstraints(maxHeight: 360),
         decoration: BoxDecoration(
-          color: cs.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: cs.outlineVariant),
         ),
