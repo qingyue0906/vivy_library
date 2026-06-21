@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/item_info.dart';
 import '../models/library_item.dart';
 import '../providers/library_state.dart';
+import '../services/preset_service.dart';
 
-/// 编辑对话框,同时处理单项编辑和批量编辑两种模式。
-/// 对应 Python 里 EditDialog 和 BatchEditDialog 两个类。
 class EditDialog extends StatefulWidget {
-  final List<LibraryItem> targets; // 要编辑的项目列表
-  final bool isBatch;              // true = 批量编辑模式
+  final List<LibraryItem> targets;
+  final bool isBatch;
   final LibraryState state;
 
   const EditDialog({
@@ -22,35 +21,36 @@ class EditDialog extends StatefulWidget {
 }
 
 class _EditDialogState extends State<EditDialog> {
-  // 单项编辑用的 controllers
   late TextEditingController _titleCtrl;
   late TextEditingController _descCtrl;
   late TextEditingController _creatorCtrl;
+  late TextEditingController _classCtrl;
+  late TextEditingController _tagsCtrl;
 
-  // 批量编辑和单项编辑共用的字段
   String _type = 'application';
   String _contentRating = 'G';
   int _rating = 10;
-  String _tagsText = '';   // 用逗号分隔的字符串,方便输入
-  String _classesText = '';
-
-  // 批量编辑专用:操作模式
-  String _batchMode = 'overwrite';
 
   bool _isSaving = false;
 
-  static const _typeOptions = [
-    'application', 'game', 'video', 'image', 'music', 'document', 'other'
-  ];
-  static const _ratingOptions = [
-    'G', 'PG', 'PG-13', 'R', 'NC-17'
-  ];
+  bool _cbDesc = false;
+  bool _cbCreator = false;
+  bool _cbType = false;
+  bool _cbContentRating = false;
+  bool _cbRating = false;
+  bool _cbClass = false;
+  bool _cbTags = false;
+
+  String _classMode = 'overwrite';
+  String _tagsMode = 'overwrite';
+
+  Map<String, List<String>> _presets = {};
 
   @override
   void initState() {
     super.initState();
+    _loadPresets();
     if (!widget.isBatch) {
-      // 单项编辑:用第一个(也是唯一一个)项目的现有值预填
       final info = widget.targets.first.info;
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
@@ -58,14 +58,20 @@ class _EditDialogState extends State<EditDialog> {
       _type = info.type;
       _contentRating = info.contentRating;
       _rating = info.rating;
-      _tagsText = info.tags.join(', ');
-      _classesText = info.classes.join(', ');
+      _classCtrl = TextEditingController(text: info.classes.join(', '));
+      _tagsCtrl = TextEditingController(text: info.tags.join(', '));
     } else {
-      // 批量编辑:字段初始为空,由用户决定改哪些
       _titleCtrl = TextEditingController();
       _descCtrl = TextEditingController();
       _creatorCtrl = TextEditingController();
+      _classCtrl = TextEditingController();
+      _tagsCtrl = TextEditingController();
     }
+  }
+
+  Future<void> _loadPresets() async {
+    final presets = await PresetService.loadAll();
+    setState(() => _presets = presets);
   }
 
   @override
@@ -73,157 +79,244 @@ class _EditDialogState extends State<EditDialog> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _creatorCtrl.dispose();
+    _classCtrl.dispose();
+    _tagsCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.isBatch
-          ? '批量编辑 (${widget.targets.length} 项)'
-          : '编辑：${widget.targets.first.info.title}'),
+      titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      title: Text(
+        widget.isBatch
+            ? '批量编辑 (${widget.targets.length} 项)'
+            : '编辑：${widget.targets.first.info.title}',
+        style: const TextStyle(fontSize: 14),
+      ),
       content: SizedBox(
-        width: 480,
+        width: 420,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 批量编辑模式下显示操作模式选择
-              if (widget.isBatch) ...[
-                _buildBatchModeSelector(),
-                const SizedBox(height: 16),
-                const Divider(),
+              if (!widget.isBatch) ...[
+                _buildField('标题', _titleCtrl),
+                const SizedBox(height: 8),
+                _buildField('描述', _descCtrl, maxLines: 2),
+                const SizedBox(height: 8),
+                _buildPresetField('创建者', _creatorCtrl, 'creator'),
                 const SizedBox(height: 8),
               ],
-
-              // 单项编辑才有标题/描述/创建者字段
-              if (!widget.isBatch) ...[
-                _buildTextField('标题', _titleCtrl),
-                const SizedBox(height: 12),
-                _buildTextField('描述', _descCtrl, maxLines: 3),
-                const SizedBox(height: 12),
-                _buildTextField('创建者', _creatorCtrl),
-                const SizedBox(height: 16),
+              if (widget.isBatch) ...[
+                _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 2)),
+                const SizedBox(height: 6),
+                _buildCheckableField('创建者', _cbCreator, _buildPresetField('', _creatorCtrl, 'creator')),
+                const SizedBox(height: 6),
               ],
-
-              // 类型和分级
-              Row(
-                children: [
-                  Expanded(child: _buildDropdown('类型', _type, _typeOptions,
-                      (v) => setState(() => _type = v!))),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: _buildDropdown(
-                          '分级', _contentRating, _ratingOptions,
-                          (v) => setState(() => _contentRating = v!))),
-                ],
+              _buildRowFields(
+                _buildDropdownField('类型', _type, _typeOptions, (v) => setState(() => _type = v!), widget.isBatch),
+                _buildDropdownField('分级', _contentRating, _ratingOptions, (v) => setState(() => _contentRating = v!), widget.isBatch),
               ),
-
-              // 评分滑块(仅单项编辑显示)
-              if (!widget.isBatch) ...[
-                const SizedBox(height: 12),
-                _buildRatingSlider(),
-              ],
-
-              const SizedBox(height: 12),
-              _buildTextField('分类标签 (class, 逗号分隔)', 
-                  TextEditingController(text: _classesText),
-                  onChanged: (v) => _classesText = v),
-              const SizedBox(height: 12),
-              _buildTextField('标签 (tags, 逗号分隔)',
-                  TextEditingController(text: _tagsText),
-                  onChanged: (v) => _tagsText = v),
+              const SizedBox(height: 8),
+              if (!widget.isBatch) _buildRatingSlider(),
+              if (widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
+              const SizedBox(height: 8),
+              _buildClassOrTagsSection('class'),
+              const SizedBox(height: 8),
+              _buildClassOrTagsSection('tags'),
             ],
           ),
         ),
       ),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: const Text('取消', style: TextStyle(fontSize: 12)),
         ),
         FilledButton(
           onPressed: _isSaving ? null : _save,
           child: _isSaving
               ? const SizedBox(
-                  width: 16,
-                  height: 16,
+                  width: 14, height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('保存'),
+              : const Text('保存', style: TextStyle(fontSize: 12)),
         ),
       ],
     );
   }
 
-  Widget _buildBatchModeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  List<String> get _typeOptions => _presets['type'] ?? PresetService.defaults['type']!;
+  List<String> get _ratingOptions => _presets['contentRating'] ?? PresetService.defaults['contentRating']!;
+
+  Widget _buildCheckableField(String label, bool checked, Widget child) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('操作模式', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        const SizedBox(height: 8),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'overwrite', label: Text('覆盖')),
-            ButtonSegment(value: 'append', label: Text('追加')),
-            ButtonSegment(value: 'remove', label: Text('删除')),
-          ],
-          selected: {_batchMode},
-          onSelectionChanged: (s) => setState(() => _batchMode = s.first),
+        SizedBox(
+          width: 24,
+          height: 32,
+          child: Checkbox(
+            value: checked,
+            onChanged: (v) => setState(() {
+              if (label == '描述') { _cbDesc = v ?? false; }
+              else if (label == '创建者') { _cbCreator = v ?? false; }
+              else if (label == '评分') { _cbRating = v ?? false; }
+              else if (label == 'types') { _cbType = v ?? false; }
+              else if (label == 'ratings') { _cbContentRating = v ?? false; }
+            }),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (label.isNotEmpty && label != 'types' && label != 'ratings')
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+                ),
+              child,
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController ctrl, {
-    int maxLines = 1,
-    void Function(String)? onChanged,
-  }) {
+  Widget _buildRowFields(Widget left, Widget right) {
+    return Row(
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: 10),
+        Expanded(child: right),
+      ],
+    );
+  }
+
+  Widget _buildField(String label, TextEditingController ctrl, {int maxLines = 1}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        const SizedBox(height: 4),
+        if (label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+          ),
         TextField(
           controller: ctrl,
           maxLines: maxLines,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            isDense: true,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
+          style: const TextStyle(fontSize: 12, color: Colors.black87),
+          decoration: _inputDecoration(),
         ),
       ],
     );
   }
 
-  Widget _buildDropdown(String label, String value, List<String> options,
-      void Function(String?) onChanged) {
+  Widget _buildPresetField(String label, TextEditingController ctrl, String presetKey) {
+    final presets = _presets[presetKey] ?? [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        const SizedBox(height: 4),
-        DropdownButtonFormField<String>(
-          value: value,
-          decoration: InputDecoration(
-            isDense: true,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        if (label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
           ),
-          items: options
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-              .toList(),
-          onChanged: onChanged,
+        Autocomplete<String>(
+          initialValue: TextEditingValue(text: ctrl.text),
+          optionsBuilder: (textEditingValue) {
+            if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+            return presets.where((option) =>
+                option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+          },
+          onSelected: (selection) {
+            if (presetKey == 'class' || presetKey == 'tags') {
+              final current = ctrl.text.trim();
+              final parts = current.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+              if (!parts.contains(selection)) {
+                parts.add(selection);
+                ctrl.text = parts.join(', ');
+                ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
+              }
+            } else {
+              ctrl.text = selection;
+              ctrl.selection = TextSelection.collapsed(offset: selection.length);
+            }
+          },
+          fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
+            if (acController.text != ctrl.text) {
+              acController.text = ctrl.text;
+            }
+            return TextField(
+              controller: acController,
+              focusNode: focusNode,
+              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              onChanged: (v) => ctrl.text = v,
+              decoration: _inputDecoration(),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: (options.length * 32).clamp(0, 160).toDouble(),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options.elementAt(index);
+                      return InkWell(
+                        onTap: () => onSelected(option),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Text(option, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
         ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownField(String label, String value, List<String> options, ValueChanged<String?> onChanged, bool isBatch) {
+    final content = DropdownButtonFormField<String>(
+      initialValue: options.contains(value) ? value : null,
+      isDense: true,
+      style: const TextStyle(fontSize: 12, color: Colors.black87),
+      decoration: _inputDecoration(),
+      items: options
+          .map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12, color: Colors.black87))))
+          .toList(),
+      onChanged: onChanged,
+    );
+    if (isBatch) {
+      final cbLabel = label == '类型' ? 'types' : 'ratings';
+      return _buildCheckableField(cbLabel, label == '类型' ? _cbType : _cbContentRating, content);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+          ),
+        content,
       ],
     );
   }
@@ -233,20 +326,115 @@ class _EditDialogState extends State<EditDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('评分：${(_rating / 2).toStringAsFixed(1)} / 5',
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        Slider(
-          value: _rating.toDouble(),
-          min: 0,
-          max: 10,
-          divisions: 10,
-          onChanged: (v) => setState(() => _rating = v.round()),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 32,
+          child: Slider(
+            value: _rating.toDouble(),
+            min: 0,
+            max: 10,
+            divisions: 10,
+            onChanged: (v) => setState(() => _rating = v.round()),
+          ),
         ),
       ],
     );
   }
 
-  // 把逗号分隔的字符串转成 List<String>,去掉空项和首尾空格
-  // 对应 Python 里 split(',') + strip() 的那段处理
+  Widget _buildClassOrTagsSection(String key) {
+    final isClass = key == 'class';
+    final label = isClass ? '分类标签 (class, 逗号分隔)' : '标签 (tags, 逗号分隔)';
+    final ctrl = isClass ? _classCtrl : _tagsCtrl;
+    final checked = isClass ? _cbClass : _cbTags;
+    final mode = isClass ? _classMode : _tagsMode;
+
+    if (!widget.isBatch) {
+      return _buildPresetField(label, ctrl, key);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 32,
+              child: Checkbox(
+                value: checked,
+                onChanged: (v) => setState(() {
+                  if (isClass) { _cbClass = v ?? false; }
+                  else { _cbTags = v ?? false; }
+                }),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            Expanded(child: _buildPresetField(label, ctrl, key)),
+          ],
+        ),
+        if (checked) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: _buildModeRadios(mode, (v) {
+              setState(() {
+                if (isClass) { _classMode = v; }
+                else { _tagsMode = v; }
+              });
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildModeRadios(String currentMode, ValueChanged<String> onChanged) {
+    return Row(
+      children: [
+        _buildRadio('覆盖', 'overwrite', currentMode, onChanged),
+        const SizedBox(width: 8),
+        _buildRadio('追加', 'append', currentMode, onChanged),
+        const SizedBox(width: 8),
+        _buildRadio('删除', 'remove', currentMode, onChanged),
+      ],
+    );
+  }
+
+  Widget _buildRadio(String label, String value, String currentMode, ValueChanged<String> onChanged) {
+    final selected = currentMode == value;
+    return InkWell(
+      onTap: () => onChanged(value),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: selected ? Colors.deepPurple.shade50 : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: selected ? Colors.deepPurple.shade200 : Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: selected ? Colors.deepPurple : Colors.grey.shade700,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration() {
+    return InputDecoration(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+    );
+  }
+
   List<String> _parseList(String text) {
     return text
         .split(',')
@@ -257,36 +445,31 @@ class _EditDialogState extends State<EditDialog> {
 
   Future<void> _save() async {
     setState(() => _isSaving = true);
-
     try {
       if (!widget.isBatch) {
-        // 单项编辑:直接用表单值构建新的 ItemInfo
         final newInfo = ItemInfo(
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim(),
-          creator: _creatorCtrl.text.trim().isEmpty
-              ? null
-              : _creatorCtrl.text.trim(),
+          creator: _creatorCtrl.text.trim().isEmpty ? null : _creatorCtrl.text.trim(),
           type: _type,
           contentRating: _contentRating,
           rating: _rating,
-          tags: _parseList(_tagsText),
-          classes: _parseList(_classesText),
+          tags: _parseList(_tagsCtrl.text),
+          classes: _parseList(_classCtrl.text),
         );
-        await widget.state.saveItemInfo(
-            widget.targets.first.path, newInfo);
+        await widget.state.saveItemInfo(widget.targets.first.path, newInfo);
       } else {
-        // 批量编辑:只传有实际输入内容的字段
         await widget.state.batchEditItems(
           itemPaths: widget.targets.map((e) => e.path).toList(),
-          type: _type,
-          contentRating: _contentRating,
-          tags: _parseList(_tagsText),
-          classes: _parseList(_classesText),
-          mode: _batchMode,
+          description: _cbDesc ? _descCtrl.text.trim() : null,
+          type: _cbType ? _type : null,
+          contentRating: _cbContentRating ? _contentRating : null,
+          tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
+          classes: _cbClass ? _parseList(_classCtrl.text) : null,
+          classMode: _classMode,
+          tagsMode: _tagsMode,
         );
       }
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

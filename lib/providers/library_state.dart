@@ -308,15 +308,17 @@ class LibraryState extends ChangeNotifier {
   }
 
   /// 批量编辑:对所有选中项应用同一批字段变更
-  /// mode: 'overwrite'(覆盖) | 'append'(追加) | 'remove'(删除)
-  /// 对应你 Python 版本里批量编辑对话框的三种操作模式
+  /// classMode / tagsMode: 'overwrite'(覆盖) | 'append'(追加) | 'remove'(删除)
+  /// 其他标量字段(type/contentRating等)仅当非 null 时直接覆盖
   Future<void> batchEditItems({
     required List<String> itemPaths,
+    String? description,
     String? type,
     String? contentRating,
     List<String>? tags,
     List<String>? classes,
-    required String mode,
+    String classMode = 'overwrite',
+    String tagsMode = 'overwrite',
   }) async {
     for (final path in itemPaths) {
       final index = _allItems.indexWhere((e) => e.path == path);
@@ -324,13 +326,12 @@ class LibraryState extends ChangeNotifier {
       final old = _allItems[index].info;
 
       List<String> mergeList(
-          List<String> oldList, List<String>? newList) {
+          List<String> oldList, List<String>? newList, String mode) {
         if (newList == null || newList.isEmpty) return oldList;
         switch (mode) {
           case 'overwrite':
             return newList;
           case 'append':
-            // 追加时去重
             return {...oldList, ...newList}.toList();
           case 'remove':
             return oldList.where((e) => !newList.contains(e)).toList();
@@ -340,12 +341,11 @@ class LibraryState extends ChangeNotifier {
       }
 
       final newInfo = old.copyWith(
-        type: type != null && mode == 'overwrite' ? type : old.type,
-        contentRating: contentRating != null && mode == 'overwrite'
-            ? contentRating
-            : old.contentRating,
-        tags: mergeList(old.tags, tags),
-        classes: mergeList(old.classes, classes),
+        description: description,
+        type: type,
+        contentRating: contentRating,
+        tags: mergeList(old.tags, tags, tagsMode),
+        classes: mergeList(old.classes, classes, classMode),
       );
 
       await saveItemInfo(path, newInfo);
