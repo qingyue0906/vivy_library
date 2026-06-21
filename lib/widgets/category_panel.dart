@@ -41,7 +41,7 @@ class CategoryPanel extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 12 * c),
           child: Align(
-            alignment: Alignment.centerLeft,
+            alignment: Alignment.center,
             child: Text(
               label,
               style: TextStyle(
