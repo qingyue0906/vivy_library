@@ -179,7 +179,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           ),
           _CaptionButton(
             icon: Icons.close,
-            onTap: () => windowManager.close(),
+            onTap: () => exit(0),
             isClose: true,
             compactLevel: c,
           ),
