@@ -526,7 +526,6 @@ class _SettingsPageState extends State<SettingsPage>
       final layout = await SettingsService.loadLayout();
       final windowState = await SettingsService.loadWindowState();
       final roots = await LibraryRootService().loadAll();
-      final presets = await PresetService.loadAll(widget.libraryRootPath);
 
       final export = {
         'version': '0.1.0',
@@ -538,7 +537,6 @@ class _SettingsPageState extends State<SettingsPage>
         'layout': layout.toMap(),
         'window_state': windowState.toMap(),
         'library_roots': roots.map((r) => {'name': r.name, 'path': r.path}).toList(),
-        'presets': presets.map((k, v) => MapEntry(k, v)),
       };
 
       final file = File('$dir/vivy_library_export.json');
@@ -613,13 +611,6 @@ class _SettingsPageState extends State<SettingsPage>
             .toList();
         await LibraryRootService().saveAll(roots);
       }
-      if (data['presets'] != null) {
-        final presetsRaw = data['presets'] as Map<String, dynamic>;
-        final converted = presetsRaw.map((k, v) => MapEntry(k, List<String>.from(v as List)));
-        await PresetService.saveAll(widget.libraryRootPath, converted);
-        _presets = converted;
-      }
-
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
