@@ -119,6 +119,7 @@ class GridArea extends StatelessWidget {
                   width: cardWidth,
                   child: ItemCard(
                     item: item,
+                    aspectRatio: gridSettings.aspectRatioValue,
                     isSelected: state.isItemSelected(item.path),
                     onTap: () => state.setSelectedItem(item),
                     onCtrlTap: () => state.toggleItemSelection(item),

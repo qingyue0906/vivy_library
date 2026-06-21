@@ -61,6 +61,16 @@ class GridSettings {
   final int itemsPerRow; // 0 = auto
   final double compactLevel; // 0.5~2.0, 1.0 = current baseline
 
+  double get aspectRatioValue {
+    final parts = aspectRatio.split(':');
+    if (parts.length == 2) {
+      final w = double.tryParse(parts[0]);
+      final h = double.tryParse(parts[1]);
+      if (w != null && h != null && h > 0) return w / h;
+    }
+    return 4 / 3;
+  }
+
   const GridSettings({
     this.minCardWidth = 120,
     this.maxCardWidth = 200,

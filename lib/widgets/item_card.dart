@@ -6,6 +6,7 @@ import 'compact_level.dart';
 
 class ItemCard extends StatelessWidget {
   final LibraryItem item;
+  final double aspectRatio;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onCtrlTap;
@@ -15,6 +16,7 @@ class ItemCard extends StatelessWidget {
   const ItemCard({
     super.key,
     required this.item,
+    this.aspectRatio = 4 / 3,
     required this.isSelected,
     required this.onTap,
     required this.onCtrlTap,
@@ -55,7 +57,7 @@ class ItemCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AspectRatio(
-                aspectRatio: 3 / 2,
+                aspectRatio: aspectRatio,
                 child: _buildPreviewImage(context, c),
               ),
               _buildInfo(c),
