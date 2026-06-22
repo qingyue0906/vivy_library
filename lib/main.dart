@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/settings_service.dart';
+import 'utils/app_quit.dart';
 import 'widgets/shell_page.dart';
 
 void main() async {
@@ -13,8 +14,14 @@ void main() async {
     await windowManager.ensureInitialized();
 
     final saved = await SettingsService.loadWindowState();
-    await windowManager.setPosition(Offset(saved.dx, saved.dy));
-    await windowManager.setSize(Size(saved.width, saved.height));
+    // 阈值验证：防止持久化了异常值（如最小化时 GetWindowRect 返回的 -32000，
+    // 或被强杀时保存的极端值），导致下次启动窗口在屏幕外不可见。
+    final dx = (saved.dx < -100 || saved.dx > 10000) ? 10.0 : saved.dx;
+    final dy = (saved.dy < -100 || saved.dy > 10000) ? 10.0 : saved.dy;
+    final w = (saved.width < 200 || saved.width > 10000) ? 1280.0 : saved.width;
+    final h = (saved.height < 200 || saved.height > 10000) ? 720.0 : saved.height;
+    await windowManager.setPosition(Offset(dx, dy));
+    await windowManager.setSize(Size(w, h));
     await windowManager.setPreventClose(true);
     await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
 
@@ -27,15 +34,7 @@ void main() async {
 class _WindowStateListener with WindowListener {
   @override
   void onWindowClose() async {
-    final pos = await windowManager.getPosition();
-    final size = await windowManager.getSize();
-    await SettingsService.saveWindowState(WindowState(
-      dx: pos.dx,
-      dy: pos.dy,
-      width: size.width,
-      height: size.height,
-    ));
-    await windowManager.destroy();
+    await quitApp();
   }
 }
 

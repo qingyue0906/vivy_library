@@ -12,6 +12,7 @@ import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
 import 'compact_level.dart';
+import '../utils/app_quit.dart';
 
 class ShellPage extends StatefulWidget {
   final void Function(ThemeMode mode) onThemeChanged;
@@ -58,6 +59,24 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     _initLibrary();
     _state.init();
     _initLayout();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureWindowOnScreen());
+  }
+
+  /// 启动后检查窗口是否在可见屏幕范围内。
+  /// 防止换显示器后（如 4K→1080p）窗口位置在屏幕外导致看不见。
+  Future<void> _ensureWindowOnScreen() async {
+    try {
+      final display = View.of(context).display;
+      final screenW = display.size.width / display.devicePixelRatio;
+      final screenH = display.size.height / display.devicePixelRatio;
+      final pos = await windowManager.getPosition();
+      final size = await windowManager.getSize();
+      // 窗口与主屏完全无交集 → 移到默认位置
+      if (pos.dx >= screenW || pos.dy >= screenH ||
+          pos.dx + size.width <= 0 || pos.dy + size.height <= 0) {
+        await windowManager.setPosition(const Offset(10, 10));
+      }
+    } catch (_) {}
   }
 
   Future<void> _initLibrary() async {
@@ -199,7 +218,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           ),
           _CaptionButton(
             icon: Icons.close,
-            onTap: () => exit(0),
+            onTap: () => quitApp(),
             isClose: true,
             compactLevel: c,
           ),

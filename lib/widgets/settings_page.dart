@@ -8,6 +8,7 @@ import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/preset_service.dart';
+import '../utils/app_quit.dart';
 
 class SettingsPage extends StatefulWidget {
   final String libraryRootPath;
@@ -92,7 +93,7 @@ class _SettingsPageState extends State<SettingsPage>
                 ),
                 _windowButton(Icons.horizontal_rule, cs, () => windowManager.minimize()),
                 _windowButton(Icons.crop_square, cs, () => windowManager.maximize()),
-                _windowButton(Icons.close, cs, () => exit(0), isClose: true),
+                _windowButton(Icons.close, cs, () => quitApp(), isClose: true),
               ],
             ),
           ),
