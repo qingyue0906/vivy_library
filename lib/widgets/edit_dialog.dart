@@ -155,37 +155,36 @@ class _EditDialogState extends State<EditDialog> {
 
   Widget _buildCheckableField(String label, bool checked, Widget child) {
     final cs = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final showLabel = label.isNotEmpty && label != '评分';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 24,
-          height: 32,
-          child: Checkbox(
-            value: checked,
-            onChanged: (v) => setState(() {
-              if (label == '描述') { _cbDesc = v ?? false; }
-              else if (label == '创建者') { _cbCreator = v ?? false; }
-              else if (label == '评分') { _cbRating = v ?? false; }
-              else if (label == 'types') { _cbType = v ?? false; }
-              else if (label == 'ratings') { _cbContentRating = v ?? false; }
-            }),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        if (showLabel)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (label.isNotEmpty && label != 'types' && label != 'ratings')
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                ),
-              child,
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 32,
+              child: Checkbox(
+                value: checked,
+                onChanged: (v) => setState(() {
+                  if (label == '描述') { _cbDesc = v ?? false; }
+                  else if (label == '创建者') { _cbCreator = v ?? false; }
+                  else if (label == '评分') { _cbRating = v ?? false; }
+                  else if (label == '类型') { _cbType = v ?? false; }
+                  else if (label == '分级') { _cbContentRating = v ?? false; }
+                }),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            Expanded(child: child),
+          ],
         ),
       ],
     );
@@ -307,8 +306,7 @@ class _EditDialogState extends State<EditDialog> {
       onChanged: onChanged,
     );
     if (isBatch) {
-      final cbLabel = label == '类型' ? 'types' : 'ratings';
-      return _buildCheckableField(cbLabel, label == '类型' ? _cbType : _cbContentRating, content);
+      return _buildCheckableField(label, label == '类型' ? _cbType : _cbContentRating, content);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,6 +345,7 @@ class _EditDialogState extends State<EditDialog> {
 
   Widget _buildClassOrTagsSection(String key) {
     final isClass = key == 'class';
+    final cs = Theme.of(context).colorScheme;
     final label = isClass ? '分类标签 (class, 逗号分隔)' : '标签 (tags, 逗号分隔)';
     final ctrl = isClass ? _classCtrl : _tagsCtrl;
     final checked = isClass ? _cbClass : _cbTags;
@@ -359,6 +358,10 @@ class _EditDialogState extends State<EditDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -375,7 +378,7 @@ class _EditDialogState extends State<EditDialog> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            Expanded(child: _buildPresetField(label, ctrl, key)),
+            Expanded(child: _buildPresetField('', ctrl, key)),
           ],
         ),
         if (checked) ...[
