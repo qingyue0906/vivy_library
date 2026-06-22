@@ -23,6 +23,20 @@ class LibraryRootSelector extends StatefulWidget {
 }
 
 class _LibraryRootSelectorState extends State<LibraryRootSelector> {
+  final LibraryRootService _service = LibraryRootService();
+  List<LibraryRoot> _allRoots = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoots();
+  }
+
+  Future<void> _loadRoots() async {
+    final roots = await _service.loadAll();
+    if (mounted) setState(() => _allRoots = roots);
+  }
+
   void _showPanel() {
     showGeneralDialog(
       context: context,
@@ -49,7 +63,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(opacity: animation, child: child);
       },
-    );
+    ).then((_) => _loadRoots());
   }
 
   @override
@@ -89,6 +103,8 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
 
   String _displayLabel() {
     if (widget.currentPath.isEmpty) return '选择资源库';
+    final match = _allRoots.where((r) => r.path == widget.currentPath).toList();
+    if (match.isNotEmpty && match.first.name.isNotEmpty) return match.first.name;
     final segments = widget.currentPath.replaceAll('\\', '/').split('/');
     return segments.last;
   }
