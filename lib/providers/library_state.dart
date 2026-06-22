@@ -352,14 +352,18 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 重命名项目文件夹内的某个文件,重命名后刷新文件面板
+  /// 重命名项目文件夹内的某个文件或子文件夹,重命名后刷新文件面板
   Future<String?> renameFile(String oldPath, String newName) async {
     try {
-      final file = File(oldPath);
       final dirSegments = oldPath.replaceAll('\\', '/').split('/')
         ..removeLast();
       final newPath = '${dirSegments.join('/')}/$newName';
-      await file.rename(newPath);
+      final type = await FileSystemEntity.type(oldPath);
+      if (type == FileSystemEntityType.directory) {
+        await Directory(oldPath).rename(newPath);
+      } else {
+        await File(oldPath).rename(newPath);
+      }
       notifyListeners(); // 触发文件面板重建,显示新文件名
       return null; // 返回 null 表示成功,跟原来的约定一致
     } catch (e) {

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// 简易文件属性对话框,展示路径/大小/创建时间/修改时间。
 /// 不依赖系统原生属性窗口,避免 Windows Shell 在不同版本上的兼容性问题。
 class FilePropertiesDialog extends StatelessWidget {
-  final File file;
+  final FileSystemEntity file;
 
   const FilePropertiesDialog({super.key, required this.file});
 

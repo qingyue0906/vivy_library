@@ -114,7 +114,7 @@ class FileBrowserPanel extends StatelessWidget {
 
     final entries = dir
         .listSync()
-        .whereType<File>()
+        .where((e) => e is File || e is Directory)
         .toList()
       ..sort((a, b) => _baseName(a.path).compareTo(_baseName(b.path)));
 
@@ -151,7 +151,7 @@ class FileBrowserPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildFileItem(BuildContext context, File file, double c) {
+  Widget _buildFileItem(BuildContext context, FileSystemEntity file, double c) {
     return _FileGridItem(
       file: file,
       compactLevel: c,
@@ -161,7 +161,7 @@ class FileBrowserPanel extends StatelessWidget {
     );
   }
 
-  void _showContextMenu(BuildContext context, File file, Offset globalPos) {
+  void _showContextMenu(BuildContext context, FileSystemEntity file, Offset globalPos) {
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -255,7 +255,7 @@ class FileBrowserPanel extends StatelessWidget {
     });
   }
 
-  void _showRenameDialog(BuildContext context, File file) {
+  void _showRenameDialog(BuildContext context, FileSystemEntity file) {
     final currentName = _baseName(file.path);
     final dotIndex = currentName.lastIndexOf('.');
     final nameWithoutExt =
@@ -293,7 +293,7 @@ class FileBrowserPanel extends StatelessWidget {
   }
 
   Future<void> _doRename(
-      BuildContext dialogContext, File file, String newName) async {
+      BuildContext dialogContext, FileSystemEntity file, String newName) async {
     if (newName.isEmpty) return;
     Navigator.pop(dialogContext);
 
@@ -315,7 +315,7 @@ class FileBrowserPanel extends StatelessWidget {
 }
 
 class _FileGridItem extends StatefulWidget {
-  final File file;
+  final FileSystemEntity file;
   final double compactLevel;
   final GifDisplayMode gifMode;
   final VoidCallback onDoubleTap;
@@ -341,9 +341,10 @@ class _FileGridItemState extends State<_FileGridItem> {
     final c = widget.compactLevel;
     final cs = Theme.of(context).colorScheme;
     final name = _baseName(widget.file.path);
-    final isImage =
+    final isDir = widget.file is Directory;
+    final isImage = !isDir &&
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
-    final isGif = name.toLowerCase().endsWith('.gif');
+    final isGif = !isDir && name.toLowerCase().endsWith('.gif');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -374,21 +375,23 @@ class _FileGridItemState extends State<_FileGridItem> {
                     color: cs.surfaceContainerHighest,
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: isImage
-                      ? (isGif
-                          ? GifImage(
-                              file: widget.file,
-                              gifMode: widget.gifMode,
-                              cacheWidth: 120,
-                              fit: BoxFit.cover,
-                              placeholderColor: cs.surfaceContainerHighest,
-                              errorBuilder: (_) => _buildFileIcon(name, c),
-                            )
-                          : Image.file(widget.file,
-                              cacheWidth: 120,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _buildFileIcon(name, c)))
-                      : _buildFileIcon(name, c),
+                  child: isDir
+                      ? _buildFileIcon(name, c, isDir: true)
+                      : (isImage
+                          ? (isGif
+                              ? GifImage(
+                                  file: widget.file as File,
+                                  gifMode: widget.gifMode,
+                                  cacheWidth: 120,
+                                  fit: BoxFit.cover,
+                                  placeholderColor: cs.surfaceContainerHighest,
+                                  errorBuilder: (_) => _buildFileIcon(name, c),
+                                )
+                              : Image.file(widget.file as File,
+                                  cacheWidth: 120,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => _buildFileIcon(name, c)))
+                          : _buildFileIcon(name, c)),
                 ),
                 SizedBox(height: 4 * c),
                 Text(
@@ -406,7 +409,10 @@ class _FileGridItemState extends State<_FileGridItem> {
     );
   }
 
-  Widget _buildFileIcon(String fileName, double c) {
+  Widget _buildFileIcon(String fileName, double c, {bool isDir = false}) {
+    if (isDir) {
+      return Icon(Icons.folder, size: 28 * c, color: Colors.amber.shade400);
+    }
     final ext = fileName.toLowerCase().split('.').last;
     IconData icon;
     Color color;
