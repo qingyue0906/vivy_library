@@ -113,7 +113,7 @@ class GridArea extends StatelessWidget {
         }
 
         final imgHeight = cardWidth / aspectRatio;
-        final mainAxisExtent = imgHeight + 36 * c;
+        final mainAxisExtent = imgHeight + 38 * c;
 
         return GridView.builder(
           padding: EdgeInsets.all(8 * c),

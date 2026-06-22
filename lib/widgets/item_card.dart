@@ -55,7 +55,7 @@ class ItemCard extends StatelessWidget {
           }
         },
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
@@ -74,7 +74,7 @@ class ItemCard extends StatelessWidget {
               ),
               child: _buildPreviewImage(context, c),
             ),
-            _buildInfo(c),
+            Expanded(child: _buildInfo(c)),
           ],
         ),
       ),
