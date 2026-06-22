@@ -10,14 +10,12 @@ class FilePropertiesDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FutureBuilder 再次派上用场:stat() 是异步操作,
-    // 对话框打开瞬间先显示 loading,数据到手后再渲染内容。
     return AlertDialog(
       title: const Text('属性', style: TextStyle(fontSize: 15)),
       content: SizedBox(
         width: 360,
-        child: FutureBuilder<FileStat>(
-          future: file.stat(),
+        child: FutureBuilder<_SizeAndStat>(
+          future: _computeSizeAndStat(file),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const SizedBox(
@@ -25,14 +23,15 @@ class FilePropertiesDialog extends StatelessWidget {
                 child: Center(child: CircularProgressIndicator()),
               );
             }
-            final stat = snapshot.data!;
+            final stat = snapshot.data!.stat;
+            final size = snapshot.data!.size;
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildRow('文件名', _baseName(file.path)),
                 _buildRow('位置', _dirName(file.path)),
-                _buildRow('大小', _formatSize(stat.size)),
+                _buildRow('大小', _formatSize(size)),
                 _buildRow('修改时间', _formatDate(stat.modified)),
                 _buildRow('访问时间', _formatDate(stat.accessed)),
                 // 注意:Windows 上 FileStat 没有单独的"创建时间"字段,
@@ -51,6 +50,26 @@ class FilePropertiesDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 计算实体大小：文件直接 stat；目录递归累加所有文件大小。
+  /// 时间字段统一用实体自身的 FileStat（目录的时间戳是正确的）。
+  Future<_SizeAndStat> _computeSizeAndStat(FileSystemEntity entity) async {
+    final stat = await entity.stat();
+    if (entity is Directory) {
+      int total = 0;
+      try {
+        for (final e in entity.listSync(recursive: true, followLinks: false)) {
+          if (e is File) {
+            try {
+              total += e.statSync().size;
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+      return _SizeAndStat(total, stat);
+    }
+    return _SizeAndStat(stat.size, stat);
   }
 
   Widget _buildRow(String label, String value) {
@@ -105,4 +124,10 @@ class FilePropertiesDialog extends StatelessWidget {
   }
 
   String _pad(int n) => n.toString().padLeft(2, '0');
+}
+
+class _SizeAndStat {
+  final int size;
+  final FileStat stat;
+  const _SizeAndStat(this.size, this.stat);
 }
