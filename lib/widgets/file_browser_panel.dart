@@ -123,8 +123,7 @@ class FileBrowserPanel extends StatelessWidget {
         : entries.where((f) {
             final name = _baseName(f.path).toLowerCase();
             final isInfo = name == 'info.json';
-            final isPreview = name.startsWith('preview') &&
-                previewExtensions.any((ext) => name.endsWith(ext));
+            final isPreview = previewExtensions.any((ext) => name == 'preview$ext');
             return !isInfo && !isPreview;
           }).toList();
 
