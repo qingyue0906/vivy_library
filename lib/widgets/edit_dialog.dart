@@ -474,6 +474,7 @@ class _EditDialogState extends State<EditDialog> {
         await widget.state.batchEditItems(
           itemPaths: widget.targets.map((e) => e.path).toList(),
           description: _cbDesc ? _descCtrl.text.trim() : null,
+          creator: _cbCreator ? _creatorCtrl.text.trim() : null,
           type: _cbType ? _type : null,
           contentRating: _cbContentRating ? _contentRating : null,
           tags: _cbTags ? _parseList(_tagsCtrl.text) : null,

@@ -313,6 +313,7 @@ class LibraryState extends ChangeNotifier {
   Future<void> batchEditItems({
     required List<String> itemPaths,
     String? description,
+    String? creator,
     String? type,
     String? contentRating,
     List<String>? tags,
@@ -342,6 +343,7 @@ class LibraryState extends ChangeNotifier {
 
       final newInfo = old.copyWith(
         description: description,
+        creator: creator,
         type: type,
         contentRating: contentRating,
         tags: mergeList(old.tags, tags, tagsMode),
