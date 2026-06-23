@@ -2,13 +2,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../models/library_item.dart';
+import '../models/category_node.dart';
+import '../models/goto_entry.dart';
 import 'compact_level.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
+  final CategoryNode? folder;
   final double backgroundOpacity;
+  final void Function(String uuid)? onGotoTap;
 
-  const DetailPanel({super.key, this.item, this.backgroundOpacity = 1.0});
+  const DetailPanel({
+    super.key,
+    this.item,
+    this.folder,
+    this.backgroundOpacity = 1.0,
+    this.onGotoTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -16,11 +26,18 @@ class DetailPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
-      child: item == null ? _buildEmpty(cs, c) : _buildDetail(context, c, item!),
+      child: _buildContent(context, c),
     );
   }
 
-  Widget _buildEmpty(ColorScheme cs, double c) {
+  Widget _buildContent(BuildContext context, double c) {
+    if (item != null) return _buildItemDetail(context, c, item!);
+    if (folder != null) return _buildFolderDetail(context, c, folder!);
+    return _buildEmpty(context, c);
+  }
+
+  Widget _buildEmpty(BuildContext context, double c) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Text(
         '选择一个项目\n查看详情',
@@ -30,36 +47,54 @@ class DetailPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildDetail(BuildContext context, double c, LibraryItem item) {
+  Widget _buildItemDetail(BuildContext context, double c, LibraryItem item) {
+    final info = item.info;
     return ListView(
       padding: EdgeInsets.all(12 * c),
       children: [
         if (item.previewPath != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4 * c),
-            child: Image.file(
-              File(item.previewPath!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4 * c),
+                child: Image.file(
+                  File(item.previewPath!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              if (info.star)
+                Positioned(
+                  top: 4 * c,
+                  right: 4 * c,
+                  child: Container(
+                    padding: EdgeInsets.all(2 * c),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10 * c),
+                    ),
+                    child: Icon(Icons.star, size: 14 * c, color: Colors.amber),
+                  ),
+                ),
+            ],
           ),
         SizedBox(height: 12 * c),
         Center(
           child: SelectableText(
-            item.info.title,
+            info.title,
             style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
           ),
         ),
         SizedBox(height: 8 * c),
         Divider(height: 1 * c),
         SizedBox(height: 6 * c),
-        _buildDescriptionRow(context, c, '描述', item.info.description),
-        _buildRow(context, c, '创建者', item.info.creator ?? ''),
-        _buildRow(context, c, '类型', item.info.type),
-        _buildRow(context, c, '分级', item.info.contentRating),
-        _buildRow(context, c, '评分', '${item.info.rating / 2} / 5'),
-        _buildRow(context, c, '分类', item.info.classes.join('、')),
-        _buildRow(context, c, '标签', item.info.tags.join('、')),
+        _buildDescriptionRow(context, c, '描述', info.description),
+        _buildRow(context, c, '创建者', info.creator ?? ''),
+        _buildRow(context, c, '类型', info.type),
+        _buildRow(context, c, '分级', info.contentRating),
+        _buildRow(context, c, '评分', '${info.rating / 2} / 5'),
+        _buildRow(context, c, '分类', info.classes.join('、')),
+        _buildRow(context, c, '标签', info.tags.join('、')),
         _buildRow(context, c, '文件夹', item.category),
         SizedBox(height: 6 * c),
         Divider(height: 1 * c),
@@ -67,6 +102,81 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, c, '大小', _formatSize(item.sizeInBytes)),
         _buildRow(context, c, '修改时间', _formatDate(item.modifiedTime)),
         _buildRow(context, c, '路径', item.path),
+        if (info.goto.isNotEmpty) ...[
+          SizedBox(height: 8 * c),
+          Divider(height: 1 * c),
+          SizedBox(height: 6 * c),
+          _buildGotoSection(context, c, info.goto),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFolderDetail(BuildContext context, double c, CategoryNode folder) {
+    final info = folder.info;
+    final hasInfo = info != null;
+    return ListView(
+      padding: EdgeInsets.all(12 * c),
+      children: [
+        Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
+        SizedBox(height: 8 * c),
+        Center(
+          child: SelectableText(
+            hasInfo ? info.title : folder.name,
+            style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
+          ),
+        ),
+        SizedBox(height: 8 * c),
+        Divider(height: 1 * c),
+        SizedBox(height: 6 * c),
+        if (hasInfo) ...[
+          _buildDescriptionRow(context, c, '描述', info.description),
+          _buildRow(context, c, '创建者', info.creator ?? ''),
+          _buildRow(context, c, '类型', info.type),
+          _buildRow(context, c, '分级', info.contentRating),
+          _buildRow(context, c, '评分', '${info.rating / 2} / 5'),
+          _buildRow(context, c, '分类', info.classes.join('、')),
+          _buildRow(context, c, '标签', info.tags.join('、')),
+          SizedBox(height: 6 * c),
+          Divider(height: 1 * c),
+          SizedBox(height: 6 * c),
+        ],
+        _buildRow(context, c, '路径', folder.path),
+        _buildRow(context, c, '子文件夹数', '${folder.subDirs.length}'),
+        _buildRow(context, c, '直接项目数', '${folder.items.length}'),
+      ],
+    );
+  }
+
+  Widget _buildGotoSection(BuildContext context, double c, List<GotoEntry> goto) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 6 * c),
+          child: Text(
+            '关联项目',
+            style: TextStyle(
+              fontSize: 11 * c,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 6 * c,
+          runSpacing: 4 * c,
+          children: goto.map((entry) {
+            return ActionChip(
+              label: Text(entry.name, style: TextStyle(fontSize: 11 * c)),
+              avatar: Icon(Icons.link, size: 12 * c),
+              onPressed: () => onGotoTap?.call(entry.uuid),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.symmetric(horizontal: 4 * c),
+            );
+          }).toList(),
+        ),
       ],
     );
   }

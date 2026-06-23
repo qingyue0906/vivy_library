@@ -354,7 +354,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
               width: width,
               child: DetailPanel(
                 item: _state.selectedItem,
+                folder: _state.selectedFolder,
                 backgroundOpacity: rightAlpha,
+                onGotoTap: (uuid) {
+                  final ok = _state.selectByUuid(uuid);
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('找不到目标项目'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
               ),
             );
           },
