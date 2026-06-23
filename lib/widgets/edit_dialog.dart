@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/item_info.dart';
+import '../models/goto_entry.dart';
 import '../models/library_item.dart';
 import '../providers/library_state.dart';
 import '../services/preset_service.dart';
+import 'goto_editor.dart';
 
 class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
@@ -30,6 +32,10 @@ class _EditDialogState extends State<EditDialog> {
   String _type = 'application';
   String _contentRating = 'G';
   int _rating = 10;
+  String _define = 'item';
+  late TextEditingController _previewCtrl;
+  bool _star = false;
+  List<GotoEntry> _goto = [];
 
   bool _isSaving = false;
 
@@ -40,9 +46,14 @@ class _EditDialogState extends State<EditDialog> {
   bool _cbRating = false;
   bool _cbClass = false;
   bool _cbTags = false;
+  bool _cbDefine = false;
+  bool _cbPreview = false;
+  bool _cbStar = false;
+  bool _cbGoto = false;
 
   String _classMode = 'overwrite';
   String _tagsMode = 'overwrite';
+  String _gotoMode = 'overwrite';
 
   Map<String, List<String>> _presets = {};
 
@@ -58,12 +69,17 @@ class _EditDialogState extends State<EditDialog> {
       _type = info.type;
       _contentRating = info.contentRating;
       _rating = info.rating;
+      _define = info.define;
+      _previewCtrl = TextEditingController(text: info.preview ?? '');
+      _star = info.star;
+      _goto = List.of(info.goto);
       _classCtrl = TextEditingController(text: info.classes.join(', '));
       _tagsCtrl = TextEditingController(text: info.tags.join(', '));
     } else {
       _titleCtrl = TextEditingController();
       _descCtrl = TextEditingController();
       _creatorCtrl = TextEditingController();
+      _previewCtrl = TextEditingController();
       _classCtrl = TextEditingController();
       _tagsCtrl = TextEditingController();
     }
@@ -79,6 +95,7 @@ class _EditDialogState extends State<EditDialog> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _creatorCtrl.dispose();
+    _previewCtrl.dispose();
     _classCtrl.dispose();
     _tagsCtrl.dispose();
     super.dispose();
@@ -127,6 +144,14 @@ class _EditDialogState extends State<EditDialog> {
               _buildClassOrTagsSection('class'),
               const SizedBox(height: 8),
               _buildClassOrTagsSection('tags'),
+              const SizedBox(height: 8),
+              _buildDefineField(widget.isBatch),
+              const SizedBox(height: 8),
+              _buildPreviewField(widget.isBatch),
+              const SizedBox(height: 8),
+              _buildStarField(widget.isBatch),
+              const SizedBox(height: 8),
+              _buildGotoSection(),
             ],
           ),
         ),
@@ -178,6 +203,10 @@ class _EditDialogState extends State<EditDialog> {
                   else if (label == '评分') { _cbRating = v ?? false; }
                   else if (label == '类型') { _cbType = v ?? false; }
                   else if (label == '分级') { _cbContentRating = v ?? false; }
+                  else if (label == '定义') { _cbDefine = v ?? false; }
+                  else if (label == '预览图') { _cbPreview = v ?? false; }
+                  else if (label == '标星') { _cbStar = v ?? false; }
+                  else if (label == 'goto') { _cbGoto = v ?? false; }
                 }),
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -397,6 +426,123 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
+  Widget _buildDefineField(bool isBatch) {
+    final cs = Theme.of(context).colorScheme;
+    final content = DropdownButtonFormField<String>(
+      initialValue: _define,
+      isDense: true,
+      style: TextStyle(fontSize: 12, color: cs.onSurface),
+      decoration: _inputDecoration(),
+      items: const [
+        DropdownMenuItem(value: 'item', child: Text('item（项目）')),
+        DropdownMenuItem(value: 'dir', child: Text('dir（文件夹）')),
+      ],
+      onChanged: (v) => setState(() => _define = v ?? 'item'),
+    );
+    if (isBatch) {
+      return _buildCheckableField('定义', _cbDefine, content);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text('定义', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ),
+        content,
+      ],
+    );
+  }
+
+  Widget _buildPreviewField(bool isBatch) {
+    if (isBatch) {
+      return _buildCheckableField('预览图', _cbPreview,
+          _buildField('', _previewCtrl));
+    }
+    return _buildField('预览图（相对路径，留空自动选择）', _previewCtrl);
+  }
+
+  Widget _buildStarField(bool isBatch) {
+    final cs = Theme.of(context).colorScheme;
+    final content = Align(
+      alignment: Alignment.centerLeft,
+      child: Switch(
+        value: _star,
+        onChanged: (v) => setState(() => _star = v),
+      ),
+    );
+    if (isBatch) {
+      return _buildCheckableField('标星', _cbStar, content);
+    }
+    return Row(
+      children: [
+        SizedBox(
+          width: 56,
+          child: Text('标星', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  Widget _buildGotoSection() {
+    final cs = Theme.of(context).colorScheme;
+    if (!widget.isBatch) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('关联项目 (goto)',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+          GotoEditor(
+            entries: _goto,
+            onChanged: (list) => _goto = list,
+          ),
+        ],
+      );
+    }
+    // 批量模式：勾选 + 编辑器 + 模式单选
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 32,
+              child: Checkbox(
+                value: _cbGoto,
+                onChanged: (v) => setState(() => _cbGoto = v ?? false),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            Expanded(
+              child: Text('关联项目 (goto)',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            ),
+          ],
+        ),
+        if (_cbGoto) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: _buildModeRadios(_gotoMode, (v) =>
+                setState(() => _gotoMode = v)),
+          ),
+          const SizedBox(height: 4),
+          GotoEditor(
+            entries: _goto,
+            onChanged: (list) => _goto = list,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildModeRadios(String currentMode, ValueChanged<String> onChanged) {
     return Row(
       children: [
@@ -458,8 +604,12 @@ class _EditDialogState extends State<EditDialog> {
   Future<void> _save() async {
     setState(() => _isSaving = true);
     try {
+      bool needRescan = false;
       if (!widget.isBatch) {
+        final info = widget.targets.first.info;
         final newInfo = ItemInfo(
+          uuid: info.uuid,
+          define: _define,
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim(),
           creator: _creatorCtrl.text.trim().isEmpty ? null : _creatorCtrl.text.trim(),
@@ -468,10 +618,13 @@ class _EditDialogState extends State<EditDialog> {
           rating: _rating,
           tags: _parseList(_tagsCtrl.text),
           classes: _parseList(_classCtrl.text),
+          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
+          goto: _goto,
+          star: _star,
         );
-        await widget.state.saveItemInfo(widget.targets.first.path, newInfo);
+        needRescan = await widget.state.saveItemInfo(widget.targets.first.path, newInfo);
       } else {
-        await widget.state.batchEditItems(
+        needRescan = await widget.state.batchEditItems(
           itemPaths: widget.targets.map((e) => e.path).toList(),
           description: _cbDesc ? _descCtrl.text.trim() : null,
           creator: _cbCreator ? _creatorCtrl.text.trim() : null,
@@ -481,9 +634,17 @@ class _EditDialogState extends State<EditDialog> {
           classes: _cbClass ? _parseList(_classCtrl.text) : null,
           classMode: _classMode,
           tagsMode: _tagsMode,
+          define: _cbDefine ? _define : null,
+          preview: _cbPreview ? _previewCtrl.text.trim() : null,
+          star: _cbStar ? _star : null,
+          goto: _cbGoto ? _goto : null,
+          gotoMode: _gotoMode,
         );
       }
       if (mounted) Navigator.pop(context);
+      if (needRescan && mounted) {
+        await widget.state.scan(widget.state.currentRootPath);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
