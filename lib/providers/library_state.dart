@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+import '../models/category_node.dart';
 import '../models/library_item.dart';
 import '../models/item_info.dart';
+import '../models/goto_entry.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
 
@@ -10,62 +13,64 @@ enum SortField { name, size, date }
 enum SortOrder { ascending, descending }
 
 class LibraryState extends ChangeNotifier {
+  CategoryNode _categoryRoot = CategoryNode(path: '', name: '');
   List<LibraryItem> _allItems = [];
+  Map<String, LibraryItem> _itemByUuid = {};
   bool _isLoading = true;
   String? _error;
 
   String _currentRootPath = '';
 
   String _searchQuery = '';
-  String? _selectedCategory;
-  String _selectedClass = '全部'; // 顶部 class 导航当前选中项,默认"全部"
+  String? _selectedCategoryPath; // null=全部，否则为文件夹绝对路径
+  String _selectedClass = '全部';
   SortField _sortField = SortField.name;
   SortOrder _sortOrder = SortOrder.ascending;
 
   LibraryItem? _selectedItem;
+  CategoryNode? _selectedFolder; // 选中的文件夹节点（用于右侧显示文件夹 info）
 
-  // 标记 init() 是否已完成,确保排序持久化只加载一次
   bool _initialized = false;
 
   bool _fileBrowserVisible = false;
   bool _showSystemFiles = false;
 
-  // 多选用 Set 存路径而不是存对象引用,原因和 isSelected 判断一样:
-  // 路径是稳定的唯一标识符,不依赖对象引用相等。
   final Set<String> _selectedPaths = {};
-  String? _selectionAnchorPath; // Shift+点击区间选择的起点
+  String? _selectionAnchorPath;
 
   bool get isLoading => _isLoading;
   String? get error => _error;
-
   String get currentRootPath => _currentRootPath;
-
   String get searchQuery => _searchQuery;
-  String? get selectedCategory => _selectedCategory;
-  String get selectedClass => _selectedClass;  // 加对应 getter
+  String? get selectedCategoryPath => _selectedCategoryPath;
+  String? get selectedCategoryName {
+    if (_selectedCategoryPath == null) return null;
+    return _categoryRoot.findByPath(_selectedCategoryPath!)?.name;
+  }
+  String get selectedClass => _selectedClass;
   SortField get sortField => _sortField;
   SortOrder get sortOrder => _sortOrder;
   LibraryItem? get selectedItem => _selectedItem;
+  CategoryNode? get selectedFolder => _selectedFolder;
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
 
-  // 当前多选的完整 LibraryItem 列表,供编辑对话框使用
+  CategoryNode get categoryRoot => _categoryRoot;
+
   List<LibraryItem> get selectedItems =>
       _allItems.where((e) => _selectedPaths.contains(e.path)).toList();
 
-  List<String> get categories {
-    final cats = _allItems.map((e) => e.category).toSet().toList();
-    cats.sort();
-    return cats;
+  /// 当前选中文件夹的直接子文件夹（"全部"时返回空）。
+  List<CategoryNode> get currentSubDirs {
+    if (_selectedCategoryPath == null) return [];
+    final node = _categoryRoot.findByPath(_selectedCategoryPath!);
+    return node?.subDirs ?? [];
   }
 
-  /// 顶部 class 导航的选项列表,每项是 (标签名, 数量)。
-  /// 只统计当前左侧分类(_selectedCategory)下的项目,这是这个导航栏
-  /// 跟左侧分类筛选最大的不同:它是"分类内再分类",范围是级联的。
+  /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
   List<MapEntry<String, int>> get classNavOptions {
-    // 先按左侧分类筛一遍,作为统计范围(对应 Python 里先 category 过滤的那段)
-    final inCategory = _selectedCategory == null
+    final inCategory = _selectedCategoryPath == null
         ? _allItems
-        : _allItems.where((e) => e.category == _selectedCategory).toList();
+        : _allItems.where((e) => e.categoryPath == _selectedCategoryPath).toList();
 
     int totalCount = inCategory.length;
     int uncategorizedCount = 0;
@@ -82,7 +87,6 @@ class LibraryState extends ChangeNotifier {
       }
     }
 
-    // 按字母排序具体 class 名,"全部"和"未分类"固定排在最前面
     final sortedClassNames = classCounts.keys.toList()..sort();
 
     return [
@@ -94,19 +98,19 @@ class LibraryState extends ChangeNotifier {
 
   List<LibraryItem> get filteredAndSortedItems {
     var result = _allItems;
-    // 1 分类筛选
-    if (_selectedCategory != null) {
-      result = result.where((e) => e.category == _selectedCategory).toList();
+    // 1 分类筛选：按 categoryPath 精确匹配（"全部"时不过滤）
+    if (_selectedCategoryPath != null) {
+      result = result.where((e) => e.categoryPath == _selectedCategoryPath).toList();
     }
 
-    // 1.5. 顶部 class 导航筛选,对应 Python 里 current_class 的判断逻辑
+    // 1.5 顶部 class 导航筛选
     if (_selectedClass == '未分类') {
       result = result.where((e) => e.info.classes.isEmpty).toList();
     } else if (_selectedClass != '全部') {
       result =
           result.where((e) => e.info.classes.contains(_selectedClass)).toList();
     }
-    
+
     // 2 搜索过滤
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
@@ -157,12 +161,17 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSelectedCategory(String? category) {
-    _selectedCategory = category;
-    _selectedClass = '全部'; // 新增:切换左侧分类时,顶部 class 导航回到"全部"
+  /// 选中左侧文件夹（null=全部）。
+  void setSelectedCategory(String? path) {
+    _selectedCategoryPath = path;
+    _selectedClass = '全部';
     _selectedItem = null;
+    _selectedFolder = null;
     _selectedPaths.clear();
-    _fileBrowserVisible = false; // 切换分类时收起面板
+    _fileBrowserVisible = false;
+    if (path != null) {
+      _selectedFolder = _categoryRoot.findByPath(path);
+    }
     notifyListeners();
   }
 
@@ -174,7 +183,6 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 从持久化存储中恢复排序选项,仅在首次加载时执行
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -200,35 +208,46 @@ class LibraryState extends ChangeNotifier {
 
   void setSelectedItem(LibraryItem item) {
     _selectedItem = item;
+    _selectedFolder = null;
     _selectedPaths
       ..clear()
       ..add(item.path);
-    _selectionAnchorPath = item.path; // 新增:更新锚点
-    _fileBrowserVisible = true; // 选中时自动展开
+    _selectionAnchorPath = item.path;
+    _fileBrowserVisible = true;
     notifyListeners();
   }
 
-  /// Ctrl+点击:切换某项的多选状态,不影响其他已选中项
+  /// 选中一个文件夹节点（用于单击文件夹卡片：显示文件夹 info，不进底部）。
+  void setSelectedFolder(CategoryNode node) {
+    _selectedFolder = node;
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _fileBrowserVisible = false;
+    notifyListeners();
+  }
+
+  /// 通过 uuid 选中项目（goto 点击）。找不到返回 false，调用方提示。
+  bool selectByUuid(String uuid) {
+    final item = _itemByUuid[uuid];
+    if (item == null) return false;
+    setSelectedItem(item);
+    return true;
+  }
+
   void toggleItemSelection(LibraryItem item) {
     if (_selectedPaths.contains(item.path)) {
       _selectedPaths.remove(item.path);
-      // 如果取消选中的刚好是详情面板显示的那项,清空详情面板
       if (_selectedItem?.path == item.path) _selectedItem = null;
     } else {
       _selectedPaths.add(item.path);
-      _selectedItem = item; // 详情面板显示最后一个 Ctrl+点击的项
-      _selectionAnchorPath = item.path; // 新增:更新锚点
+      _selectedItem = item;
+      _selectionAnchorPath = item.path;
     }
     notifyListeners();
   }
 
-  /// Shift+点击:从锚点(上一次单击的项)到这次点击的项之间,
-  /// 按 currentList 给出的显示顺序整段选中。
-  /// currentList 由调用方传入当前网格实际显示的列表(已过滤排序后的),
-  /// 因为"区间"的含义依赖于用户当前看到的顺序,不是全量数据的顺序。
   void selectRange(LibraryItem item, List<LibraryItem> currentList) {
     if (_selectionAnchorPath == null) {
-      // 没有锚点(比如这是第一次操作就直接 Shift+点),退化成单选
       setSelectedItem(item);
       return;
     }
@@ -251,7 +270,6 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ctrl+A:全选当前网格显示的所有项
   void selectAll(List<LibraryItem> currentList) {
     _selectedPaths
       ..clear()
@@ -260,9 +278,6 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 右键点击某项时:
-  /// 如果它不在多选集合里,就清空多选、只选它(跟你 Python 版本行为一致)
-  /// 如果它已经在多选集合里,保持多选状态不变(右键批量编辑场景)
   void selectItemForContextMenu(LibraryItem item) {
     if (!_selectedPaths.contains(item.path)) {
       _selectedPaths
@@ -275,42 +290,53 @@ class LibraryState extends ChangeNotifier {
 
   bool isItemSelected(String path) => _selectedPaths.contains(path);
 
-  /// 保存单项编辑结果:用新的 ItemInfo 替换对应项目的 info,并写回 info.json
-  Future<void> saveItemInfo(String itemPath, ItemInfo newInfo) async {
+  /// 保存单项编辑结果：用新的 ItemInfo 替换对应项目的 info,并写回 info.json。
+  /// uuid 为空时自动生成。
+  Future<bool> saveItemInfo(String itemPath, ItemInfo newInfo) async {
     final index = _allItems.indexWhere((e) => e.path == itemPath);
-    if (index == -1) return;
+    if (index == -1) return false;
 
-    // 写回 info.json
-    final jsonFile =
-        File('$itemPath${Platform.pathSeparator}info.json');
+    // uuid 为空时自动生成
+    ItemInfo finalInfo = newInfo;
+    if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
+      finalInfo = newInfo.copyWith(uuid: const Uuid().v4());
+    }
+
+    final jsonFile = File('$itemPath${Platform.pathSeparator}info.json');
     await jsonFile.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(newInfo.toJson()),
+      const JsonEncoder.withIndent('  ').convert(finalInfo.toJson()),
     );
 
-    // 用 copyWith 生成新的 LibraryItem(字段不可变,不能直接改)
-    _allItems[index] =
-        LibraryItem(
-          category: _allItems[index].category,
-          folderName: _allItems[index].folderName,
-          path: _allItems[index].path,
-          info: newInfo,
-          previewPath: _allItems[index].previewPath,
-          sizeInBytes: _allItems[index].sizeInBytes,
-          modifiedTime: _allItems[index].modifiedTime,
-        );
+    final oldItem = _allItems[index];
+    final wasDir = oldItem.info.define == 'dir';
+    final isNowDir = finalInfo.define == 'dir';
 
-    // 如果详情面板正在显示这一项,同步更新
+    _allItems[index] = LibraryItem(
+      category: oldItem.category,
+      categoryPath: oldItem.categoryPath,
+      folderName: oldItem.folderName,
+      path: oldItem.path,
+      info: finalInfo,
+      previewPath: oldItem.previewPath,
+      sizeInBytes: oldItem.sizeInBytes,
+      modifiedTime: oldItem.modifiedTime,
+    );
+    _rebuildUuidIndex();
+
     if (_selectedItem?.path == itemPath) {
       _selectedItem = _allItems[index];
     }
 
     notifyListeners();
+
+    // define 变化（item↔dir）需要重扫以更新树结构
+    return wasDir != isNowDir;
   }
 
-  /// 批量编辑:对所有选中项应用同一批字段变更
-  /// classMode / tagsMode: 'overwrite'(覆盖) | 'append'(追加) | 'remove'(删除)
-  /// 其他标量字段(type/contentRating等)仅当非 null 时直接覆盖
-  Future<void> batchEditItems({
+  /// 批量编辑:对所有选中项应用同一批字段变更。
+  /// 列表字段（tags/classes/goto）支持 overwrite/append/remove 模式。
+  /// 返回是否有 define 变化（需要重扫）。
+  Future<bool> batchEditItems({
     required List<String> itemPaths,
     String? description,
     String? creator,
@@ -318,40 +344,115 @@ class LibraryState extends ChangeNotifier {
     String? contentRating,
     List<String>? tags,
     List<String>? classes,
+    List<GotoEntry>? goto,
+    String? define,
+    String? preview,
+    bool? star,
     String classMode = 'overwrite',
     String tagsMode = 'overwrite',
+    String gotoMode = 'overwrite',
   }) async {
+    bool anyDefineChanged = false;
+
+    List<String> mergeList(
+        List<String> oldList, List<String>? newList, String mode) {
+      if (newList == null || newList.isEmpty) return oldList;
+      switch (mode) {
+        case 'overwrite':
+          return newList;
+        case 'append':
+          return {...oldList, ...newList}.toList();
+        case 'remove':
+          return oldList.where((e) => !newList.contains(e)).toList();
+        default:
+          return oldList;
+      }
+    }
+
+    List<GotoEntry> mergeGoto(
+        List<GotoEntry> oldList, List<GotoEntry>? newList, String mode) {
+      if (newList == null || newList.isEmpty) return oldList;
+      switch (mode) {
+        case 'overwrite':
+          return newList;
+        case 'append':
+          final seen = <String>{};
+          final result = <GotoEntry>[];
+          for (final e in oldList.followedBy(newList)) {
+            if (!seen.contains(e.uuid)) {
+              seen.add(e.uuid);
+              result.add(e);
+            }
+          }
+          return result;
+        case 'remove':
+          final removeUuids = newList.map((e) => e.uuid).toSet();
+          return oldList.where((e) => !removeUuids.contains(e.uuid)).toList();
+        default:
+          return oldList;
+      }
+    }
+
     for (final path in itemPaths) {
       final index = _allItems.indexWhere((e) => e.path == path);
       if (index == -1) continue;
       final old = _allItems[index].info;
 
-      List<String> mergeList(
-          List<String> oldList, List<String>? newList, String mode) {
-        if (newList == null || newList.isEmpty) return oldList;
-        switch (mode) {
-          case 'overwrite':
-            return newList;
-          case 'append':
-            return {...oldList, ...newList}.toList();
-          case 'remove':
-            return oldList.where((e) => !newList.contains(e)).toList();
-          default:
-            return oldList;
-        }
-      }
+      final wasDir = old.define == 'dir';
+      final newDefine = define ?? old.define;
+      final isNowDir = newDefine == 'dir';
+      if (wasDir != isNowDir) anyDefineChanged = true;
 
-      final newInfo = old.copyWith(
+      ItemInfo newInfo = old.copyWith(
         description: description,
         creator: creator,
         type: type,
         contentRating: contentRating,
         tags: mergeList(old.tags, tags, tagsMode),
         classes: mergeList(old.classes, classes, classMode),
+        goto: mergeGoto(old.goto, goto, gotoMode),
+        define: define,
+        preview: preview,
+        star: star,
       );
 
-      await saveItemInfo(path, newInfo);
+      // uuid 为空时自动生成
+      if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
+        newInfo = newInfo.copyWith(uuid: const Uuid().v4());
+      }
+
+      final jsonFile = File('$path${Platform.pathSeparator}info.json');
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(newInfo.toJson()),
+      );
+
+      final oldItem = _allItems[index];
+      _allItems[index] = LibraryItem(
+        category: oldItem.category,
+        categoryPath: oldItem.categoryPath,
+        folderName: oldItem.folderName,
+        path: oldItem.path,
+        info: newInfo,
+        previewPath: oldItem.previewPath,
+        sizeInBytes: oldItem.sizeInBytes,
+        modifiedTime: oldItem.modifiedTime,
+      );
+
+      if (_selectedItem?.path == path) {
+        _selectedItem = _allItems[index];
+      }
     }
+    _rebuildUuidIndex();
+    notifyListeners();
+    return anyDefineChanged;
+  }
+
+  void _rebuildUuidIndex() {
+    _itemByUuid = {
+      for (final item in _allItems)
+        if (item.info.uuid != null && item.info.uuid!.isNotEmpty)
+          item.info.uuid!: item,
+    };
   }
 
   /// 重命名项目文件夹内的某个文件或子文件夹,重命名后刷新文件面板
@@ -366,10 +467,10 @@ class LibraryState extends ChangeNotifier {
       } else {
         await File(oldPath).rename(newPath);
       }
-      notifyListeners(); // 触发文件面板重建,显示新文件名
-      return null; // 返回 null 表示成功,跟原来的约定一致
+      notifyListeners();
+      return null;
     } catch (e) {
-      return e.toString(); // 返回错误信息字符串,表示失败
+      return e.toString();
     }
   }
 
@@ -377,17 +478,18 @@ class LibraryState extends ChangeNotifier {
     _currentRootPath = rootDir;
     _isLoading = true;
     _error = null;
-    // 切换资源库时重置所有筛选/选中状态,避免带着上一个库的筛选条件
-    // 进入新库后出现"看起来没数据"的困惑(比如还选着上个库才有的 class 标签)
-    _selectedCategory = null;
+    _selectedCategoryPath = null;
     _selectedClass = '全部';
     _selectedItem = null;
+    _selectedFolder = null;
     _selectedPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
 
     try {
-      _allItems = await LibraryScanner().scanAll(rootDir);
+      _categoryRoot = await LibraryScanner().scanAll(rootDir);
+      _allItems = _categoryRoot.allItems;
+      _rebuildUuidIndex();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -396,8 +498,6 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 应用启动时如果没有可恢复的资源库路径,调用这个方法结束 loading 状态,
-  /// 让界面显示"请选择资源库"的引导,而不是一直转圈
   void markNoLibrarySelected() {
     _isLoading = false;
     notifyListeners();
