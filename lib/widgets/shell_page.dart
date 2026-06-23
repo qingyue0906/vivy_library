@@ -325,6 +325,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
             builder: (context, fileHeight, _) {
               return GridArea(
                 items: _state.filteredAndSortedItems,
+                subDirs: _state.currentSubDirs,
                 state: _state,
                 filePanelHeight: fileHeight,
                 onFilePanelResize: _resizeFilePanel,

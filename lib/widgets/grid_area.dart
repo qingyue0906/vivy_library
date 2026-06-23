@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/library_item.dart';
+import '../models/category_node.dart';
 import '../providers/library_state.dart';
 import '../services/settings_service.dart';
 import 'item_card.dart';
+import 'folder_card.dart';
 import 'dart:io';
 import 'file_browser_panel.dart';
 import 'class_nav_bar.dart';
@@ -11,6 +13,7 @@ import 'compact_level.dart';
 
 class GridArea extends StatelessWidget {
   final List<LibraryItem> items;
+  final List<CategoryNode> subDirs;
   final LibraryState state;
   final double filePanelHeight;
   final void Function(double delta) onFilePanelResize;
@@ -22,6 +25,7 @@ class GridArea extends StatelessWidget {
   const GridArea({
     super.key,
     required this.items,
+    required this.subDirs,
     required this.state,
     required this.filePanelHeight,
     required this.onFilePanelResize,
@@ -49,7 +53,7 @@ class GridArea extends StatelessWidget {
         children: [
           ClassNavBar(state: state),
           Expanded(
-            child: items.isEmpty
+            child: (items.isEmpty && subDirs.isEmpty)
                 ? Center(child: Text('没有找到项目', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
                 : Padding(
                     padding: EdgeInsets.all(8 * c),
@@ -83,6 +87,7 @@ class GridArea extends StatelessWidget {
   }
 
   Widget _buildGrid(BuildContext context, double c) {
+    final cs = Theme.of(context).colorScheme;
     final minCardWidth = gridSettings.minCardWidth;
     final maxCardWidth = gridSettings.maxCardWidth;
     final spacing = 8.0 * c;
@@ -114,35 +119,132 @@ class GridArea extends StatelessWidget {
 
         final imgHeight = cardWidth / aspectRatio;
         final mainAxisExtent = imgHeight + 38 * c;
+        final folderMainAxisExtent = 48 * c + 4 * c + 30 * c; // 图标+间距+2行文字
 
-        return GridView.builder(
-          padding: EdgeInsets.all(8 * c),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisExtent: mainAxisExtent,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: spacing,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return ItemCard(
-              item: item,
-              aspectRatio: aspectRatio,
-              displayWidth: cardWidth,
-              displayHeight: imgHeight,
-              isSelected: state.isItemSelected(item.path),
-              onTap: () => state.setSelectedItem(item),
-              onCtrlTap: () => state.toggleItemSelection(item),
-              onShiftTap: () => state.selectRange(item, items),
-              onRightClick: (globalPos) =>
-                  _showContextMenu(context, item, globalPos),
-              gifMode: gridSettings.cardGifMode,
-            );
-          },
+        return CustomScrollView(
+          slivers: [
+            if (subDirs.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 4 * c, left: 2 * c),
+                  child: Text(
+                    '文件夹',
+                    style: TextStyle(
+                      fontSize: 11 * c,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisExtent: folderMainAxisExtent,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final node = subDirs[index];
+                    return FolderCard(
+                      node: node,
+                      displayWidth: cardWidth,
+                      isSelected: state.selectedFolder?.path == node.path,
+                      onTap: () => state.setSelectedFolder(node),
+                      onDoubleTap: () => state.setSelectedCategory(node.path),
+                      onRightClick: (globalPos) =>
+                          _showFolderContextMenu(context, node, globalPos),
+                    );
+                  },
+                  childCount: subDirs.length,
+                ),
+              ),
+              if (items.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 8 * c, bottom: 4 * c, left: 2 * c),
+                    child: Text(
+                      '项目',
+                      style: TextStyle(
+                        fontSize: 11 * c,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+            SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                mainAxisExtent: mainAxisExtent,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = items[index];
+                  return ItemCard(
+                    item: item,
+                    aspectRatio: aspectRatio,
+                    displayWidth: cardWidth,
+                    displayHeight: imgHeight,
+                    isSelected: state.isItemSelected(item.path),
+                    onTap: () => state.setSelectedItem(item),
+                    onCtrlTap: () => state.toggleItemSelection(item),
+                    onShiftTap: () => state.selectRange(item, items),
+                    onRightClick: (globalPos) =>
+                        _showContextMenu(context, item, globalPos),
+                    gifMode: gridSettings.cardGifMode,
+                  );
+                },
+                childCount: items.length,
+              ),
+            ),
+          ],
         );
       },
     );
+  }
+
+  void _showFolderContextMenu(
+      BuildContext context, CategoryNode node, Offset globalPos) {
+    final c = CompactLevel.of(context);
+    final position = RelativeRect.fromLTRB(
+      globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1,
+    );
+    showMenu<String>(
+      context: context,
+      position: position,
+      constraints: BoxConstraints(minWidth: 150 * c),
+      items: [
+        PopupMenuItem(
+          value: 'enter',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.folder_open, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('进入文件夹', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'open_folder',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.open_in_new, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'enter') {
+        state.setSelectedCategory(node.path);
+      } else if (value == 'open_folder') {
+        _openInExplorer(node.path);
+      }
+    });
   }
 
   void _showContextMenu(
