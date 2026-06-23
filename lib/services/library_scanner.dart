@@ -123,7 +123,7 @@ class LibraryScanner {
 
     // 并发构建子文件夹节点和直接项目
     final subDirFutures = subDirPaths.map((p) => _buildDirNodeRecursive(p));
-    final itemFutures = directItemPaths.map((p) => _buildLibraryItem(
+    final itemFutures = directItemPaths.map((p) => buildSingleItem(
       category: folderName,
       categoryPath: folderPath,
       folderName: _baseName(p),
@@ -150,7 +150,8 @@ class LibraryScanner {
   }
 
   /// 处理单个项目文件夹,读取 info.json、定位预览图、统计大小和修改时间。
-  Future<LibraryItem> _buildLibraryItem({
+  /// 公开方法，供 goto path 即时扫描嵌套 item 使用。
+  Future<LibraryItem> buildSingleItem({
     required String category,
     required String categoryPath,
     required String folderName,

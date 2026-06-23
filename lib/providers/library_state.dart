@@ -234,6 +234,31 @@ class LibraryState extends ChangeNotifier {
     return true;
   }
 
+  /// 通过相对路径选中嵌套 item（goto 点击 path 型）。
+  /// [currentItemPath] 是当前选中项目的绝对路径，[relativePath] 是相对它的路径。
+  /// 即时扫描构建临时 LibraryItem 显示。找不到返回 false。
+  Future<bool> selectByGotoPath(String currentItemPath, String relativePath) async {
+    final sep = Platform.pathSeparator;
+    final target = '$currentItemPath$sep$relativePath';
+    final dir = Directory(target);
+    if (!await dir.exists()) return false;
+    try {
+      final item = await LibraryScanner().buildSingleItem(
+        category: _baseName(currentItemPath),
+        categoryPath: currentItemPath,
+        folderName: _baseName(target),
+        itemPath: target,
+      );
+      setSelectedItem(item);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _baseName(String p) =>
+      p.replaceAll('\\', '/').split('/').last;
+
   void toggleItemSelection(LibraryItem item) {
     if (_selectedPaths.contains(item.path)) {
       _selectedPaths.remove(item.path);
@@ -333,6 +358,43 @@ class LibraryState extends ChangeNotifier {
     return wasDir != isNowDir;
   }
 
+  /// 保存文件夹（CategoryNode）的 info.json。返回 define 是否变化（需重扫）。
+  Future<bool> saveFolderInfo(String folderPath, ItemInfo newInfo) async {
+    // uuid 为空时自动生成
+    ItemInfo finalInfo = newInfo;
+    if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
+      finalInfo = newInfo.copyWith(uuid: const Uuid().v4());
+    }
+
+    final jsonFile = File('$folderPath${Platform.pathSeparator}info.json');
+    await jsonFile.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(finalInfo.toJson()),
+    );
+
+    // 更新树中的节点 info
+    final node = _categoryRoot.findByPath(folderPath);
+    final wasDir = node?.info?.define == 'dir';
+    final isNowDir = finalInfo.define == 'dir';
+    if (node != null) {
+      _categoryRoot = _updateFolderInfoInTree(_categoryRoot, folderPath, finalInfo);
+    }
+    if (_selectedFolder?.path == folderPath) {
+      _selectedFolder = _categoryRoot.findByPath(folderPath);
+    }
+    notifyListeners();
+    return wasDir != isNowDir;
+  }
+
+  /// 递归更新树中某节点 info（不可变树需重建根）。
+  CategoryNode _updateFolderInfoInTree(CategoryNode node, String targetPath, ItemInfo newInfo) {
+    if (node.path == targetPath) {
+      return node.copyWith(info: newInfo);
+    }
+    final newSubDirs = node.subDirs.map((sub) =>
+        _updateFolderInfoInTree(sub, targetPath, newInfo)).toList();
+    return node.copyWith(subDirs: newSubDirs);
+  }
+
   /// 批量编辑:对所有选中项应用同一批字段变更。
   /// 列表字段（tags/classes/goto）支持 overwrite/append/remove 模式。
   /// 返回是否有 define 变化（需要重扫）。
@@ -379,15 +441,15 @@ class LibraryState extends ChangeNotifier {
           final seen = <String>{};
           final result = <GotoEntry>[];
           for (final e in oldList.followedBy(newList)) {
-            if (!seen.contains(e.uuid)) {
-              seen.add(e.uuid);
+            if (!seen.contains(e.dedupKey)) {
+              seen.add(e.dedupKey);
               result.add(e);
             }
           }
           return result;
         case 'remove':
-          final removeUuids = newList.map((e) => e.uuid).toSet();
-          return oldList.where((e) => !removeUuids.contains(e.uuid)).toList();
+          final removeKeys = newList.map((e) => e.dedupKey).toSet();
+          return oldList.where((e) => !removeKeys.contains(e.dedupKey)).toList();
         default:
           return oldList;
       }
@@ -490,6 +552,41 @@ class LibraryState extends ChangeNotifier {
       _categoryRoot = await LibraryScanner().scanAll(rootDir);
       _allItems = _categoryRoot.allItems;
       _rebuildUuidIndex();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 重扫当前资源库，保留当前选中的分类路径和搜索（不跳回开头）。
+  /// 用于 define 变化后刷新树结构。
+  Future<void> rescan() async {
+    if (_currentRootPath.isEmpty) return;
+    final keepCategoryPath = _selectedCategoryPath;
+    final keepSearch = _searchQuery;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _categoryRoot = await LibraryScanner().scanAll(_currentRootPath);
+      _allItems = _categoryRoot.allItems;
+      _rebuildUuidIndex();
+      // 恢复分类路径（若新树里不存在则置 null）
+      if (keepCategoryPath != null &&
+          _categoryRoot.findByPath(keepCategoryPath) == null) {
+        _selectedCategoryPath = null;
+      } else {
+        _selectedCategoryPath = keepCategoryPath;
+      }
+      _selectedFolder = _selectedCategoryPath == null
+          ? null
+          : _categoryRoot.findByPath(_selectedCategoryPath!);
+      _selectedItem = null;
+      _selectedPaths.clear();
+      _fileBrowserVisible = false;
+      _searchQuery = keepSearch;
     } catch (e) {
       _error = e.toString();
     } finally {

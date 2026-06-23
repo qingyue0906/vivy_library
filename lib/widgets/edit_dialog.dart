@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/item_info.dart';
 import '../models/goto_entry.dart';
 import '../models/library_item.dart';
+import '../models/category_node.dart';
 import '../providers/library_state.dart';
 import '../services/preset_service.dart';
 import 'goto_editor.dart';
@@ -10,12 +11,14 @@ class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
   final bool isBatch;
   final LibraryState state;
+  final CategoryNode? folderTarget; // 文件夹单编辑时传入
 
   const EditDialog({
     super.key,
     required this.targets,
     required this.isBatch,
     required this.state,
+    this.folderTarget,
   });
 
   @override
@@ -55,13 +58,30 @@ class _EditDialogState extends State<EditDialog> {
   String _tagsMode = 'overwrite';
   String _gotoMode = 'overwrite';
 
+  bool _showAdvanced = false;
+
   Map<String, List<String>> _presets = {};
 
   @override
   void initState() {
     super.initState();
     _loadPresets();
-    if (!widget.isBatch) {
+    if (widget.folderTarget != null) {
+      // 文件夹单编辑
+      final info = widget.folderTarget!.info ?? ItemInfo.defaults(widget.folderTarget!.name);
+      _titleCtrl = TextEditingController(text: info.title);
+      _descCtrl = TextEditingController(text: info.description);
+      _creatorCtrl = TextEditingController(text: info.creator ?? '');
+      _type = info.type;
+      _contentRating = info.contentRating;
+      _rating = info.rating;
+      _define = info.define;
+      _previewCtrl = TextEditingController(text: info.preview ?? '');
+      _star = info.star;
+      _goto = List.of(info.goto);
+      _classCtrl = TextEditingController(text: info.classes.join(', '));
+      _tagsCtrl = TextEditingController(text: info.tags.join(', '));
+    } else if (!widget.isBatch) {
       final info = widget.targets.first.info;
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
@@ -107,9 +127,11 @@ class _EditDialogState extends State<EditDialog> {
       titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       title: Text(
-        widget.isBatch
-            ? '批量编辑 (${widget.targets.length} 项)'
-            : '编辑：${widget.targets.first.info.title}',
+        widget.folderTarget != null
+            ? '编辑文件夹：${widget.folderTarget!.name}'
+            : widget.isBatch
+                ? '批量编辑 (${widget.targets.length} 项)'
+                : '编辑：${widget.targets.first.info.title}',
         style: const TextStyle(fontSize: 14),
       ),
       content: SizedBox(
@@ -119,7 +141,7 @@ class _EditDialogState extends State<EditDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!widget.isBatch) ...[
+              if (widget.folderTarget == null && !widget.isBatch) ...[
                 _buildField('标题', _titleCtrl),
                 const SizedBox(height: 8),
                 _buildField('描述', _descCtrl, maxLines: 2),
@@ -127,7 +149,7 @@ class _EditDialogState extends State<EditDialog> {
                 _buildPresetField('创建者', _creatorCtrl, 'creator'),
                 const SizedBox(height: 8),
               ],
-              if (widget.isBatch) ...[
+              if (widget.folderTarget == null && widget.isBatch) ...[
                 _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 2)),
                 const SizedBox(height: 6),
                 _buildCheckableField('创建者', _cbCreator, _buildPresetField('', _creatorCtrl, 'creator')),
@@ -138,20 +160,24 @@ class _EditDialogState extends State<EditDialog> {
                 _buildDropdownField('分级', _contentRating, _ratingOptions, (v) => setState(() => _contentRating = v!), widget.isBatch),
               ),
               const SizedBox(height: 8),
-              if (!widget.isBatch) _buildRatingSlider(),
-              if (widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
+              if (widget.folderTarget == null && !widget.isBatch) _buildRatingSlider(),
+              if (widget.folderTarget == null && widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
+              if (widget.folderTarget == null) const SizedBox(height: 8),
+              if (widget.folderTarget == null) _buildClassOrTagsSection('class'),
+              if (widget.folderTarget == null) const SizedBox(height: 8),
+              if (widget.folderTarget == null) _buildClassOrTagsSection('tags'),
               const SizedBox(height: 8),
-              _buildClassOrTagsSection('class'),
-              const SizedBox(height: 8),
-              _buildClassOrTagsSection('tags'),
-              const SizedBox(height: 8),
-              _buildDefineField(widget.isBatch),
-              const SizedBox(height: 8),
-              _buildPreviewField(widget.isBatch),
-              const SizedBox(height: 8),
-              _buildStarField(widget.isBatch),
-              const SizedBox(height: 8),
-              _buildGotoSection(),
+              _buildAdvancedToggle(),
+              if (_showAdvanced) ...[
+                const SizedBox(height: 8),
+                _buildDefineField(widget.isBatch),
+                const SizedBox(height: 8),
+                _buildPreviewField(widget.isBatch),
+                const SizedBox(height: 8),
+                _buildStarField(widget.isBatch),
+                const SizedBox(height: 8),
+                _buildGotoSection(),
+              ],
             ],
           ),
         ),
@@ -426,6 +452,29 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
+  Widget _buildAdvancedToggle() {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
+        icon: Icon(
+          _showAdvanced ? Icons.expand_less : Icons.chevron_right,
+          size: 18,
+        ),
+        label: Text(
+          '高级',
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    );
+  }
+
   Widget _buildDefineField(bool isBatch) {
     final cs = Theme.of(context).colorScheme;
     final content = DropdownButtonFormField<String>(
@@ -605,7 +654,30 @@ class _EditDialogState extends State<EditDialog> {
     setState(() => _isSaving = true);
     try {
       bool needRescan = false;
-      if (!widget.isBatch) {
+      if (widget.folderTarget != null) {
+        // 文件夹单编辑
+        final oldInfo = widget.folderTarget!.info ??
+            ItemInfo.defaults(widget.folderTarget!.name);
+        final wasDir = oldInfo.define == 'dir';
+        final isNowDir = _define == 'dir';
+        needRescan = wasDir != isNowDir;
+        final newInfo = ItemInfo(
+          uuid: oldInfo.uuid,
+          define: _define,
+          title: oldInfo.title,
+          description: oldInfo.description,
+          creator: oldInfo.creator,
+          type: _type,
+          contentRating: _contentRating,
+          rating: _rating,
+          tags: oldInfo.tags,
+          classes: oldInfo.classes,
+          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
+          goto: _goto,
+          star: _star,
+        );
+        await widget.state.saveFolderInfo(widget.folderTarget!.path, newInfo);
+      } else if (!widget.isBatch) {
         final info = widget.targets.first.info;
         final newInfo = ItemInfo(
           uuid: info.uuid,
@@ -643,7 +715,7 @@ class _EditDialogState extends State<EditDialog> {
       }
       if (mounted) Navigator.pop(context);
       if (needRescan && mounted) {
-        await widget.state.scan(widget.state.currentRootPath);
+        await widget.state.rescan();
       }
     } catch (e) {
       if (mounted) {
