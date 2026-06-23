@@ -72,7 +72,25 @@ class ItemCard extends StatelessWidget {
                   width: isSelected ? 1.5 : 0.5,
                 ),
               ),
-              child: _buildPreviewImage(context, c),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildPreviewImage(context, c),
+                  if (item.info.star)
+                    Positioned(
+                      top: 2 * c,
+                      right: 2 * c,
+                      child: Container(
+                        padding: EdgeInsets.all(2 * c),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10 * c),
+                        ),
+                        child: Icon(Icons.star, size: 12 * c, color: Colors.amber),
+                      ),
+                    ),
+                ],
+              ),
             ),
             Expanded(child: _buildInfo(c)),
           ],
