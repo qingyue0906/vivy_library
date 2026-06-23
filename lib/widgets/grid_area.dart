@@ -19,6 +19,7 @@ class GridArea extends StatelessWidget {
   final void Function(double delta) onFilePanelResize;
   final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
+  final void Function(CategoryNode folder) onFolderEditRequest;
   final GridSettings gridSettings;
   final double middleOpacity;
 
@@ -31,6 +32,7 @@ class GridArea extends StatelessWidget {
     required this.onFilePanelResize,
     this.onFilePanelResizeEnd,
     required this.onEditRequest,
+    required this.onFolderEditRequest,
     required this.gridSettings,
     this.middleOpacity = 1.0,
   });
@@ -119,7 +121,7 @@ class GridArea extends StatelessWidget {
 
         final imgHeight = cardWidth / aspectRatio;
         final mainAxisExtent = imgHeight + 38 * c;
-        final folderMainAxisExtent = 48 * c + 4 * c + 30 * c; // 图标+间距+2行文字
+        final folderMainAxisExtent = 48 * c + 4 * c + 34 * c + 12 * c; // 图标+间距+2行文字+vertical padding
 
         return CustomScrollView(
           slivers: [
@@ -220,6 +222,15 @@ class GridArea extends StatelessWidget {
       constraints: BoxConstraints(minWidth: 150 * c),
       items: [
         PopupMenuItem(
+          value: 'edit',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.edit, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('编辑', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
+        PopupMenuItem(
           value: 'enter',
           height: 28 * c,
           child: Row(children: [
@@ -239,7 +250,9 @@ class GridArea extends StatelessWidget {
         ),
       ],
     ).then((value) {
-      if (value == 'enter') {
+      if (value == 'edit') {
+        onFolderEditRequest(node);
+      } else if (value == 'enter') {
         state.setSelectedCategory(node.path);
       } else if (value == 'open_folder') {
         _openInExplorer(node.path);

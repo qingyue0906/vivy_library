@@ -10,7 +10,7 @@ class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
   final CategoryNode? folder;
   final double backgroundOpacity;
-  final void Function(String uuid)? onGotoTap;
+  final void Function(GotoEntry entry)? onGotoTap;
 
   const DetailPanel({
     super.key,
@@ -171,7 +171,7 @@ class DetailPanel extends StatelessWidget {
             return ActionChip(
               label: Text(entry.name, style: TextStyle(fontSize: 11 * c)),
               avatar: Icon(Icons.link, size: 12 * c),
-              onPressed: () => onGotoTap?.call(entry.uuid),
+              onPressed: () => onGotoTap?.call(entry),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.symmetric(horizontal: 4 * c),
             );

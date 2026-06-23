@@ -4,7 +4,10 @@ import 'compact_level.dart';
 
 /// 文件夹卡片，模仿 Windows 资源管理器大图标风格。
 /// 单击：选中文件夹（右侧显示其 info）；双击：进入文件夹。
-class FolderCard extends StatelessWidget {
+///
+/// 用手动双击检测替代 InkWell.onDoubleTap，避免 Flutter 为区分单击/双击
+/// 等待 ~300ms 超时导致的"点击卡顿"。单击立即响应，300ms 内第二次点击触发双击。
+class FolderCard extends StatefulWidget {
   final CategoryNode node;
   final double displayWidth;
   final bool isSelected;
@@ -23,6 +26,25 @@ class FolderCard extends StatelessWidget {
   });
 
   @override
+  State<FolderCard> createState() => _FolderCardState();
+}
+
+class _FolderCardState extends State<FolderCard> {
+  DateTime? _lastTapTime;
+
+  void _handleTap() {
+    final now = DateTime.now();
+    if (_lastTapTime != null &&
+        now.difference(_lastTapTime!).inMilliseconds < 300) {
+      _lastTapTime = null;
+      widget.onDoubleTap();
+    } else {
+      _lastTapTime = now;
+      widget.onTap();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
@@ -30,37 +52,38 @@ class FolderCard extends StatelessWidget {
         ? const Color(0xFF7B49E0)
         : cs.primary;
     return GestureDetector(
-      onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
+      onSecondaryTapUp: (details) => widget.onRightClick(details.globalPosition),
       child: InkWell(
-        onTap: onTap,
-        onDoubleTap: onDoubleTap,
+        onTap: _handleTap,
         borderRadius: BorderRadius.circular(4 * c),
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 6 * c, horizontal: 4 * c),
           decoration: BoxDecoration(
-            color: isSelected
+            color: widget.isSelected
                 ? cs.primaryContainer.withValues(alpha: 0.4)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(4 * c),
             border: Border.all(
-              color: isSelected ? selectedColor : Colors.transparent,
+              color: widget.isSelected ? selectedColor : Colors.transparent,
               width: 1.5,
             ),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.max,
             children: [
               Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
               SizedBox(height: 4 * c),
-              Text(
-                node.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11 * c,
-                  fontWeight: FontWeight.w500,
-                  color: cs.onSurface,
+              Expanded(
+                child: Text(
+                  widget.node.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11 * c,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ],

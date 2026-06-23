@@ -90,27 +90,26 @@ class _CategoryPanelState extends State<CategoryPanel> {
       child: InkWell(
         onTap: () => widget.onCategorySelected(value),
         child: Padding(
-          padding: EdgeInsets.only(left: 12 * c + depth * 14 * c, right: 8 * c),
+          padding: EdgeInsets.only(left: 8 * c + depth * 12 * c, right: 8 * c),
           child: Row(
             children: [
               if (hasSubDirs)
                 InkWell(
                   onTap: onToggleExpand,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   child: Padding(
-                    padding: const EdgeInsets.all(2),
+                    padding: EdgeInsets.all(1 * c),
                     child: Icon(
                       isExpanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 16 * c,
+                      size: 14 * c,
                       color: cs.onSurfaceVariant,
                     ),
                   ),
                 )
               else
-                SizedBox(width: 20 * c),
+                SizedBox(width: 16 * c),
+              Icon(Icons.folder, size: 13 * c, color: cs.onSurfaceVariant),
               SizedBox(width: 4 * c),
-              Icon(Icons.folder, size: 14 * c, color: cs.onSurfaceVariant),
-              SizedBox(width: 6 * c),
               Expanded(
                 child: Text(
                   label,

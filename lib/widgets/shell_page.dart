@@ -340,6 +340,17 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     ),
                   );
                 },
+                onFolderEditRequest: (folder) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => EditDialog(
+                      targets: const [],
+                      isBatch: false,
+                      state: _state,
+                      folderTarget: folder,
+                    ),
+                  );
+                },
                 gridSettings: widget.gridSettings,
                 middleOpacity: middleAlpha,
               );
@@ -356,8 +367,15 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 item: _state.selectedItem,
                 folder: _state.selectedFolder,
                 backgroundOpacity: rightAlpha,
-                onGotoTap: (uuid) {
-                  final ok = _state.selectByUuid(uuid);
+                onGotoTap: (entry) async {
+                  bool ok;
+                  if (entry.path != null && entry.path!.isNotEmpty) {
+                    if (_state.selectedItem == null) return;
+                    ok = await _state.selectByGotoPath(
+                        _state.selectedItem!.path, entry.path!);
+                  } else {
+                    ok = _state.selectByUuid(entry.uuid);
+                  }
                   if (!ok && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
