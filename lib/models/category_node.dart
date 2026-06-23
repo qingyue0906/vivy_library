@@ -1,0 +1,61 @@
+import 'item_info.dart';
+import 'library_item.dart';
+
+/// 资源库的文件夹树节点。
+///
+/// 一个 CategoryNode 代表一个"分类文件夹"（define=='dir'），它可能包含：
+/// - subDirs: 子文件夹（同样是 CategoryNode，可层层嵌套）
+/// - items: 该文件夹"直接"包含的项目（define=='item' 或无 info 的文件夹）
+///
+/// 根目录是一个虚拟的 CategoryNode（path = 资源库根路径，info = null）。
+class CategoryNode {
+  final String path;
+  final String name;
+  final ItemInfo? info; // 文件夹自身的 info.json，可能没有
+  final List<CategoryNode> subDirs;
+  final List<LibraryItem> items;
+
+  const CategoryNode({
+    required this.path,
+    required this.name,
+    this.info,
+    this.subDirs = const [],
+    this.items = const [],
+  });
+
+  /// 递归展平：返回该节点及其所有子文件夹下的全部项目。
+  List<LibraryItem> get allItems {
+    final result = <LibraryItem>[];
+    result.addAll(items);
+    for (final sub in subDirs) {
+      result.addAll(sub.allItems);
+    }
+    return result;
+  }
+
+  /// 按路径查找子节点（含自身）。找不到返回 null。
+  CategoryNode? findByPath(String targetPath) {
+    if (path == targetPath) return this;
+    for (final sub in subDirs) {
+      final found = sub.findByPath(targetPath);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  CategoryNode copyWith({
+    String? path,
+    String? name,
+    ItemInfo? info,
+    List<CategoryNode>? subDirs,
+    List<LibraryItem>? items,
+  }) {
+    return CategoryNode(
+      path: path ?? this.path,
+      name: name ?? this.name,
+      info: info ?? this.info,
+      subDirs: subDirs ?? this.subDirs,
+      items: items ?? this.items,
+    );
+  }
+}
