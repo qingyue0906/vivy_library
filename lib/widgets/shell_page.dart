@@ -307,8 +307,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   Divider(height: 1, color: cs.outlineVariant),
                   Expanded(
                     child: CategoryPanel(
-                      categories: _state.categories,
-                      selectedCategory: _state.selectedCategory,
+                      root: _state.categoryRoot,
+                      selectedCategoryPath: _state.selectedCategoryPath,
                       onCategorySelected: _state.setSelectedCategory,
                       backgroundOpacity: leftAlpha,
                     ),
