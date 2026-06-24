@@ -97,7 +97,6 @@ class _VivyAppState extends State<VivyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Vivy Library',
-      scrollBehavior: const _GutterScrollBehavior(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -151,24 +150,6 @@ class _VivyAppState extends State<VivyApp> {
         gridSettings: _gridSettings,
         backgroundSettings: _backgroundSettings,
         onBackgroundChanged: _onBackgroundChanged,
-      ),
-    );
-  }
-}
-
-/// 自定义滚动行为：在所有可滚动区域右侧留出滚动条宽度的 gutter，
-/// 让常态显示的滚动条不遮挡内容（内容向左偏移一个滚动条宽度）。
-class _GutterScrollBehavior extends MaterialScrollBehavior {
-  const _GutterScrollBehavior();
-
-  @override
-  Widget buildScrollbar(
-      BuildContext context, Widget child, ScrollableDetails details) {
-    return Scrollbar(
-      controller: details.controller,
-      child: Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: child,
       ),
     );
   }
