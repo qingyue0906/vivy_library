@@ -1,35 +1,46 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-/// 让桌面端的鼠标滚轮滚动变得平滑，同时保留滚动条 thumb 拖动。
+/// Desktop smooth scrolling wrapper.
 ///
-/// 实现原理：
-/// - 默认给子滚动组件 [NeverScrollableScrollPhysics]，这样 Flutter 不会用滚轮事件
-///   直接“跳一格”。
-/// - 用 [Listener] 拦截 [PointerScrollEvent]，通过 [ScrollController.animateTo]
-///   自己播放平滑动画。
-/// - 检测到 [PointerDownEvent] 时切回 [ClampingScrollPhysics]，允许用户拖动内容；
-///   [PointerUpEvent] 时再切回桌面物理，保证后续滚轮仍然平滑。
-/// - 滚动条 thumb 拖动不依赖 physics 的 drag 手势，因此始终可用。
+/// Wraps any scrollable built by [builder] and converts mouse-wheel deltas into
+/// smooth [ScrollController.animateTo] animations. It does **not** change the
+/// scrollable's physics, so scrollbar thumb drag and track page-up/down keep
+/// working normally.
 class SmoothScroll extends StatefulWidget {
+  /// Builder that receives the internally created [ScrollController] and the
+  /// physics that should be used (defaults to [ClampingScrollPhysics]).
   final Widget Function(
     BuildContext context,
     ScrollController controller,
     ScrollPhysics physics,
   ) builder;
 
-  final ScrollPhysics mobilePhysics;
-  final Duration duration;
-  final Curve curve;
+  /// Optional external controller. If omitted, a controller is created and
+  /// disposed internally.
+  final ScrollController? controller;
+
+  /// Multiplier applied to each wheel delta.
   final double scrollSpeed;
+
+  /// Duration of the smooth scroll animation.
+  final Duration duration;
+
+  /// Curve of the smooth scroll animation.
+  final Curve curve;
+
+  /// Physics passed to the scrollable. Keep a normal physics so that the
+  /// scrollbar thumb and track gestures are not disabled.
+  final ScrollPhysics mobilePhysics;
 
   const SmoothScroll({
     super.key,
     required this.builder,
+    this.controller,
+    this.scrollSpeed = 2, // 步进/速度倍率
+    this.duration = const Duration(milliseconds: 300), // 平滑动画时间
+    this.curve = Curves.easeOutCubic,
     this.mobilePhysics = const ClampingScrollPhysics(),
-    this.duration = const Duration(milliseconds: 350),
-    this.curve = Curves.easeOutQuart,
-    this.scrollSpeed = 2.0,
   });
 
   @override
@@ -39,23 +50,29 @@ class SmoothScroll extends StatefulWidget {
 class _SmoothScrollState extends State<SmoothScroll> {
   late final ScrollController _controller;
 
-  /// true 表示当前使用桌面物理（屏蔽滚轮默认行为，由本组件自己动画）。
-  bool _desktop = true;
+  /// Running target position accumulated from consecutive wheel events.
+  double? _futurePosition;
+
+  /// The most recently started animation, used to know when we can clear the
+  /// accumulated target.
+  Future<void>? _animation;
+
+  /// Direction of the last wheel event (`true` = scrolling down).
+  bool _lastDeltaDown = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = ScrollController();
+    _controller = widget.controller ?? ScrollController();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (widget.controller == null) {
+      _controller.dispose();
+    }
     super.dispose();
   }
-
-  ScrollPhysics get _physics =>
-      _desktop ? const NeverScrollableScrollPhysics() : widget.mobilePhysics;
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
@@ -64,58 +81,77 @@ class _SmoothScrollState extends State<SmoothScroll> {
     final delta = event.scrollDelta.dy;
     if (delta == 0) return;
 
-    final target = (_controller.position.pixels + delta * widget.scrollSpeed)
-        .clamp(
-          _controller.position.minScrollExtent,
-          _controller.position.maxScrollExtent,
-        )
-        .toDouble();
-    if (target == _controller.position.pixels) return;
+    final position = _controller.position;
+    final min = position.minScrollExtent;
+    final max = position.maxScrollExtent;
+    if (min == max) return; // nothing to scroll
 
-    if (!_desktop) {
-      // 刚从触摸/拖动状态回来，先切回桌面物理再动画
-      setState(() => _desktop = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _animateTo(target);
-      });
-    } else {
-      _animateTo(target);
+    final goingDown = delta > 0;
+    if (_futurePosition == null || goingDown != _lastDeltaDown) {
+      // Start accumulating from the current position, or reset when the user
+      // reverses scroll direction.
+      _futurePosition = position.pixels;
+    }
+    _lastDeltaDown = goingDown;
+
+    _futurePosition =
+        (_futurePosition! + delta * widget.scrollSpeed).clamp(min, max).toDouble();
+
+    // Register first with the pointer signal resolver so that the underlying
+    // Scrollable/RawScrollbar default wheel handling is skipped.
+    GestureBinding.instance.pointerSignalResolver.register(
+      event,
+      _handlePointerScroll,
+    );
+
+    _animateTo(_futurePosition!);
+  }
+
+  /// Callback invoked by the [PointerSignalResolver] when our overlay wins.
+  void _handlePointerScroll(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      event.respond(allowPlatformDefault: false);
     }
   }
 
-  void _animateTo(double target) {
+  Future<void> _animateTo(double target) async {
     if (!_controller.hasClients) return;
-    _controller.animateTo(
+
+    final animation = _controller.animateTo(
       target,
       duration: widget.duration,
       curve: widget.curve,
     );
-  }
+    _animation = animation;
 
-  void _onPointerDown(PointerDownEvent event) {
-    if (_desktop) {
-      // 停止当前动画，确保拖动从当前位置开始
-      if (_controller.hasClients) {
-        _controller.jumpTo(_controller.position.pixels);
-      }
-      setState(() => _desktop = false);
+    try {
+      await animation;
+    } catch (_) {
+      // Animation was interrupted by a newer wheel event - that's fine.
     }
-  }
 
-  void _onPointerUp(PointerUpEvent event) {
-    if (!_desktop) {
-      setState(() => _desktop = true);
+    if (_animation == animation && mounted) {
+      _futurePosition = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerSignal: _onPointerSignal,
-      onPointerDown: _onPointerDown,
-      onPointerUp: _onPointerUp,
-      behavior: HitTestBehavior.translucent,
-      child: widget.builder(context, _controller, _physics),
+    return Stack(
+      children: [
+        // The actual scrollable uses normal physics.
+        widget.builder(context, _controller, widget.mobilePhysics),
+        // A transparent overlay that intercepts wheel events before they reach
+        // the scrollable, while letting pointer down/up pass through for
+        // scrollbar track clicks, thumb drags, and content drags.
+        Positioned.fill(
+          child: Listener(
+            onPointerSignal: _onPointerSignal,
+            behavior: HitTestBehavior.translucent,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ],
     );
   }
 }
