@@ -349,7 +349,18 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       targets: const [],
                       isBatch: false,
                       state: _state,
-                      folderTarget: folder,
+                      folderTargets: [folder],
+                    ),
+                  );
+                },
+                onFolderBatchEditRequest: (folders) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => EditDialog(
+                      targets: const [],
+                      isBatch: true,
+                      state: _state,
+                      folderTargets: folders,
                     ),
                   );
                 },

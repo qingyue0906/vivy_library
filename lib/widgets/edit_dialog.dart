@@ -11,14 +11,14 @@ class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
   final bool isBatch;
   final LibraryState state;
-  final CategoryNode? folderTarget; // 文件夹单编辑时传入
+  final List<CategoryNode> folderTargets; // 文件夹编辑（单/批量）时传入
 
   const EditDialog({
     super.key,
     required this.targets,
     required this.isBatch,
     required this.state,
-    this.folderTarget,
+    this.folderTargets = const [],
   });
 
   @override
@@ -66,9 +66,10 @@ class _EditDialogState extends State<EditDialog> {
   void initState() {
     super.initState();
     _loadPresets();
-    if (widget.folderTarget != null) {
+    if (widget.folderTargets.isNotEmpty && !widget.isBatch) {
       // 文件夹单编辑
-      final info = widget.folderTarget!.info ?? ItemInfo.defaults(widget.folderTarget!.name);
+      final info = widget.folderTargets.first.info ??
+          ItemInfo.defaults(widget.folderTargets.first.name);
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
       _creatorCtrl = TextEditingController(text: info.creator ?? '');
@@ -81,6 +82,14 @@ class _EditDialogState extends State<EditDialog> {
       _goto = List.of(info.goto);
       _classCtrl = TextEditingController(text: info.classes.join(', '));
       _tagsCtrl = TextEditingController(text: info.tags.join(', '));
+    } else if (widget.folderTargets.isNotEmpty && widget.isBatch) {
+      // 文件夹批量编辑：控制器留空，由勾选决定
+      _titleCtrl = TextEditingController();
+      _descCtrl = TextEditingController();
+      _creatorCtrl = TextEditingController();
+      _previewCtrl = TextEditingController();
+      _classCtrl = TextEditingController();
+      _tagsCtrl = TextEditingController();
     } else if (!widget.isBatch) {
       final info = widget.targets.first.info;
       _titleCtrl = TextEditingController(text: info.title);
@@ -127,8 +136,10 @@ class _EditDialogState extends State<EditDialog> {
       titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       title: Text(
-        widget.folderTarget != null
-            ? '编辑文件夹：${widget.folderTarget!.name}'
+        widget.folderTargets.isNotEmpty
+            ? widget.isBatch
+                ? '批量编辑文件夹 (${widget.folderTargets.length} 项)'
+                : '编辑文件夹：${widget.folderTargets.first.name}'
             : widget.isBatch
                 ? '批量编辑 (${widget.targets.length} 项)'
                 : '编辑：${widget.targets.first.info.title}',
@@ -485,6 +496,7 @@ class _EditDialogState extends State<EditDialog> {
       items: const [
         DropdownMenuItem(value: 'item', child: Text('item（项目）')),
         DropdownMenuItem(value: 'dir', child: Text('dir（文件夹）')),
+        DropdownMenuItem(value: 'hide', child: Text('hide（隐藏）')),
       ],
       onChanged: (v) => setState(() => _define = v ?? 'item'),
     );
@@ -655,47 +667,72 @@ class _EditDialogState extends State<EditDialog> {
     try {
       bool needRescan = false;
       if (widget.isBatch) {
-        needRescan = await widget.state.batchEditItems(
-          itemPaths: widget.targets.map((e) => e.path).toList(),
-          description: _cbDesc ? _descCtrl.text.trim() : null,
-          creator: _cbCreator ? _creatorCtrl.text.trim() : null,
-          type: _cbType ? _type : null,
-          contentRating: _cbContentRating ? _contentRating : null,
-          tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
-          classes: _cbClass ? _parseList(_classCtrl.text) : null,
-          classMode: _classMode,
-          tagsMode: _tagsMode,
-          define: _cbDefine ? _define : null,
-          preview: _cbPreview ? _previewCtrl.text.trim() : null,
-          star: _cbStar ? _star : null,
-          goto: _cbGoto ? _goto : null,
-          gotoMode: _gotoMode,
-        );
+        if (widget.folderTargets.isNotEmpty) {
+          needRescan = await widget.state.batchEditFolders(
+            folderPaths: widget.folderTargets.map((e) => e.path).toList(),
+            description: _cbDesc ? _descCtrl.text.trim() : null,
+            creator: _cbCreator ? _creatorCtrl.text.trim() : null,
+            type: _cbType ? _type : null,
+            contentRating: _cbContentRating ? _contentRating : null,
+            tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
+            classes: _cbClass ? _parseList(_classCtrl.text) : null,
+            classMode: _classMode,
+            tagsMode: _tagsMode,
+            define: _cbDefine ? _define : null,
+            preview: _cbPreview ? _previewCtrl.text.trim() : null,
+            star: _cbStar ? _star : null,
+            goto: _cbGoto ? _goto : null,
+            gotoMode: _gotoMode,
+          );
+        } else {
+          needRescan = await widget.state.batchEditItems(
+            itemPaths: widget.targets.map((e) => e.path).toList(),
+            description: _cbDesc ? _descCtrl.text.trim() : null,
+            creator: _cbCreator ? _creatorCtrl.text.trim() : null,
+            type: _cbType ? _type : null,
+            contentRating: _cbContentRating ? _contentRating : null,
+            tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
+            classes: _cbClass ? _parseList(_classCtrl.text) : null,
+            classMode: _classMode,
+            tagsMode: _tagsMode,
+            define: _cbDefine ? _define : null,
+            preview: _cbPreview ? _previewCtrl.text.trim() : null,
+            star: _cbStar ? _star : null,
+            goto: _cbGoto ? _goto : null,
+            gotoMode: _gotoMode,
+          );
+        }
       } else {
         // 单编辑：项目或文件夹统一走控制器值构建 newInfo
-        final targetPath = widget.folderTarget?.path ?? widget.targets.first.path;
-        final oldInfo = widget.folderTarget?.info ??
-            widget.targets.first.info;
-        final wasDir = oldInfo.define == 'dir';
-        final isNowDir = _define == 'dir';
-        needRescan = wasDir != isNowDir;
+        final isFolder = widget.folderTargets.isNotEmpty;
+        final targetPath = isFolder
+            ? widget.folderTargets.first.path
+            : widget.targets.first.path;
+        final oldInfo = isFolder
+            ? widget.folderTargets.first.info ??
+                ItemInfo.defaults(widget.folderTargets.first.name)
+            : widget.targets.first.info;
         final newInfo = ItemInfo(
           uuid: oldInfo.uuid,
           define: _define,
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim(),
-          creator: _creatorCtrl.text.trim().isEmpty ? null : _creatorCtrl.text.trim(),
+          creator: _creatorCtrl.text.trim().isEmpty
+              ? null
+              : _creatorCtrl.text.trim(),
           type: _type,
           contentRating: _contentRating,
           rating: _rating,
           tags: _parseList(_tagsCtrl.text),
           classes: _parseList(_classCtrl.text),
-          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
+          preview: _previewCtrl.text.trim().isEmpty
+              ? null
+              : _previewCtrl.text.trim(),
           goto: _goto,
           star: _star,
         );
-        if (widget.folderTarget != null) {
-          await widget.state.saveFolderInfo(targetPath, newInfo);
+        if (isFolder) {
+          needRescan = await widget.state.saveFolderInfo(targetPath, newInfo);
         } else {
           needRescan = await widget.state.saveItemInfo(targetPath, newInfo);
         }

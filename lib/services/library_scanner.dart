@@ -36,6 +36,16 @@ class LibraryScanner {
     );
   }
 
+  /// 安全地列出目录内容，遇到无权限等错误时返回空列表，避免整个扫描崩溃。
+  Future<List<FileSystemEntity>> _safeList(Directory dir,
+      {bool recursive = false}) async {
+    try {
+      return await dir.list(recursive: recursive).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
   /// 扫描某一层文件夹，返回该层的子文件夹节点列表 + 直接项目列表。
   /// 分类节点（dir）会递归；项目节点（item）构建为 LibraryItem 并放入 items。
   Future<List<CategoryNode>> _scanLevel({
@@ -45,7 +55,7 @@ class LibraryScanner {
     final dir = Directory(parentPath);
     if (!await dir.exists()) return [];
 
-    final entities = await dir.list().toList();
+    final entities = await _safeList(dir);
 
     // 先收集所有子文件夹路径，并发处理
     final childDirPaths = <String>[];
@@ -78,7 +88,12 @@ class LibraryScanner {
     final defaults = ItemInfo.defaults(folderName);
     final info = await _loadItemInfo(folderPath, defaults);
 
-    // 根目录第一层强制为 dir
+    // define == 'hide' 的文件夹/项目不在资源库中展示
+    if (info.define == 'hide') {
+      return null;
+    }
+
+    // 根目录第一层强制为 dir（hide 已提前排除）
     if (isRootLevel) {
       return await _buildDirNode(folderPath, folderName, info);
     }
@@ -102,7 +117,7 @@ class LibraryScanner {
     ItemInfo? info,
   ) async {
     final dir = Directory(folderPath);
-    final entities = await dir.list().toList();
+    final entities = await _safeList(dir);
 
     final subDirPaths = <String>[];
     final directItemPaths = <String>[];
@@ -111,9 +126,12 @@ class LibraryScanner {
       if (e is! Directory) continue;
       final name = _baseName(e.path);
       if (name.startsWith('.')) continue;
-      // 深层子文件夹：读 info 判断 dir/item
+      // 深层子文件夹：读 info 判断 dir/item/hide
       final childDefaults = ItemInfo.defaults(name);
       final childInfo = await _loadItemInfo(e.path, childDefaults);
+      if (childInfo.define == 'hide') {
+        continue;
+      }
       if (childInfo.define == 'dir') {
         subDirPaths.add(e.path);
       } else {
@@ -211,7 +229,7 @@ class LibraryScanner {
     final dir = Directory(itemPath);
     if (!await dir.exists()) return null;
 
-    final entries = (await dir.list().toList()).whereType<File>().toList();
+    final entries = (await _safeList(dir)).whereType<File>().toList();
 
     for (final file in entries) {
       final name = _baseName(file.path).toLowerCase();

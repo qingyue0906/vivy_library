@@ -43,6 +43,20 @@ class CategoryNode {
     return null;
   }
 
+  /// 计算 [targetPath] 对应节点在本树中的所有祖先路径（从根到父节点）。
+  /// 若 targetPath 不在本树中，返回空列表；若 targetPath 就是本节点，也返回空列表。
+  List<String> ancestorPaths(String targetPath) {
+    if (path == targetPath) return [];
+    for (final sub in subDirs) {
+      if (sub.path == targetPath) return [path];
+      final found = sub.findByPath(targetPath);
+      if (found != null) {
+        return [path, ...sub.ancestorPaths(targetPath)];
+      }
+    }
+    return [];
+  }
+
   CategoryNode copyWith({
     String? path,
     String? name,

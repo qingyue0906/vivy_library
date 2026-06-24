@@ -41,6 +41,10 @@ class LibraryState extends ChangeNotifier {
   final Set<String> _selectedPaths = {};
   String? _selectionAnchorPath;
 
+  // 文件夹多选状态（与项目多选分开，二者互斥）
+  final Set<String> _selectedFolderPaths = {};
+  String? _folderSelectionAnchorPath;
+
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get currentRootPath => _currentRootPath;
@@ -57,11 +61,18 @@ class LibraryState extends ChangeNotifier {
   CategoryNode? get selectedFolder => _selectedFolder;
   Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
+  Set<String> get selectedFolderPaths =>
+      Set.unmodifiable(_selectedFolderPaths);
 
   CategoryNode get categoryRoot => _categoryRoot;
 
   List<LibraryItem> get selectedItems =>
       _allItems.where((e) => _selectedPaths.contains(e.path)).toList();
+
+  List<CategoryNode> get selectedFolders => _selectedFolderPaths
+      .map((p) => _categoryRoot.findByPath(p))
+      .whereType<CategoryNode>()
+      .toList();
 
   /// 当前选中文件夹是否在中间区显示"直接子文件夹 + 直接项目"。
   /// - null（全部项目）：不显示子文件夹。
@@ -200,10 +211,26 @@ class LibraryState extends ChangeNotifier {
     _selectedItem = null;
     _selectedFolder = null;
     _selectedPaths.clear();
+    _selectedFolderPaths.clear();
     _fileBrowserVisible = false;
     if (path != null) {
       _selectedFolder = _categoryRoot.findByPath(path);
     }
+    notifyListeners();
+  }
+
+  /// 在左侧目录树中定位并选中 [folderPath]，同时自动展开所有祖先节点，
+  /// 并清空项目和文件夹的选中状态。
+  void locateInTree(String folderPath) {
+    final ancestors = _categoryRoot.ancestorPaths(folderPath);
+    _expandedPaths.addAll(ancestors);
+    _selectedCategoryPath = folderPath;
+    _selectedClass = '全部';
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _selectedFolderPaths.clear();
+    _selectedFolder = _categoryRoot.findByPath(folderPath);
+    _fileBrowserVisible = false;
     notifyListeners();
   }
 
@@ -221,6 +248,7 @@ class LibraryState extends ChangeNotifier {
     _selectedClass = className;
     _selectedItem = null;
     _selectedPaths.clear();
+    _selectedFolderPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
   }
@@ -255,6 +283,7 @@ class LibraryState extends ChangeNotifier {
       ..clear()
       ..add(item.path);
     _selectionAnchorPath = item.path;
+    _selectedFolderPaths.clear();
     _fileBrowserVisible = true;
     notifyListeners();
   }
@@ -264,8 +293,77 @@ class LibraryState extends ChangeNotifier {
     _selectedFolder = node;
     _selectedItem = null;
     _selectedPaths.clear();
+    _selectedFolderPaths
+      ..clear()
+      ..add(node.path);
+    _folderSelectionAnchorPath = node.path;
     _fileBrowserVisible = false;
     notifyListeners();
+  }
+
+  bool isFolderSelected(String path) => _selectedFolderPaths.contains(path);
+
+  void toggleFolderSelection(CategoryNode node) {
+    if (_selectedFolderPaths.contains(node.path)) {
+      _selectedFolderPaths.remove(node.path);
+      if (_selectedFolder?.path == node.path) _selectedFolder = null;
+    } else {
+      _selectedFolderPaths.add(node.path);
+      _selectedFolder = node;
+      _folderSelectionAnchorPath = node.path;
+    }
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _fileBrowserVisible = false;
+    notifyListeners();
+  }
+
+  void selectFolderRange(CategoryNode node, List<CategoryNode> currentList) {
+    if (_folderSelectionAnchorPath == null) {
+      setSelectedFolder(node);
+      return;
+    }
+    final anchorIndex = currentList
+        .indexWhere((e) => e.path == _folderSelectionAnchorPath);
+    final targetIndex = currentList.indexWhere((e) => e.path == node.path);
+    if (anchorIndex == -1 || targetIndex == -1) {
+      setSelectedFolder(node);
+      return;
+    }
+    final start = anchorIndex < targetIndex ? anchorIndex : targetIndex;
+    final end = anchorIndex < targetIndex ? targetIndex : anchorIndex;
+
+    _selectedFolderPaths
+      ..clear()
+      ..addAll(currentList.sublist(start, end + 1).map((e) => e.path));
+    _selectedFolder = node;
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _fileBrowserVisible = false;
+    notifyListeners();
+  }
+
+  void selectAllFolders(List<CategoryNode> currentList) {
+    _selectedFolderPaths
+      ..clear()
+      ..addAll(currentList.map((e) => e.path));
+    _selectedFolder = currentList.isNotEmpty ? currentList.last : null;
+    _selectedItem = null;
+    _selectedPaths.clear();
+    _fileBrowserVisible = false;
+    notifyListeners();
+  }
+
+  void selectFolderForContextMenu(CategoryNode node) {
+    if (!_selectedFolderPaths.contains(node.path)) {
+      _selectedFolderPaths
+        ..clear()
+        ..add(node.path);
+      _selectedFolder = node;
+      _selectedItem = null;
+      _selectedPaths.clear();
+      notifyListeners();
+    }
   }
 
   /// 通过 uuid 选中项目（goto 点击）。找不到返回 false，调用方提示。
@@ -310,6 +408,8 @@ class LibraryState extends ChangeNotifier {
       _selectedItem = item;
       _selectionAnchorPath = item.path;
     }
+    _selectedFolderPaths.clear();
+    _selectedFolder = null;
     notifyListeners();
   }
 
@@ -334,6 +434,8 @@ class LibraryState extends ChangeNotifier {
       ..clear()
       ..addAll(currentList.sublist(start, end + 1).map((e) => e.path));
     _selectedItem = item;
+    _selectedFolderPaths.clear();
+    _selectedFolder = null;
     notifyListeners();
   }
 
@@ -342,6 +444,8 @@ class LibraryState extends ChangeNotifier {
       ..clear()
       ..addAll(currentList.map((e) => e.path));
     _selectedItem = currentList.isNotEmpty ? currentList.last : null;
+    _selectedFolderPaths.clear();
+    _selectedFolder = null;
     notifyListeners();
   }
 
@@ -351,6 +455,8 @@ class LibraryState extends ChangeNotifier {
         ..clear()
         ..add(item.path);
       _selectedItem = item;
+      _selectedFolderPaths.clear();
+      _selectedFolder = null;
       notifyListeners();
     }
   }
@@ -375,8 +481,7 @@ class LibraryState extends ChangeNotifier {
     );
 
     final oldItem = _allItems[index];
-    final wasDir = oldItem.info.define == 'dir';
-    final isNowDir = finalInfo.define == 'dir';
+    final defineChanged = oldItem.info.define != finalInfo.define;
 
     _allItems[index] = LibraryItem(
       category: oldItem.category,
@@ -396,8 +501,8 @@ class LibraryState extends ChangeNotifier {
 
     notifyListeners();
 
-    // define 变化（item↔dir）需要重扫以更新树结构
-    return wasDir != isNowDir;
+    // define 变化（item/dir/hide 之间任意切换）需要重扫以更新树结构
+    return defineChanged;
   }
 
   /// 保存文件夹（CategoryNode）的 info.json。返回 define 是否变化（需重扫）。
@@ -415,8 +520,7 @@ class LibraryState extends ChangeNotifier {
 
     // 更新树中的节点 info
     final node = _categoryRoot.findByPath(folderPath);
-    final wasDir = node?.info?.define == 'dir';
-    final isNowDir = finalInfo.define == 'dir';
+    final defineChanged = node?.info?.define != finalInfo.define;
     if (node != null) {
       _categoryRoot = _updateFolderInfoInTree(_categoryRoot, folderPath, finalInfo);
     }
@@ -424,7 +528,7 @@ class LibraryState extends ChangeNotifier {
       _selectedFolder = _categoryRoot.findByPath(folderPath);
     }
     notifyListeners();
-    return wasDir != isNowDir;
+    return defineChanged;
   }
 
   /// 递归更新树中某节点 info（不可变树需重建根）。
@@ -458,63 +562,23 @@ class LibraryState extends ChangeNotifier {
   }) async {
     bool anyDefineChanged = false;
 
-    List<String> mergeList(
-        List<String> oldList, List<String>? newList, String mode) {
-      if (newList == null || newList.isEmpty) return oldList;
-      switch (mode) {
-        case 'overwrite':
-          return newList;
-        case 'append':
-          return {...oldList, ...newList}.toList();
-        case 'remove':
-          return oldList.where((e) => !newList.contains(e)).toList();
-        default:
-          return oldList;
-      }
-    }
-
-    List<GotoEntry> mergeGoto(
-        List<GotoEntry> oldList, List<GotoEntry>? newList, String mode) {
-      if (newList == null || newList.isEmpty) return oldList;
-      switch (mode) {
-        case 'overwrite':
-          return newList;
-        case 'append':
-          final seen = <String>{};
-          final result = <GotoEntry>[];
-          for (final e in oldList.followedBy(newList)) {
-            if (!seen.contains(e.dedupKey)) {
-              seen.add(e.dedupKey);
-              result.add(e);
-            }
-          }
-          return result;
-        case 'remove':
-          final removeKeys = newList.map((e) => e.dedupKey).toSet();
-          return oldList.where((e) => !removeKeys.contains(e.dedupKey)).toList();
-        default:
-          return oldList;
-      }
-    }
-
     for (final path in itemPaths) {
       final index = _allItems.indexWhere((e) => e.path == path);
       if (index == -1) continue;
       final old = _allItems[index].info;
 
-      final wasDir = old.define == 'dir';
-      final newDefine = define ?? old.define;
-      final isNowDir = newDefine == 'dir';
-      if (wasDir != isNowDir) anyDefineChanged = true;
+      if (old.define != (define ?? old.define)) {
+        anyDefineChanged = true;
+      }
 
       ItemInfo newInfo = old.copyWith(
         description: description,
         creator: creator,
         type: type,
         contentRating: contentRating,
-        tags: mergeList(old.tags, tags, tagsMode),
-        classes: mergeList(old.classes, classes, classMode),
-        goto: mergeGoto(old.goto, goto, gotoMode),
+        tags: _mergeList(old.tags, tags, tagsMode),
+        classes: _mergeList(old.classes, classes, classMode),
+        goto: _mergeGoto(old.goto, goto, gotoMode),
         define: define,
         preview: preview,
         star: star,
@@ -549,6 +613,105 @@ class LibraryState extends ChangeNotifier {
     _rebuildUuidIndex();
     notifyListeners();
     return anyDefineChanged;
+  }
+
+  /// 批量编辑文件夹：与 batchEditItems 字段对齐，用于多选文件夹卡片后的批量编辑。
+  Future<bool> batchEditFolders({
+    required List<String> folderPaths,
+    String? description,
+    String? creator,
+    String? type,
+    String? contentRating,
+    List<String>? tags,
+    List<String>? classes,
+    List<GotoEntry>? goto,
+    String? define,
+    String? preview,
+    bool? star,
+    String classMode = 'overwrite',
+    String tagsMode = 'overwrite',
+    String gotoMode = 'overwrite',
+  }) async {
+    bool anyDefineChanged = false;
+
+    for (final path in folderPaths) {
+      final node = _categoryRoot.findByPath(path);
+      final old = node?.info ?? ItemInfo.defaults(_baseName(path));
+
+      if (old.define != (define ?? old.define)) {
+        anyDefineChanged = true;
+      }
+
+      ItemInfo newInfo = old.copyWith(
+        description: description,
+        creator: creator,
+        type: type,
+        contentRating: contentRating,
+        tags: _mergeList(old.tags, tags, tagsMode),
+        classes: _mergeList(old.classes, classes, classMode),
+        goto: _mergeGoto(old.goto, goto, gotoMode),
+        define: define,
+        preview: preview,
+        star: star,
+      );
+
+      // uuid 为空时自动生成
+      if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
+        newInfo = newInfo.copyWith(uuid: const Uuid().v4());
+      }
+
+      final jsonFile = File('$path${Platform.pathSeparator}info.json');
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(newInfo.toJson()),
+      );
+
+      _categoryRoot = _updateFolderInfoInTree(_categoryRoot, path, newInfo);
+
+      if (_selectedFolder?.path == path) {
+        _selectedFolder = _categoryRoot.findByPath(path);
+      }
+    }
+    notifyListeners();
+    return anyDefineChanged;
+  }
+
+  List<String> _mergeList(
+      List<String> oldList, List<String>? newList, String mode) {
+    if (newList == null || newList.isEmpty) return oldList;
+    switch (mode) {
+      case 'overwrite':
+        return newList;
+      case 'append':
+        return {...oldList, ...newList}.toList();
+      case 'remove':
+        return oldList.where((e) => !newList.contains(e)).toList();
+      default:
+        return oldList;
+    }
+  }
+
+  List<GotoEntry> _mergeGoto(
+      List<GotoEntry> oldList, List<GotoEntry>? newList, String mode) {
+    if (newList == null || newList.isEmpty) return oldList;
+    switch (mode) {
+      case 'overwrite':
+        return newList;
+      case 'append':
+        final seen = <String>{};
+        final result = <GotoEntry>[];
+        for (final e in oldList.followedBy(newList)) {
+          if (!seen.contains(e.dedupKey)) {
+            seen.add(e.dedupKey);
+            result.add(e);
+          }
+        }
+        return result;
+      case 'remove':
+        final removeKeys = newList.map((e) => e.dedupKey).toSet();
+        return oldList.where((e) => !removeKeys.contains(e.dedupKey)).toList();
+      default:
+        return oldList;
+    }
   }
 
   void _rebuildUuidIndex() {
@@ -587,6 +750,7 @@ class LibraryState extends ChangeNotifier {
     _selectedItem = null;
     _selectedFolder = null;
     _selectedPaths.clear();
+    _selectedFolderPaths.clear();
     _expandedPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
@@ -630,6 +794,7 @@ class LibraryState extends ChangeNotifier {
           : _categoryRoot.findByPath(_selectedCategoryPath!);
       _selectedItem = null;
       _selectedPaths.clear();
+      _selectedFolderPaths.clear();
       _fileBrowserVisible = false;
       _searchQuery = keepSearch;
     } catch (e) {

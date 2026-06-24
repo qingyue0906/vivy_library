@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/category_node.dart';
 import 'compact_level.dart';
 
@@ -13,6 +14,8 @@ class FolderCard extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
+  final VoidCallback onCtrlTap;
+  final VoidCallback onShiftTap;
   final void Function(Offset globalPosition) onRightClick;
 
   const FolderCard({
@@ -22,6 +25,8 @@ class FolderCard extends StatefulWidget {
     required this.isSelected,
     required this.onTap,
     required this.onDoubleTap,
+    required this.onCtrlTap,
+    required this.onShiftTap,
     required this.onRightClick,
   });
 
@@ -33,6 +38,17 @@ class _FolderCardState extends State<FolderCard> {
   DateTime? _lastTapTime;
 
   void _handleTap() {
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    if (isCtrl) {
+      widget.onCtrlTap();
+      return;
+    }
+    if (isShift) {
+      widget.onShiftTap();
+      return;
+    }
+
     final now = DateTime.now();
     if (_lastTapTime != null &&
         now.difference(_lastTapTime!).inMilliseconds < 300) {

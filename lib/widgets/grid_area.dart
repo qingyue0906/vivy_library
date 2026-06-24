@@ -20,6 +20,7 @@ class GridArea extends StatelessWidget {
   final VoidCallback? onFilePanelResizeEnd;
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
   final void Function(CategoryNode folder) onFolderEditRequest;
+  final void Function(List<CategoryNode> folders) onFolderBatchEditRequest;
   final GridSettings gridSettings;
   final double middleOpacity;
 
@@ -33,6 +34,7 @@ class GridArea extends StatelessWidget {
     this.onFilePanelResizeEnd,
     required this.onEditRequest,
     required this.onFolderEditRequest,
+    required this.onFolderBatchEditRequest,
     required this.gridSettings,
     this.middleOpacity = 1.0,
   });
@@ -150,11 +152,14 @@ class GridArea extends StatelessWidget {
                   (context, index) {
                     final node = subDirs[index];
                     return FolderCard(
+                      key: GlobalObjectKey(node.path),
                       node: node,
                       displayWidth: cardWidth,
-                      isSelected: state.selectedFolder?.path == node.path,
+                      isSelected: state.isFolderSelected(node.path),
                       onTap: () => state.setSelectedFolder(node),
                       onDoubleTap: () => state.setSelectedCategory(node.path),
+                      onCtrlTap: () => state.toggleFolderSelection(node),
+                      onShiftTap: () => state.selectFolderRange(node, subDirs),
                       onRightClick: (globalPos) =>
                           _showFolderContextMenu(context, node, globalPos),
                     );
@@ -188,6 +193,7 @@ class GridArea extends StatelessWidget {
                 (context, index) {
                   final item = items[index];
                   return ItemCard(
+                    key: GlobalObjectKey(item.path),
                     item: item,
                     aspectRatio: aspectRatio,
                     displayWidth: cardWidth,
@@ -213,6 +219,10 @@ class GridArea extends StatelessWidget {
   void _showFolderContextMenu(
       BuildContext context, CategoryNode node, Offset globalPos) {
     final c = CompactLevel.of(context);
+    state.selectFolderForContextMenu(node);
+    final selectedFolders = state.selectedFolders;
+    final isBatch = selectedFolders.length > 1;
+
     final position = RelativeRect.fromLTRB(
       globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1,
     );
@@ -227,7 +237,19 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.edit, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('编辑', style: TextStyle(fontSize: 11 * c)),
+            Text(
+              isBatch ? '批量编辑 (${selectedFolders.length} 项)' : '编辑',
+              style: TextStyle(fontSize: 11 * c),
+            ),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'locate',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.location_searching, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('定位到此处', style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
@@ -250,12 +272,20 @@ class GridArea extends StatelessWidget {
         ),
       ],
     ).then((value) {
-      if (value == 'edit') {
-        onFolderEditRequest(node);
-      } else if (value == 'enter') {
-        state.setSelectedCategory(node.path);
-      } else if (value == 'open_folder') {
-        _openInExplorer(node.path);
+      if (value == null) return;
+      switch (value) {
+        case 'edit':
+          if (isBatch) {
+            onFolderBatchEditRequest(selectedFolders);
+          } else {
+            onFolderEditRequest(node);
+          }
+        case 'locate':
+          _locateFolder(node.path);
+        case 'enter':
+          state.setSelectedCategory(node.path);
+        case 'open_folder':
+          _openInExplorer(node.path);
       }
     });
   }
@@ -294,6 +324,17 @@ class GridArea extends StatelessWidget {
           ),
         ),
         PopupMenuItem(
+          value: 'locate',
+          height: 28 * c,
+          child: Row(
+            children: [
+              Icon(Icons.location_searching, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text('定位到此处', style: TextStyle(fontSize: 11 * c)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
           value: 'open_folder',
           height: 28 * c,
           child: Row(
@@ -310,8 +351,30 @@ class GridArea extends StatelessWidget {
       switch (value) {
         case 'edit':
           onEditRequest(selectedItems, isBatch);
+        case 'locate':
+          _locateItem(tappedItem);
         case 'open_folder':
           _openInExplorer(tappedItem.path);
+      }
+    });
+  }
+
+  void _locateFolder(String folderPath) {
+    state.locateInTree(folderPath);
+  }
+
+  void _locateItem(LibraryItem item) {
+    state.locateInTree(item.categoryPath);
+    // 切换分类后，下一帧将对应项目滚动到可见区域
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = GlobalObjectKey(item.path);
+      final ctx = key.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 300),
+        );
       }
     });
   }
