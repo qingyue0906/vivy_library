@@ -30,6 +30,15 @@ class _GotoEditorState extends State<GotoEditor> {
     _syncControllers(widget.entries);
   }
 
+  @override
+  void didUpdateWidget(covariant GotoEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 外部 entries 变化时（如批量模式覆盖/追加后），重新同步控制器
+    if (oldWidget.entries.length != widget.entries.length) {
+      _syncControllers(widget.entries);
+    }
+  }
+
   void _syncControllers(List<GotoEntry> list) {
     while (_nameCtrls.length < list.length) {
       _nameCtrls.add(TextEditingController());
@@ -42,9 +51,11 @@ class _GotoEditorState extends State<GotoEditor> {
       _pathCtrls.removeLast().dispose();
     }
     for (int i = 0; i < list.length; i++) {
-      _nameCtrls[i].text = list[i].name;
-      _uuidCtrls[i].text = list[i].uuid;
-      _pathCtrls[i].text = list[i].path ?? '';
+      // 避免覆盖正在输入的文本：只在不一致时更新
+      if (_nameCtrls[i].text != list[i].name) _nameCtrls[i].text = list[i].name;
+      if (_uuidCtrls[i].text != list[i].uuid) _uuidCtrls[i].text = list[i].uuid;
+      final p = list[i].path ?? '';
+      if (_pathCtrls[i].text != p) _pathCtrls[i].text = p;
     }
   }
 
@@ -62,7 +73,7 @@ class _GotoEditorState extends State<GotoEditor> {
     super.dispose();
   }
 
-  void _notify() {
+  List<GotoEntry> _buildListFromControllers() {
     final list = <GotoEntry>[];
     for (int i = 0; i < _nameCtrls.length; i++) {
       list.add(GotoEntry(
@@ -71,13 +82,16 @@ class _GotoEditorState extends State<GotoEditor> {
         path: _pathCtrls[i].text.trim().isEmpty ? null : _pathCtrls[i].text.trim(),
       ));
     }
-    widget.onChanged(list);
+    return list;
+  }
+
+  void _notify() {
+    widget.onChanged(_buildListFromControllers());
   }
 
   void _add() {
     setState(() {
-      final newList = List<GotoEntry>.of(widget.entries)
-        ..add(const GotoEntry(name: ''));
+      final newList = _buildListFromControllers()..add(const GotoEntry(name: ''));
       _syncControllers(newList);
       widget.onChanged(newList);
     });
@@ -85,7 +99,7 @@ class _GotoEditorState extends State<GotoEditor> {
 
   void _remove(int index) {
     setState(() {
-      final newList = List<GotoEntry>.of(widget.entries)..removeAt(index);
+      final newList = _buildListFromControllers()..removeAt(index);
       _syncControllers(newList);
       widget.onChanged(newList);
     });
