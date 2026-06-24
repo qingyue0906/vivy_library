@@ -30,6 +30,9 @@ class LibraryState extends ChangeNotifier {
   LibraryItem? _selectedItem;
   CategoryNode? _selectedFolder; // 选中的文件夹节点（用于右侧显示文件夹 info）
 
+  // 左侧文件夹树的展开状态（已从 widget 层上移，便于刷新/编辑后保留）。
+  final Set<String> _expandedPaths = {};
+
   bool _initialized = false;
 
   bool _fileBrowserVisible = false;
@@ -52,6 +55,7 @@ class LibraryState extends ChangeNotifier {
   SortOrder get sortOrder => _sortOrder;
   LibraryItem? get selectedItem => _selectedItem;
   CategoryNode? get selectedFolder => _selectedFolder;
+  Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
 
   CategoryNode get categoryRoot => _categoryRoot;
@@ -59,18 +63,50 @@ class LibraryState extends ChangeNotifier {
   List<LibraryItem> get selectedItems =>
       _allItems.where((e) => _selectedPaths.contains(e.path)).toList();
 
-  /// 当前选中文件夹的直接子文件夹（"全部"时返回空）。
+  /// 当前选中文件夹是否在中间区显示"直接子文件夹 + 直接项目"。
+  /// - null（全部项目）：不显示子文件夹。
+  /// - 根目录：无展开概念，恒显示直接内容。
+  /// - 普通文件夹：折叠时不显示子文件夹（中间区递归显示其全部项目），
+  ///   展开时显示直接子文件夹 + 直接项目。
+  bool get _selectedShowsSubDirs {
+    if (_selectedCategoryPath == null) return false;
+    if (_selectedCategoryPath == _categoryRoot.path) return true;
+    return _expandedPaths.contains(_selectedCategoryPath!);
+  }
+
+  /// 当前选中分类下的项目集合（供网格与 class 导航统一取数）。
+  /// - null（全部项目）：全库。
+  /// - 文件夹展开 / 根目录：仅直接项目。
+  /// - 文件夹折叠：该文件夹下所有递归项目。
+  List<LibraryItem> get _itemsInSelectedCategory {
+    if (_selectedCategoryPath == null) return _allItems;
+    if (_selectedShowsSubDirs) {
+      return _allItems
+          .where((e) => e.categoryPath == _selectedCategoryPath)
+          .toList();
+    }
+    final node = _categoryRoot.findByPath(_selectedCategoryPath!);
+    if (node == null) {
+      // 节点已不存在（如刚被删/改名），回退到精确匹配。
+      return _allItems
+          .where((e) => e.categoryPath == _selectedCategoryPath)
+          .toList();
+    }
+    final paths = node.allItems.map((e) => e.path).toSet();
+    return _allItems.where((e) => paths.contains(e.path)).toList();
+  }
+
+  /// 当前选中文件夹的直接子文件夹。
+  /// 仅当展开态下（或选中根目录）才返回；折叠/"全部"时返回空。
   List<CategoryNode> get currentSubDirs {
-    if (_selectedCategoryPath == null) return [];
+    if (!_selectedShowsSubDirs) return [];
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
     return node?.subDirs ?? [];
   }
 
   /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
   List<MapEntry<String, int>> get classNavOptions {
-    final inCategory = _selectedCategoryPath == null
-        ? _allItems
-        : _allItems.where((e) => e.categoryPath == _selectedCategoryPath).toList();
+    final inCategory = _itemsInSelectedCategory;
 
     int totalCount = inCategory.length;
     int uncategorizedCount = 0;
@@ -97,11 +133,7 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<LibraryItem> get filteredAndSortedItems {
-    var result = _allItems;
-    // 1 分类筛选：按 categoryPath 精确匹配（"全部"时不过滤）
-    if (_selectedCategoryPath != null) {
-      result = result.where((e) => e.categoryPath == _selectedCategoryPath).toList();
-    }
+    var result = _itemsInSelectedCategory;
 
     // 1.5 顶部 class 导航筛选
     if (_selectedClass == '未分类') {
@@ -171,6 +203,16 @@ class LibraryState extends ChangeNotifier {
     _fileBrowserVisible = false;
     if (path != null) {
       _selectedFolder = _categoryRoot.findByPath(path);
+    }
+    notifyListeners();
+  }
+
+  /// 切换左侧文件夹节点的展开/收起状态。
+  void toggleExpand(String path) {
+    if (_expandedPaths.contains(path)) {
+      _expandedPaths.remove(path);
+    } else {
+      _expandedPaths.add(path);
     }
     notifyListeners();
   }
@@ -545,6 +587,7 @@ class LibraryState extends ChangeNotifier {
     _selectedItem = null;
     _selectedFolder = null;
     _selectedPaths.clear();
+    _expandedPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
 
@@ -573,6 +616,8 @@ class LibraryState extends ChangeNotifier {
       _categoryRoot = await LibraryScanner().scanAll(_currentRootPath);
       _allItems = _categoryRoot.allItems;
       _rebuildUuidIndex();
+      // 保留展开态，仅清理已不存在的路径（文件夹可能被删/改名）。
+      _expandedPaths.removeWhere((p) => _categoryRoot.findByPath(p) == null);
       // 恢复分类路径（若新树里不存在则置 null）
       if (keepCategoryPath != null &&
           _categoryRoot.findByPath(keepCategoryPath) == null) {

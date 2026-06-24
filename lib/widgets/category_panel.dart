@@ -4,10 +4,14 @@ import 'compact_level.dart';
 
 /// 左侧分类栏，树形展示多层文件夹。
 /// 有子文件夹的节点显示展开箭头，点击展开/收起子层。
+/// 展开状态托管在 LibraryState（expandedPaths / toggleExpand），
+/// 因此刷新/编辑后的 rescan 不会丢失展开态。
 class CategoryPanel extends StatefulWidget {
   final CategoryNode root;
   final String? selectedCategoryPath;
   final void Function(String?) onCategorySelected;
+  final Set<String> expandedPaths;
+  final void Function(String path) onToggleExpand;
   final double backgroundOpacity;
 
   const CategoryPanel({
@@ -15,6 +19,8 @@ class CategoryPanel extends StatefulWidget {
     required this.root,
     required this.selectedCategoryPath,
     required this.onCategorySelected,
+    required this.expandedPaths,
+    required this.onToggleExpand,
     this.backgroundOpacity = 1.0,
   });
 
@@ -23,8 +29,6 @@ class CategoryPanel extends StatefulWidget {
 }
 
 class _CategoryPanelState extends State<CategoryPanel> {
-  final Set<String> _expandedPaths = {};
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -52,7 +56,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
 
   Widget _buildNode(BuildContext context, double c, CategoryNode node, int depth) {
     final hasSubDirs = node.subDirs.isNotEmpty;
-    final isExpanded = _expandedPaths.contains(node.path);
+    final isExpanded = widget.expandedPaths.contains(node.path);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -64,13 +68,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
             hasSubDirs: hasSubDirs,
             isExpanded: isExpanded,
             onToggleExpand: hasSubDirs
-                ? () => setState(() {
-                      if (isExpanded) {
-                        _expandedPaths.remove(node.path);
-                      } else {
-                        _expandedPaths.add(node.path);
-                      }
-                    })
+                ? () => widget.onToggleExpand(node.path)
                 : null),
         if (hasSubDirs && isExpanded)
           ...node.subDirs.map((sub) => _buildNode(context, c, sub, depth + 1)),

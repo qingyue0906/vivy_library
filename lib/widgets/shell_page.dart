@@ -310,6 +310,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       root: _state.categoryRoot,
                       selectedCategoryPath: _state.selectedCategoryPath,
                       onCategorySelected: _state.setSelectedCategory,
+                      expandedPaths: _state.expandedPaths,
+                      onToggleExpand: _state.toggleExpand,
                       backgroundOpacity: leftAlpha,
                     ),
                   ),
