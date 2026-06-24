@@ -141,16 +141,16 @@ class _EditDialogState extends State<EditDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.folderTarget == null && !widget.isBatch) ...[
+              if (!widget.isBatch) ...[
                 _buildField('标题', _titleCtrl),
                 const SizedBox(height: 8),
-                _buildField('描述', _descCtrl, maxLines: 2),
+                _buildField('描述', _descCtrl, maxLines: 4),
                 const SizedBox(height: 8),
                 _buildPresetField('创建者', _creatorCtrl, 'creator'),
                 const SizedBox(height: 8),
               ],
-              if (widget.folderTarget == null && widget.isBatch) ...[
-                _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 2)),
+              if (widget.isBatch) ...[
+                _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 4)),
                 const SizedBox(height: 6),
                 _buildCheckableField('创建者', _cbCreator, _buildPresetField('', _creatorCtrl, 'creator')),
                 const SizedBox(height: 6),
@@ -160,12 +160,14 @@ class _EditDialogState extends State<EditDialog> {
                 _buildDropdownField('分级', _contentRating, _ratingOptions, (v) => setState(() => _contentRating = v!), widget.isBatch),
               ),
               const SizedBox(height: 8),
-              if (widget.folderTarget == null && !widget.isBatch) _buildRatingSlider(),
-              if (widget.folderTarget == null && widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
-              if (widget.folderTarget == null) const SizedBox(height: 8),
-              if (widget.folderTarget == null) _buildClassOrTagsSection('class'),
-              if (widget.folderTarget == null) const SizedBox(height: 8),
-              if (widget.folderTarget == null) _buildClassOrTagsSection('tags'),
+              if (!widget.isBatch) _buildRatingSlider(),
+              if (widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
+              const SizedBox(height: 8),
+              _buildClassOrTagsSection('class'),
+              const SizedBox(height: 8),
+              _buildClassOrTagsSection('tags'),
+              const SizedBox(height: 8),
+              _buildStarField(widget.isBatch),
               const SizedBox(height: 8),
               _buildAdvancedToggle(),
               if (_showAdvanced) ...[
@@ -173,8 +175,6 @@ class _EditDialogState extends State<EditDialog> {
                 _buildDefineField(widget.isBatch),
                 const SizedBox(height: 8),
                 _buildPreviewField(widget.isBatch),
-                const SizedBox(height: 8),
-                _buildStarField(widget.isBatch),
                 const SizedBox(height: 8),
                 _buildGotoSection(),
               ],
@@ -654,48 +654,7 @@ class _EditDialogState extends State<EditDialog> {
     setState(() => _isSaving = true);
     try {
       bool needRescan = false;
-      if (widget.folderTarget != null) {
-        // 文件夹单编辑
-        final oldInfo = widget.folderTarget!.info ??
-            ItemInfo.defaults(widget.folderTarget!.name);
-        final wasDir = oldInfo.define == 'dir';
-        final isNowDir = _define == 'dir';
-        needRescan = wasDir != isNowDir;
-        final newInfo = ItemInfo(
-          uuid: oldInfo.uuid,
-          define: _define,
-          title: oldInfo.title,
-          description: oldInfo.description,
-          creator: oldInfo.creator,
-          type: _type,
-          contentRating: _contentRating,
-          rating: _rating,
-          tags: oldInfo.tags,
-          classes: oldInfo.classes,
-          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
-          goto: _goto,
-          star: _star,
-        );
-        await widget.state.saveFolderInfo(widget.folderTarget!.path, newInfo);
-      } else if (!widget.isBatch) {
-        final info = widget.targets.first.info;
-        final newInfo = ItemInfo(
-          uuid: info.uuid,
-          define: _define,
-          title: _titleCtrl.text.trim(),
-          description: _descCtrl.text.trim(),
-          creator: _creatorCtrl.text.trim().isEmpty ? null : _creatorCtrl.text.trim(),
-          type: _type,
-          contentRating: _contentRating,
-          rating: _rating,
-          tags: _parseList(_tagsCtrl.text),
-          classes: _parseList(_classCtrl.text),
-          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
-          goto: _goto,
-          star: _star,
-        );
-        needRescan = await widget.state.saveItemInfo(widget.targets.first.path, newInfo);
-      } else {
+      if (widget.isBatch) {
         needRescan = await widget.state.batchEditItems(
           itemPaths: widget.targets.map((e) => e.path).toList(),
           description: _cbDesc ? _descCtrl.text.trim() : null,
@@ -712,6 +671,34 @@ class _EditDialogState extends State<EditDialog> {
           goto: _cbGoto ? _goto : null,
           gotoMode: _gotoMode,
         );
+      } else {
+        // 单编辑：项目或文件夹统一走控制器值构建 newInfo
+        final targetPath = widget.folderTarget?.path ?? widget.targets.first.path;
+        final oldInfo = widget.folderTarget?.info ??
+            widget.targets.first.info;
+        final wasDir = oldInfo.define == 'dir';
+        final isNowDir = _define == 'dir';
+        needRescan = wasDir != isNowDir;
+        final newInfo = ItemInfo(
+          uuid: oldInfo.uuid,
+          define: _define,
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          creator: _creatorCtrl.text.trim().isEmpty ? null : _creatorCtrl.text.trim(),
+          type: _type,
+          contentRating: _contentRating,
+          rating: _rating,
+          tags: _parseList(_tagsCtrl.text),
+          classes: _parseList(_classCtrl.text),
+          preview: _previewCtrl.text.trim().isEmpty ? null : _previewCtrl.text.trim(),
+          goto: _goto,
+          star: _star,
+        );
+        if (widget.folderTarget != null) {
+          await widget.state.saveFolderInfo(targetPath, newInfo);
+        } else {
+          needRescan = await widget.state.saveItemInfo(targetPath, newInfo);
+        }
       }
       if (mounted) Navigator.pop(context);
       if (needRescan && mounted) {
