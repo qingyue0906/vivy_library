@@ -34,8 +34,15 @@ class _CategoryPanelState extends State<CategoryPanel> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
+          // Part 1: 全部项目 + 根目录
           _buildItem(context, c,
-              label: '全部', value: null, depth: 0, node: null),
+              label: '全部项目', value: null, depth: 0, node: null,
+              icon: Icons.apps),
+          _buildItem(context, c,
+              label: '根目录', value: widget.root.path, depth: 0, node: widget.root,
+              icon: Icons.folder_open),
+          Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
+          // Part 2: 根级直接文件夹展开树
           ...widget.root.subDirs.map((node) =>
               _buildNode(context, c, node, 0)),
         ],
@@ -78,6 +85,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
     required String? value,
     required int depth,
     required CategoryNode? node,
+    IconData icon = Icons.folder,
     bool hasSubDirs = false,
     bool isExpanded = false,
     VoidCallback? onToggleExpand,
@@ -108,7 +116,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
                 )
               else
                 SizedBox(width: 16 * c),
-              Icon(Icons.folder, size: 13 * c, color: cs.onSurfaceVariant),
+              Icon(icon, size: 13 * c, color: cs.onSurfaceVariant),
               SizedBox(width: 4 * c),
               Expanded(
                 child: Text(

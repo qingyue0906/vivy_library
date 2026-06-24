@@ -53,30 +53,13 @@ class DetailPanel extends StatelessWidget {
       padding: EdgeInsets.all(12 * c),
       children: [
         if (item.previewPath != null)
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4 * c),
-                child: Image.file(
-                  File(item.previewPath!),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
-              if (info.star)
-                Positioned(
-                  top: 4 * c,
-                  right: 4 * c,
-                  child: Container(
-                    padding: EdgeInsets.all(2 * c),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(10 * c),
-                    ),
-                    child: Icon(Icons.star, size: 14 * c, color: Colors.amber),
-                  ),
-                ),
-            ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4 * c),
+            child: Image.file(
+              File(item.previewPath!),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
           ),
         SizedBox(height: 12 * c),
         Center(

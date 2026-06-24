@@ -39,6 +39,8 @@ class TopBar extends StatelessWidget {
           _buildSortFieldDropdown(context, c),
           SizedBox(width: 2 * c),
           _buildSortOrderButton(c),
+          SizedBox(width: 2 * c),
+          _buildRefreshButton(c),
         ],
       ),
     );
@@ -147,6 +149,16 @@ class TopBar extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
       onPressed: state.toggleSortOrder,
+    );
+  }
+
+  Widget _buildRefreshButton(double c) {
+    return IconButton(
+      tooltip: '刷新',
+      icon: Icon(Icons.refresh, size: 14 * c),
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
+      onPressed: () => state.rescan(),
     );
   }
 }
