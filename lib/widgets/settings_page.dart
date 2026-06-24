@@ -9,6 +9,7 @@ import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/preset_service.dart';
 import '../utils/app_quit.dart';
+import 'smooth_scroll.dart';
 
 class SettingsPage extends StatefulWidget {
   final String libraryRootPath;
@@ -166,60 +167,64 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildThemeTab() {
     final cs = Theme.of(context).colorScheme;
     final hasBg = _bgSettings.path != null;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('主题', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          _buildThemeOption('跟随系统', ThemeMode.system),
-          _buildThemeOption('亮色', ThemeMode.light),
-          _buildThemeOption('暗色', ThemeMode.dark),
-          const SizedBox(height: 20),
-          const Text('自定义背景', style: TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _pickBackgroundImage,
-                icon: const Icon(Icons.image, size: 16),
-                label: const Text('选择背景', style: TextStyle(fontSize: 12)),
-              ),
-              const SizedBox(width: 8),
-              if (hasBg) ...[
+    return SmoothScroll(
+      builder: (context, controller, physics) => SingleChildScrollView(
+        controller: controller,
+        physics: physics,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('主题', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 16),
+            _buildThemeOption('跟随系统', ThemeMode.system),
+            _buildThemeOption('亮色', ThemeMode.light),
+            _buildThemeOption('暗色', ThemeMode.dark),
+            const SizedBox(height: 20),
+            const Text('自定义背景', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 OutlinedButton.icon(
-                  onPressed: _clearBackground,
-                  icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade700),
-                  label: Text('清除背景',
-                      style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                  onPressed: _pickBackgroundImage,
+                  icon: const Icon(Icons.image, size: 16),
+                  label: const Text('选择背景', style: TextStyle(fontSize: 12)),
                 ),
+                const SizedBox(width: 8),
+                if (hasBg) ...[
+                  OutlinedButton.icon(
+                    onPressed: _clearBackground,
+                    icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade700),
+                    label: Text('清除背景',
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                  ),
+                ],
               ],
-            ],
-          ),
-          if (hasBg) ...[
-            const SizedBox(height: 4),
-            Text(
-              _bgSettings.path!.replaceAll('\\', '/').split('/').last,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
+            if (hasBg) ...[
+              const SizedBox(height: 4),
+              Text(
+                _bgSettings.path!.replaceAll('\\', '/').split('/').last,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text('面板不透明度', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 8),
+            _buildOpacitySlider('左栏', _bgSettings.leftOpacity, hasBg, (v) {
+              _bgSettings = _bgSettings.copyWith(leftOpacity: v);
+              _saveBackground();
+            }),
+            _buildOpacitySlider('中栏', _bgSettings.middleOpacity, hasBg, (v) {
+              _bgSettings = _bgSettings.copyWith(middleOpacity: v);
+              _saveBackground();
+            }),
+            _buildOpacitySlider('右栏', _bgSettings.rightOpacity, hasBg, (v) {
+              _bgSettings = _bgSettings.copyWith(rightOpacity: v);
+              _saveBackground();
+            }),
           ],
-          const SizedBox(height: 16),
-          const Text('面板不透明度', style: TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 8),
-          _buildOpacitySlider('左面板', _bgSettings.leftOpacity, hasBg, (v) {
-            _bgSettings = _bgSettings.copyWith(leftOpacity: v);
-            _saveBackground();
-          }),
-          _buildOpacitySlider('底部区域', _bgSettings.middleOpacity, hasBg, (v) {
-            _bgSettings = _bgSettings.copyWith(middleOpacity: v);
-            _saveBackground();
-          }),
-          _buildOpacitySlider('右面板', _bgSettings.rightOpacity, hasBg, (v) {
-            _bgSettings = _bgSettings.copyWith(rightOpacity: v);
-            _saveBackground();
-          }),
-        ],
+        ),
       ),
     );
   }
@@ -291,43 +296,47 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildUiTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('网格设置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          _buildSliderField('卡片最小宽度', _gridSettings.minCardWidth, 80, 300,
-              (v) => _gridSettings = _gridSettings.copyWith(minCardWidth: v)),
-          const SizedBox(height: 16),
-          _buildSliderField('卡片最大宽度', _gridSettings.maxCardWidth, 120, 400,
-              (v) => _gridSettings = _gridSettings.copyWith(maxCardWidth: v)),
-          const SizedBox(height: 16),
-          _buildAspectRatioSelector(),
-          const SizedBox(height: 16),
-          _buildItemsPerRowField(),
-          const SizedBox(height: 20),
-          _buildCompactLevelSlider(),
-          const SizedBox(height: 20),
-          const Text('动图展示方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          _buildGifModeSelector('卡片动图', _gridSettings.cardGifMode, (v) {
-            setState(() => _gridSettings = _gridSettings.copyWith(cardGifMode: v));
-          }),
-          const SizedBox(height: 12),
-          _buildGifModeSelector('底部区域动图', _gridSettings.fileGifMode, (v) {
-            setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
-          }),
-          const SizedBox(height: 20),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton(
-              onPressed: _saveGridSettings,
-              child: const Text('应用', style: TextStyle(fontSize: 12)),
+    return SmoothScroll(
+      builder: (context, controller, physics) => SingleChildScrollView(
+        controller: controller,
+        physics: physics,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('网格设置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 16),
+            _buildSliderField('卡片最小宽度', _gridSettings.minCardWidth, 80, 300,
+                (v) => _gridSettings = _gridSettings.copyWith(minCardWidth: v)),
+            const SizedBox(height: 16),
+            _buildSliderField('卡片最大宽度', _gridSettings.maxCardWidth, 120, 400,
+                (v) => _gridSettings = _gridSettings.copyWith(maxCardWidth: v)),
+            const SizedBox(height: 16),
+            _buildAspectRatioSelector(),
+            const SizedBox(height: 16),
+            _buildItemsPerRowField(),
+            const SizedBox(height: 20),
+            _buildCompactLevelSlider(),
+            const SizedBox(height: 20),
+            const Text('动图展示方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _buildGifModeSelector('卡片动图', _gridSettings.cardGifMode, (v) {
+              setState(() => _gridSettings = _gridSettings.copyWith(cardGifMode: v));
+            }),
+            const SizedBox(height: 12),
+            _buildGifModeSelector('底部区域动图', _gridSettings.fileGifMode, (v) {
+              setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
+            }),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: _saveGridSettings,
+                child: const Text('应用', style: TextStyle(fontSize: 12)),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -414,26 +423,30 @@ class _SettingsPageState extends State<SettingsPage>
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           Expanded(
-            child: ListView(
-              children: _presets.entries.map((entry) {
-                return Card(
-                  child: ListTile(
-                    dense: true,
-                    title: Text(entry.key,
-                        style: const TextStyle(fontSize: 12)),
-                    subtitle: Text(
-                      entry.value.join(', '),
-                      style: const TextStyle(fontSize: 11),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            child: SmoothScroll(
+              builder: (context, controller, physics) => ListView(
+                controller: controller,
+                physics: physics,
+                children: _presets.entries.map((entry) {
+                  return Card(
+                    child: ListTile(
+                      dense: true,
+                      title: Text(entry.key,
+                          style: const TextStyle(fontSize: 12)),
+                      subtitle: Text(
+                        entry.value.join(', '),
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.edit, size: 16),
+                        onPressed: () => _editPreset(entry.key),
+                      ),
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, size: 16),
-                      onPressed: () => _editPreset(entry.key),
-                    ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ],

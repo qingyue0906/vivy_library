@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 class ClassNavBar extends StatelessWidget {
   final LibraryState state;
@@ -18,16 +19,20 @@ class ClassNavBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(8 * c, 6 * c, 8 * c, 2 * c),
       color: Colors.transparent,
       width: double.infinity,
-      child: SingleChildScrollView(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Wrap(
-            alignment: WrapAlignment.start,
-            spacing: 4 * c,
-            runSpacing: 4 * c,
-            children: options
-                .map((entry) => _buildChip(entry.key, entry.value, cs, c))
-                .toList(),
+      child: SmoothScroll(
+        builder: (context, controller, physics) => SingleChildScrollView(
+          controller: controller,
+          physics: physics,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Wrap(
+              alignment: WrapAlignment.start,
+              spacing: 4 * c,
+              runSpacing: 4 * c,
+              children: options
+                  .map((entry) => _buildChip(entry.key, entry.value, cs, c))
+                  .toList(),
+            ),
           ),
         ),
       ),

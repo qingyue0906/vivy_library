@@ -10,6 +10,7 @@ import 'file_browser_panel.dart';
 import 'class_nav_bar.dart';
 import 'package:flutter/services.dart';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 class GridArea extends StatelessWidget {
   final List<LibraryItem> items;
@@ -125,23 +126,26 @@ class GridArea extends StatelessWidget {
         final mainAxisExtent = imgHeight + 38 * c;
         final folderMainAxisExtent = 48 * c + 4 * c + 34 * c + 12 * c; // 图标+间距+2行文字+vertical padding
 
-        return CustomScrollView(
-          slivers: [
-            if (subDirs.isNotEmpty) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 4 * c, left: 2 * c),
-                  child: Text(
-                    '文件夹',
-                    style: TextStyle(
-                      fontSize: 11 * c,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurfaceVariant,
+        return SmoothScroll(
+          builder: (context, controller, physics) => CustomScrollView(
+            controller: controller,
+            physics: physics,
+            slivers: [
+              if (subDirs.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 4 * c, left: 2 * c),
+                    child: Text(
+                      '文件夹',
+                      style: TextStyle(
+                        fontSize: 11 * c,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SliverGrid(
+                SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisExtent: folderMainAxisExtent,
@@ -211,6 +215,7 @@ class GridArea extends StatelessWidget {
               ),
             ),
           ],
+          ),
         );
       },
     );

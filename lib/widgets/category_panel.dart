@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/category_node.dart';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 /// 左侧分类栏，树形展示多层文件夹。
 /// 有子文件夹的节点显示展开箭头，点击展开/收起子层。
@@ -35,21 +36,25 @@ class _CategoryPanelState extends State<CategoryPanel> {
     final c = CompactLevel.of(context);
     return Material(
       color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          // Part 1: 全部项目 + 根目录
-          _buildItem(context, c,
-              label: '全部项目', value: null, depth: 0, node: null,
-              icon: Icons.apps),
-          _buildItem(context, c,
-              label: '根目录', value: widget.root.path, depth: 0, node: widget.root,
-              icon: Icons.folder_open),
-          Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
-          // Part 2: 根级直接文件夹展开树
-          ...widget.root.subDirs.map((node) =>
-              _buildNode(context, c, node, 0)),
-        ],
+      child: SmoothScroll(
+        builder: (context, controller, physics) => ListView(
+          controller: controller,
+          physics: physics,
+          padding: EdgeInsets.zero,
+          children: [
+            // Part 1: 全部项目 + 根目录
+            _buildItem(context, c,
+                label: '全部项目', value: null, depth: 0, node: null,
+                icon: Icons.apps),
+            _buildItem(context, c,
+                label: '根目录', value: widget.root.path, depth: 0, node: widget.root,
+                icon: Icons.folder_open),
+            Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
+            // Part 2: 根级直接文件夹展开树
+            ...widget.root.subDirs.map((node) =>
+                _buildNode(context, c, node, 0)),
+          ],
+        ),
       ),
     );
   }

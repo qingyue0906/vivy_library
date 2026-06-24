@@ -6,6 +6,7 @@ import '../models/category_node.dart';
 import '../providers/library_state.dart';
 import '../services/preset_service.dart';
 import 'goto_editor.dart';
+import 'smooth_scroll.dart';
 
 class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
@@ -147,11 +148,14 @@ class _EditDialogState extends State<EditDialog> {
       ),
       content: SizedBox(
         width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: SmoothScroll(
+          builder: (context, controller, physics) => SingleChildScrollView(
+            controller: controller,
+            physics: physics,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               if (!widget.isBatch) ...[
                 _buildField('标题', _titleCtrl),
                 const SizedBox(height: 8),
@@ -193,6 +197,7 @@ class _EditDialogState extends State<EditDialog> {
           ),
         ),
       ),
+    ),
       actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       actions: [
         TextButton(
@@ -336,19 +341,23 @@ class _EditDialogState extends State<EditDialog> {
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
                   height: (options.length * 32).clamp(0, 160).toDouble(),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options.elementAt(index);
-                      return InkWell(
-                        onTap: () => onSelected(option),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          child: Text(option, style: TextStyle(fontSize: 12, color: cs.onSurface)),
-                        ),
-                      );
-                    },
+                  child: SmoothScroll(
+                    builder: (context, controller, physics) => ListView.builder(
+                      controller: controller,
+                      physics: physics,
+                      padding: EdgeInsets.zero,
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final option = options.elementAt(index);
+                        return InkWell(
+                          onTap: () => onSelected(option),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: Text(option, style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

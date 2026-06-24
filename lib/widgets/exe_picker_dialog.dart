@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../models/exe_record.dart';
 import '../services/exe_history_service.dart';
+import 'smooth_scroll.dart';
 
 /// "打开方式"对话框:展示历史选过的程序列表,支持选择已有记录、
 /// 浏览新程序、删除历史记录。
@@ -111,30 +112,34 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
       );
     }
 
-    return ListView.builder(
-      itemCount: _records.length,
-      itemBuilder: (context, index) {
-        final record = _records[index];
-        return ListTile(
-          dense: true,
-          leading: const Icon(Icons.apps, size: 18),
-          title: Text(record.displayName, style: const TextStyle(fontSize: 13)),
-          subtitle: Text(
-            record.path,
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          // 点击这一条记录,直接选中并关闭对话框
-          onTap: () => Navigator.pop(context, record),
-          // 右侧删除按钮,点击只删记录,不关闭对话框,不触发 onTap
-          trailing: IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            onPressed: () => _deleteRecord(record),
-            tooltip: '删除此记录',
-          ),
-        );
-      },
+    return SmoothScroll(
+      builder: (context, controller, physics) => ListView.builder(
+        controller: controller,
+        physics: physics,
+        itemCount: _records.length,
+        itemBuilder: (context, index) {
+          final record = _records[index];
+          return ListTile(
+            dense: true,
+            leading: const Icon(Icons.apps, size: 18),
+            title: Text(record.displayName, style: const TextStyle(fontSize: 13)),
+            subtitle: Text(
+              record.path,
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // 点击这一条记录,直接选中并关闭对话框
+            onTap: () => Navigator.pop(context, record),
+            // 右侧删除按钮,点击只删记录,不关闭对话框,不触发 onTap
+            trailing: IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: () => _deleteRecord(record),
+              tooltip: '删除此记录',
+            ),
+          );
+        },
+      ),
     );
   }
 }

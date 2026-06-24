@@ -4,6 +4,7 @@ import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import 'dart:io';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 /// 顶部"资源库选择"按钮 + 浮层。
 /// 按钮本身用 CompositedTransformTarget 包裹作为锚点,
@@ -270,25 +271,29 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                         // 因为现在每一项可能带展开的子菜单,高度不固定,
                         // 数据量本身也不大(用户添加的资源库数量通常很少),
                         // 不需要 builder 的按需渲染优化,用最简单可靠的方式拼装
-                        : ListView(
-                            shrinkWrap: true,
-                            children: _filteredRoots
-                                .map((root) => _RootListTile(
-                                      key: ValueKey(root.path),
-                                      root: root,
-                                      isCurrent: root.path == widget.currentPath,
-                                      isExpanded: _expandedPath == root.path,
-                                      isRenaming: _renamingPath == root.path,
-                                      renameController: _renameCtrl,
-                                      onSelect: () => widget.onSelect(root.path),
-                                      onToggleExpanded: () => _toggleExpanded(root.path),
-                                      onStartRename: () => _startRename(root),
-                                      onConfirmRename: () => _confirmRename(root),
-                                      onCancelRename: _cancelRename,
-                                      onRemove: () => _removeRoot(root),
-                                      onOpenExplorer: () => Process.run('explorer', [root.path]),
-                                    ))
-                                .toList(),
+                        : SmoothScroll(
+                            builder: (context, controller, physics) => ListView(
+                              controller: controller,
+                              physics: physics,
+                              shrinkWrap: true,
+                              children: _filteredRoots
+                                  .map((root) => _RootListTile(
+                                        key: ValueKey(root.path),
+                                        root: root,
+                                        isCurrent: root.path == widget.currentPath,
+                                        isExpanded: _expandedPath == root.path,
+                                        isRenaming: _renamingPath == root.path,
+                                        renameController: _renameCtrl,
+                                        onSelect: () => widget.onSelect(root.path),
+                                        onToggleExpanded: () => _toggleExpanded(root.path),
+                                        onStartRename: () => _startRename(root),
+                                        onConfirmRename: () => _confirmRename(root),
+                                        onCancelRename: _cancelRename,
+                                        onRemove: () => _removeRoot(root),
+                                        onOpenExplorer: () => Process.run('explorer', [root.path]),
+                                      ))
+                                  .toList(),
+                            ),
                           ),
                   ),
                   const Divider(height: 1),

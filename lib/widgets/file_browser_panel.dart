@@ -9,6 +9,7 @@ import '../models/exe_record.dart';
 import 'file_properties_dialog.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
+import 'smooth_scroll.dart';
 
 class FileBrowserPanel extends StatelessWidget {
   final LibraryItem item;
@@ -136,17 +137,21 @@ class FileBrowserPanel extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
-      padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 82 * c,
-        mainAxisExtent: 96 * c,
-        crossAxisSpacing: 4 * c,
-        mainAxisSpacing: 4 * c,
+    return SmoothScroll(
+      builder: (context, controller, physics) => GridView.builder(
+        controller: controller,
+        physics: physics,
+        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 82 * c,
+          mainAxisExtent: 96 * c,
+          crossAxisSpacing: 4 * c,
+          mainAxisSpacing: 4 * c,
+        ),
+        itemCount: visible.length,
+        itemBuilder: (context, index) =>
+            _buildFileItem(context, visible[index], c),
       ),
-      itemCount: visible.length,
-      itemBuilder: (context, index) =>
-          _buildFileItem(context, visible[index], c),
     );
   }
 

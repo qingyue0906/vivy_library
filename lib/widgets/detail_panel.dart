@@ -5,6 +5,7 @@ import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/goto_entry.dart';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
@@ -49,9 +50,12 @@ class DetailPanel extends StatelessWidget {
 
   Widget _buildItemDetail(BuildContext context, double c, LibraryItem item) {
     final info = item.info;
-    return ListView(
-      padding: EdgeInsets.all(12 * c),
-      children: [
+    return SmoothScroll(
+      builder: (context, controller, physics) => ListView(
+        controller: controller,
+        physics: physics,
+        padding: EdgeInsets.all(12 * c),
+        children: [
         if (item.previewPath != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(4 * c),
@@ -92,16 +96,20 @@ class DetailPanel extends StatelessWidget {
           _buildGotoSection(context, c, info.goto),
         ],
       ],
+      ),
     );
   }
 
   Widget _buildFolderDetail(BuildContext context, double c, CategoryNode folder) {
     final info = folder.info;
     final hasInfo = info != null;
-    return ListView(
-      padding: EdgeInsets.all(12 * c),
-      children: [
-        Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
+    return SmoothScroll(
+      builder: (context, controller, physics) => ListView(
+        controller: controller,
+        physics: physics,
+        padding: EdgeInsets.all(12 * c),
+        children: [
+          Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
         SizedBox(height: 8 * c),
         Center(
           child: SelectableText(
@@ -128,6 +136,7 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, c, '子文件夹数', '${folder.subDirs.length}'),
         _buildRow(context, c, '直接项目数', '${folder.items.length}'),
       ],
+      ),
     );
   }
 
