@@ -8,6 +8,16 @@ import '../models/library_item.dart';
 /// 支持的预览图后缀,对应 Python 里的 PREVIEW_EXTS。
 const List<String> previewExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
+/// 默认跳过的 Windows/Linux 系统文件夹（不区分大小写）。
+const Set<String> _systemFolderNames = {
+  '\$recycle.bin',
+  'system volume information',
+  '\$winreagent',
+  'config.msi',
+  'msocache',
+  'recovery',
+};
+
 /// 负责扫描根目录、递归构建文件夹树、读取每个项目/文件夹的 info.json、
 /// 定位预览图、统计大小和修改时间。
 ///
@@ -16,7 +26,7 @@ const List<String> previewExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'
 /// - 第二层起，读取 info.json 的 define 字段：
 ///   - 'dir' → 递归为 CategoryNode（文件夹）
 ///   - 'item' 或无 info / 无 define → 当作 LibraryItem（项目）
-/// - 跳过以 '.' 开头的文件夹和 'tools' 文件夹（仅对分类节点层级生效）。
+/// - 跳过以 '.' 开头的文件夹、'tools' 文件夹，以及 _systemFolderNames 中的系统文件夹。
 class LibraryScanner {
   /// 扫描根目录，返回虚拟根 CategoryNode（path=rootDir，info=null）。
   Future<CategoryNode> scanAll(String rootDir) async {
@@ -34,6 +44,11 @@ class LibraryScanner {
       name: _baseName(rootDir),
       subDirs: subDirs,
     );
+  }
+
+  /// 判断文件夹名是否为默认系统文件夹（不区分大小写）。
+  bool _isSystemFolder(String name) {
+    return _systemFolderNames.contains(name.toLowerCase());
   }
 
   /// 安全地列出目录内容，遇到无权限等错误时返回空列表，避免整个扫描崩溃。
@@ -64,6 +79,7 @@ class LibraryScanner {
       final name = _baseName(e.path);
       if (name.startsWith('.')) continue;
       if (name.toLowerCase() == 'tools') continue;
+      if (_isSystemFolder(name)) continue;
       childDirPaths.add(e.path);
     }
 
@@ -126,6 +142,7 @@ class LibraryScanner {
       if (e is! Directory) continue;
       final name = _baseName(e.path);
       if (name.startsWith('.')) continue;
+      if (_isSystemFolder(name)) continue;
       // 深层子文件夹：读 info 判断 dir/item/hide
       final childDefaults = ItemInfo.defaults(name);
       final childInfo = await _loadItemInfo(e.path, childDefaults);
