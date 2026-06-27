@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/category_node.dart';
 import '../models/item_info.dart';
 import '../models/library_item.dart';
+import '../models/direct_file.dart';
 
 /// 支持的预览图后缀,对应 Python 里的 PREVIEW_EXTS。
 const List<String> previewExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -156,6 +157,24 @@ class LibraryScanner {
       }
     }
 
+    // 收集直接文件（非目录）
+    final directFiles = <DirectFile>[];
+    for (final e in entities) {
+      if (e is! File) continue;
+      final name = _baseName(e.path);
+      if (name.startsWith('.')) continue;
+      if (name == 'info.json' || name == 'presets.json') continue;
+      try {
+        final stat = e.statSync();
+        directFiles.add(DirectFile(
+          path: e.path,
+          name: name,
+          sizeInBytes: stat.size,
+          modifiedTime: stat.modified,
+        ));
+      } catch (_) {}
+    }
+
     // 并发构建子文件夹节点和直接项目
     final subDirFutures = subDirPaths.map((p) => _buildDirNodeRecursive(p));
     final itemFutures = directItemPaths.map((p) => buildSingleItem(
@@ -173,6 +192,7 @@ class LibraryScanner {
       info: info,
       subDirs: subDirResults.toList(),
       items: itemResults.toList(),
+      files: directFiles,
     );
   }
 

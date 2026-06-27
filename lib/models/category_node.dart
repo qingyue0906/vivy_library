@@ -1,5 +1,6 @@
 import 'item_info.dart';
 import 'library_item.dart';
+import 'direct_file.dart';
 
 /// 资源库的文件夹树节点。
 ///
@@ -14,6 +15,7 @@ class CategoryNode {
   final ItemInfo? info; // 文件夹自身的 info.json，可能没有
   final List<CategoryNode> subDirs;
   final List<LibraryItem> items;
+  final List<DirectFile> files; // 该目录下的直接文件（非项目文件夹）
 
   const CategoryNode({
     required this.path,
@@ -21,6 +23,7 @@ class CategoryNode {
     this.info,
     this.subDirs = const [],
     this.items = const [],
+    this.files = const [],
   });
 
   /// 递归展平：返回该节点及其所有子文件夹下的全部项目。
@@ -63,6 +66,7 @@ class CategoryNode {
     ItemInfo? info,
     List<CategoryNode>? subDirs,
     List<LibraryItem>? items,
+    List<DirectFile>? files,
   }) {
     return CategoryNode(
       path: path ?? this.path,
@@ -70,6 +74,7 @@ class CategoryNode {
       info: info ?? this.info,
       subDirs: subDirs ?? this.subDirs,
       items: items ?? this.items,
+      files: files ?? this.files,
     );
   }
 }

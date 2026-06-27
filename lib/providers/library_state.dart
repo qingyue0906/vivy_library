@@ -6,6 +6,7 @@ import '../models/category_node.dart';
 import '../models/library_item.dart';
 import '../models/item_info.dart';
 import '../models/goto_entry.dart';
+import '../models/direct_file.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
 
@@ -113,6 +114,14 @@ class LibraryState extends ChangeNotifier {
     if (!_selectedShowsSubDirs) return [];
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
     return node?.subDirs ?? [];
+  }
+
+  /// 当前选中文件夹下的直接文件（非项目）。
+  /// 仅当展开态下（或选中根目录）才返回；折叠/"全部"时返回空。
+  List<DirectFile> get currentDirectFiles {
+    if (!_selectedShowsSubDirs) return [];
+    final node = _categoryRoot.findByPath(_selectedCategoryPath!);
+    return node?.files ?? [];
   }
 
   /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
