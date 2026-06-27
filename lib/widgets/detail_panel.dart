@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
+import '../models/direct_file.dart';
 import '../models/goto_entry.dart';
+import '../services/library_scanner.dart' show previewExtensions;
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
   final CategoryNode? folder;
+  final DirectFile? file;
   final double backgroundOpacity;
   final void Function(GotoEntry entry)? onGotoTap;
 
@@ -17,6 +20,7 @@ class DetailPanel extends StatelessWidget {
     super.key,
     this.item,
     this.folder,
+    this.file,
     this.backgroundOpacity = 1.0,
     this.onGotoTap,
   });
@@ -34,6 +38,7 @@ class DetailPanel extends StatelessWidget {
   Widget _buildContent(BuildContext context, double c) {
     if (item != null) return _buildItemDetail(context, c, item!);
     if (folder != null) return _buildFolderDetail(context, c, folder!);
+    if (file != null) return _buildFileDetail(context, c, file!);
     return _buildEmpty(context, c);
   }
 
@@ -138,6 +143,81 @@ class DetailPanel extends StatelessWidget {
       ],
       ),
     );
+  }
+
+  Widget _buildFileDetail(BuildContext context, double c, DirectFile file) {
+    final ext = file.extension;
+    final isImage = previewExtensions.any((e) => e == '.$ext');
+
+    return SmoothScroll(
+      builder: (context, controller, physics) => ListView(
+        controller: controller,
+        physics: physics,
+        padding: EdgeInsets.all(12 * c),
+        children: [
+          if (isImage)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4 * c),
+              child: Image.file(
+                File(file.path),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildFileIcon(context, ext, c),
+              ),
+            )
+          else
+            Center(
+              child: Icon(_fileIcon(ext), size: 64 * c, color: _fileColor(ext)),
+            ),
+          SizedBox(height: 12 * c),
+          Center(
+            child: SelectableText(
+              file.name,
+              style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
+            ),
+          ),
+          SizedBox(height: 8 * c),
+          Divider(height: 1 * c),
+          SizedBox(height: 6 * c),
+          _buildRow(context, c, '扩展名', ext.isNotEmpty ? '.$ext' : '(无)'),
+          _buildRow(context, c, '大小', _formatSize(file.sizeInBytes)),
+          _buildRow(context, c, '修改时间', _formatDate(file.modifiedTime)),
+          SizedBox(height: 6 * c),
+          Divider(height: 1 * c),
+          SizedBox(height: 6 * c),
+          _buildRow(context, c, '路径', file.path),
+        ],
+      ),
+    );
+  }
+
+  IconData _fileIcon(String ext) {
+    switch (ext) {
+      case 'mp4' || 'mkv' || 'avi' || 'mov' || 'wmv': return Icons.video_file;
+      case 'mp3' || 'flac' || 'wav' || 'aac' || 'ogg': return Icons.audio_file;
+      case 'pdf': return Icons.picture_as_pdf;
+      case 'zip' || 'rar' || '7z' || 'tar' || 'gz': return Icons.folder_zip;
+      case 'exe' || 'msi' || 'bat' || 'sh': return Icons.terminal;
+      case 'txt' || 'md' || 'log': return Icons.article;
+      case 'json' || 'xml' || 'yaml' || 'toml': return Icons.data_object;
+      default: return Icons.insert_drive_file;
+    }
+  }
+
+  Color _fileColor(String ext) {
+    switch (ext) {
+      case 'mp4' || 'mkv' || 'avi' || 'mov' || 'wmv': return Colors.blue.shade400;
+      case 'mp3' || 'flac' || 'wav' || 'aac' || 'ogg': return Colors.purple.shade400;
+      case 'pdf': return Colors.red.shade400;
+      case 'zip' || 'rar' || '7z' || 'tar' || 'gz': return Colors.orange.shade400;
+      case 'exe' || 'msi' || 'bat' || 'sh': return Colors.green.shade400;
+      case 'txt' || 'md' || 'log': return Colors.grey.shade600;
+      case 'json' || 'xml' || 'yaml' || 'toml': return Colors.teal.shade400;
+      default: return Colors.grey.shade500;
+    }
+  }
+
+  Widget _buildFileIcon(BuildContext context, String ext, double c) {
+    return Icon(_fileIcon(ext), size: 64 * c, color: _fileColor(ext));
   }
 
   Widget _buildGotoSection(BuildContext context, double c, List<GotoEntry> goto) {

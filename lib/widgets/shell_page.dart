@@ -380,6 +380,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
               child: DetailPanel(
                 item: _state.selectedItem,
                 folder: _state.selectedFolder,
+                file: _state.selectedFile,
                 backgroundOpacity: rightAlpha,
                 onGotoTap: (entry) async {
                   bool ok;

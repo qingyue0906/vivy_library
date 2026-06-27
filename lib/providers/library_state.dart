@@ -30,6 +30,7 @@ class LibraryState extends ChangeNotifier {
 
   LibraryItem? _selectedItem;
   CategoryNode? _selectedFolder; // 选中的文件夹节点（用于右侧显示文件夹 info）
+  DirectFile? _selectedFile;
 
   // 左侧文件夹树的展开状态（已从 widget 层上移，便于刷新/编辑后保留）。
   final Set<String> _expandedPaths = {};
@@ -60,6 +61,7 @@ class LibraryState extends ChangeNotifier {
   SortOrder get sortOrder => _sortOrder;
   LibraryItem? get selectedItem => _selectedItem;
   CategoryNode? get selectedFolder => _selectedFolder;
+  DirectFile? get selectedFile => _selectedFile;
   Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
   Set<String> get selectedFolderPaths =>
@@ -116,12 +118,21 @@ class LibraryState extends ChangeNotifier {
     return node?.subDirs ?? [];
   }
 
-  /// 当前选中文件夹下的直接文件（非项目）。
-  /// 仅当展开态下（或选中根目录）才返回；折叠/"全部"时返回空。
+  /// 当前选中分类下的直接文件（逻辑与 _itemsInSelectedCategory 对等）。
+  /// - null（全部项目）：全库。
+  /// - 文件夹展开 / 根目录：仅直接文件。
+  /// - 文件夹折叠：该文件夹下所有递归文件。
   List<DirectFile> get currentDirectFiles {
-    if (!_selectedShowsSubDirs) return [];
+    if (_selectedCategoryPath == null) return _categoryRoot.allFiles;
+    if (_selectedShowsSubDirs) {
+      final node = _categoryRoot.findByPath(_selectedCategoryPath!);
+      return node?.files ?? [];
+    }
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
-    return node?.files ?? [];
+    if (node == null) {
+      return [];
+    }
+    return node.allFiles;
   }
 
   /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
@@ -332,6 +343,7 @@ class LibraryState extends ChangeNotifier {
   void setSelectedItem(LibraryItem item) {
     _selectedItem = item;
     _selectedFolder = null;
+    _selectedFile = null;
     _selectedPaths
       ..clear()
       ..add(item.path);
@@ -345,11 +357,22 @@ class LibraryState extends ChangeNotifier {
   void setSelectedFolder(CategoryNode node) {
     _selectedFolder = node;
     _selectedItem = null;
+    _selectedFile = null;
     _selectedPaths.clear();
     _selectedFolderPaths
       ..clear()
       ..add(node.path);
     _folderSelectionAnchorPath = node.path;
+    _fileBrowserVisible = false;
+    notifyListeners();
+  }
+
+  void setSelectedFile(DirectFile file) {
+    _selectedFile = file;
+    _selectedItem = null;
+    _selectedFolder = null;
+    _selectedPaths.clear();
+    _selectedFolderPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
   }

@@ -9,6 +9,8 @@ import 'compact_level.dart';
 class FileCard extends StatelessWidget {
   final DirectFile file;
   final double displayWidth;
+  final bool isSelected;
+  final VoidCallback? onTap;
   final VoidCallback onDoubleTap;
   final void Function(Offset globalPosition)? onRightClick;
 
@@ -16,6 +18,8 @@ class FileCard extends StatelessWidget {
     super.key,
     required this.file,
     required this.displayWidth,
+    this.isSelected = false,
+    this.onTap,
     required this.onDoubleTap,
     this.onRightClick,
   });
@@ -30,6 +34,7 @@ class FileCard extends StatelessWidget {
 
     return MouseRegion(
       child: GestureDetector(
+        onTap: onTap,
         onDoubleTap: onDoubleTap,
         onSecondaryTapUp: onRightClick != null
             ? (details) => onRightClick!(details.globalPosition)
@@ -37,6 +42,12 @@ class FileCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(6 * c),
+            border: isSelected
+                ? Border.all(color: cs.primary, width: 1.5 * c)
+                : null,
+            color: isSelected
+                ? cs.primaryContainer.withValues(alpha: 0.25)
+                : Colors.transparent,
           ),
           padding: EdgeInsets.all(4 * c),
           child: Column(

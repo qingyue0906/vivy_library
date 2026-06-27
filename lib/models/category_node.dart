@@ -36,6 +36,16 @@ class CategoryNode {
     return result;
   }
 
+  /// 递归展平：返回该节点及其所有子文件夹下的全部直接文件。
+  List<DirectFile> get allFiles {
+    final result = <DirectFile>[];
+    result.addAll(files);
+    for (final sub in subDirs) {
+      result.addAll(sub.allFiles);
+    }
+    return result;
+  }
+
   /// 按路径查找子节点（含自身）。找不到返回 null。
   CategoryNode? findByPath(String targetPath) {
     if (path == targetPath) return this;

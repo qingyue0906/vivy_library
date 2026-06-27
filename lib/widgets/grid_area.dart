@@ -243,14 +243,16 @@ class GridArea extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final file = files[index];
-                      return FileCard(
-                        key: GlobalObjectKey(file.path),
-                        file: file,
-                        displayWidth: cardWidth,
-                        onDoubleTap: () => _openFile(file.path),
-                        onRightClick: (globalPos) =>
-                            _showFileContextMenu(context, file, globalPos),
-                      );
+                    return FileCard(
+                      key: GlobalObjectKey(file.path),
+                      file: file,
+                      displayWidth: cardWidth,
+                      isSelected: state.selectedFile?.path == file.path,
+                      onTap: () => state.setSelectedFile(file),
+                      onDoubleTap: () => _openFile(file.path),
+                      onRightClick: (globalPos) =>
+                          _showFileContextMenu(context, file, globalPos),
+                    );
                     },
                     childCount: files.length,
                   ),
