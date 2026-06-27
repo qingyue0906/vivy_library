@@ -6,7 +6,13 @@ import '../services/library_scanner.dart' show previewExtensions;
 import 'gif_image.dart';
 import 'compact_level.dart';
 
-class FileCard extends StatelessWidget {
+/// 中间区域的文件卡片。模仿 Windows 资源管理器大图标风格。
+/// 单击：选中文件（右侧显示其信息）；双击：打开文件。
+///
+/// 用手动双击检测替代 GestureDetector.onDoubleTap，避免 Flutter 为区分
+/// 单击/双击等待 ~300ms 超时导致的"点击卡顿"。单击立即响应，
+/// 300ms 内第二次点击触发双击（与 FolderCard 一致）。
+class FileCard extends StatefulWidget {
   final DirectFile file;
   final double displayWidth;
   final bool isSelected;
@@ -25,27 +31,45 @@ class FileCard extends StatelessWidget {
   });
 
   @override
+  State<FileCard> createState() => _FileCardState();
+}
+
+class _FileCardState extends State<FileCard> {
+  DateTime? _lastTapTime;
+
+  void _handleTap() {
+    final now = DateTime.now();
+    if (_lastTapTime != null &&
+        now.difference(_lastTapTime!).inMilliseconds < 300) {
+      _lastTapTime = null;
+      widget.onDoubleTap();
+    } else {
+      _lastTapTime = now;
+      widget.onTap?.call();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    final ext = file.extension;
+    final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
     final isGif = ext == 'gif';
 
     return MouseRegion(
       child: GestureDetector(
-        onTap: onTap,
-        onDoubleTap: onDoubleTap,
-        onSecondaryTapUp: onRightClick != null
-            ? (details) => onRightClick!(details.globalPosition)
+        onTap: _handleTap,
+        onSecondaryTapUp: widget.onRightClick != null
+            ? (details) => widget.onRightClick!(details.globalPosition)
             : null,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(6 * c),
-            border: isSelected
+            border: widget.isSelected
                 ? Border.all(color: cs.primary, width: 1.5 * c)
                 : null,
-            color: isSelected
+            color: widget.isSelected
                 ? cs.primaryContainer.withValues(alpha: 0.25)
                 : Colors.transparent,
           ),
@@ -64,14 +88,14 @@ class FileCard extends StatelessWidget {
                 child: isImage
                     ? (isGif
                         ? GifImage(
-                            file: File(file.path),
+                            file: File(widget.file.path),
                             gifMode: GifDisplayMode.static,
                             cacheWidth: 120,
                             fit: BoxFit.cover,
                             placeholderColor: cs.surfaceContainerHighest,
                           )
                         : Image.file(
-                            File(file.path),
+                            File(widget.file.path),
                             cacheWidth: 120,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) =>
@@ -81,7 +105,7 @@ class FileCard extends StatelessWidget {
               ),
               SizedBox(height: 4 * c),
               Text(
-                file.name,
+                widget.file.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,

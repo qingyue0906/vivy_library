@@ -415,14 +415,14 @@ class _SettingsPageState extends State<SettingsPage>
         children: [
           const Text('Vivy Library', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('版本 0.1.0', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const Text('版本 0.1.0 Build260627', style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 16),
           const Text('项目地址', style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           GestureDetector(
             onTap: () {},
             child: const Text(
-              'https://github.com/anomalyco/vivy-library',
+              'https://github.com/qingyue0906/vivy-library',
               style: TextStyle(fontSize: 12, color: Colors.blue),
             ),
           ),
