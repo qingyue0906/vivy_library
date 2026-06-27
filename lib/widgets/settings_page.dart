@@ -7,7 +7,6 @@ import 'package:window_manager/window_manager.dart';
 import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
-import '../services/preset_service.dart';
 import '../utils/app_quit.dart';
 import 'smooth_scroll.dart';
 
@@ -37,13 +36,12 @@ class _SettingsPageState extends State<SettingsPage>
 
   ThemeMode _themeMode = ThemeMode.system;
   GridSettings _gridSettings = const GridSettings();
-  Map<String, List<String>> _presets = {};
   late BackgroundSettings _bgSettings;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _bgSettings = widget.backgroundSettings;
     _load();
   }
@@ -51,11 +49,9 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _load() async {
     final theme = await SettingsService.loadThemeMode();
     final grid = await SettingsService.loadGridSettings();
-    final presets = await PresetService.loadAll(widget.libraryRootPath);
     setState(() {
       _themeMode = theme;
       _gridSettings = grid;
-      _presets = presets;
     });
   }
 
@@ -120,7 +116,6 @@ class _SettingsPageState extends State<SettingsPage>
               Tab(text: '数据'),
               Tab(text: '主题'),
               Tab(text: '界面'),
-              Tab(text: '预设管理'),
               Tab(text: '关于'),
             ],
           ),
@@ -135,7 +130,6 @@ class _SettingsPageState extends State<SettingsPage>
             _buildDataTab(),
             _buildThemeTab(),
             _buildUiTab(),
-            _buildPresetTab(),
             _buildAboutTab(),
           ],
         ),
@@ -413,47 +407,6 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  Widget _buildPresetTab() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('编辑预设管理',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SmoothScroll(
-              builder: (context, controller, physics) => ListView(
-                controller: controller,
-                physics: physics,
-                children: _presets.entries.map((entry) {
-                  return Card(
-                    child: ListTile(
-                      dense: true,
-                      title: Text(entry.key,
-                          style: const TextStyle(fontSize: 12)),
-                      subtitle: Text(
-                        entry.value.join(', '),
-                        style: const TextStyle(fontSize: 11),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.edit, size: 16),
-                        onPressed: () => _editPreset(entry.key),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAboutTab() {
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -614,50 +567,6 @@ class _SettingsPageState extends State<SettingsPage>
     widget.onGridSettingsChanged(_gridSettings);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('网格设置已保存'), duration: Duration(seconds: 1)),
-    );
-  }
-
-  void _editPreset(String key) {
-    final ctrl = TextEditingController(text: _presets[key]?.join('\n') ?? '');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('编辑 $key', style: const TextStyle(fontSize: 13)),
-        content: SizedBox(
-          width: 300,
-          child: TextField(
-            controller: ctrl,
-            maxLines: 8,
-            style: const TextStyle(fontSize: 12),
-            decoration: InputDecoration(
-              hintText: '每行一个选项',
-              border: OutlineInputBorder(),
-              contentPadding: const EdgeInsets.all(8),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消', style: TextStyle(fontSize: 12)),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final lines = ctrl.text
-                  .split('\n')
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .toList();
-              _presets[key] = lines;
-              await PresetService.saveAll(widget.libraryRootPath, Map.from(_presets));
-              if (!ctx.mounted) return;
-              if (mounted) setState(() {});
-              Navigator.pop(ctx);
-            },
-            child: const Text('保存', style: TextStyle(fontSize: 12)),
-          ),
-        ],
-      ),
     );
   }
 

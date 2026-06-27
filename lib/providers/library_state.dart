@@ -143,6 +143,50 @@ class LibraryState extends ChangeNotifier {
     ];
   }
 
+  List<String> get uniqueTypes {
+    return _itemsInSelectedCategory
+        .map((e) => e.info.type)
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  List<String> get uniqueContentRatings {
+    return _itemsInSelectedCategory
+        .map((e) => e.info.contentRating)
+        .where((r) => r.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  List<String> get uniqueCreators {
+    return _itemsInSelectedCategory
+        .map((e) => e.info.creator)
+        .where((c) => c != null && c.isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  List<String> get uniqueClasses {
+    return _itemsInSelectedCategory
+        .expand((e) => e.info.classes)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  List<String> get uniqueTags {
+    return _itemsInSelectedCategory
+        .expand((e) => e.info.tags)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
   List<LibraryItem> get filteredAndSortedItems {
     var result = _itemsInSelectedCategory;
 

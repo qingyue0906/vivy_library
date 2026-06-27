@@ -4,7 +4,6 @@ import '../models/goto_entry.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../providers/library_state.dart';
-import '../services/preset_service.dart';
 import 'goto_editor.dart';
 import 'smooth_scroll.dart';
 
@@ -12,7 +11,7 @@ class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
   final bool isBatch;
   final LibraryState state;
-  final List<CategoryNode> folderTargets; // 文件夹编辑（单/批量）时传入
+  final List<CategoryNode> folderTargets;
 
   const EditDialog({
     super.key,
@@ -30,16 +29,20 @@ class _EditDialogState extends State<EditDialog> {
   late TextEditingController _titleCtrl;
   late TextEditingController _descCtrl;
   late TextEditingController _creatorCtrl;
-  late TextEditingController _classCtrl;
-  late TextEditingController _tagsCtrl;
-
-  String _type = 'application';
-  String _contentRating = 'G';
+  late TextEditingController _typeCtrl;
+  late TextEditingController _contentRatingCtrl;
+  late TextEditingController _previewCtrl;
+  List<String> _classes = [];
+  List<String> _tags = [];
   int _rating = 10;
   String _define = 'item';
-  late TextEditingController _previewCtrl;
   bool _star = false;
   List<GotoEntry> _goto = [];
+
+  bool _showClassInput = false;
+  bool _showTagInput = false;
+  late TextEditingController _classInputCtrl;
+  late TextEditingController _tagInputCtrl;
 
   bool _isSaving = false;
 
@@ -61,63 +64,55 @@ class _EditDialogState extends State<EditDialog> {
 
   bool _showAdvanced = false;
 
-  Map<String, List<String>> _presets = {};
-
   @override
   void initState() {
     super.initState();
-    _loadPresets();
+    _classInputCtrl = TextEditingController();
+    _tagInputCtrl = TextEditingController();
     if (widget.folderTargets.isNotEmpty && !widget.isBatch) {
-      // 文件夹单编辑
       final info = widget.folderTargets.first.info ??
           ItemInfo.defaults(widget.folderTargets.first.name);
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
       _creatorCtrl = TextEditingController(text: info.creator ?? '');
-      _type = info.type;
-      _contentRating = info.contentRating;
+      _typeCtrl = TextEditingController(text: info.type);
+      _contentRatingCtrl = TextEditingController(text: info.contentRating);
       _rating = info.rating;
       _define = info.define;
       _previewCtrl = TextEditingController(text: info.preview ?? '');
       _star = info.star;
       _goto = List.of(info.goto);
-      _classCtrl = TextEditingController(text: info.classes.join(', '));
-      _tagsCtrl = TextEditingController(text: info.tags.join(', '));
+      _classes = List.of(info.classes);
+      _tags = List.of(info.tags);
     } else if (widget.folderTargets.isNotEmpty && widget.isBatch) {
-      // 文件夹批量编辑：控制器留空，由勾选决定
       _titleCtrl = TextEditingController();
       _descCtrl = TextEditingController();
       _creatorCtrl = TextEditingController();
+      _typeCtrl = TextEditingController();
+      _contentRatingCtrl = TextEditingController();
       _previewCtrl = TextEditingController();
-      _classCtrl = TextEditingController();
-      _tagsCtrl = TextEditingController();
     } else if (!widget.isBatch) {
       final info = widget.targets.first.info;
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
       _creatorCtrl = TextEditingController(text: info.creator ?? '');
-      _type = info.type;
-      _contentRating = info.contentRating;
+      _typeCtrl = TextEditingController(text: info.type);
+      _contentRatingCtrl = TextEditingController(text: info.contentRating);
       _rating = info.rating;
       _define = info.define;
       _previewCtrl = TextEditingController(text: info.preview ?? '');
       _star = info.star;
       _goto = List.of(info.goto);
-      _classCtrl = TextEditingController(text: info.classes.join(', '));
-      _tagsCtrl = TextEditingController(text: info.tags.join(', '));
+      _classes = List.of(info.classes);
+      _tags = List.of(info.tags);
     } else {
       _titleCtrl = TextEditingController();
       _descCtrl = TextEditingController();
       _creatorCtrl = TextEditingController();
+      _typeCtrl = TextEditingController();
+      _contentRatingCtrl = TextEditingController();
       _previewCtrl = TextEditingController();
-      _classCtrl = TextEditingController();
-      _tagsCtrl = TextEditingController();
     }
-  }
-
-  Future<void> _loadPresets() async {
-    final presets = await PresetService.loadAll(widget.state.currentRootPath);
-    setState(() => _presets = presets);
   }
 
   @override
@@ -125,9 +120,11 @@ class _EditDialogState extends State<EditDialog> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _creatorCtrl.dispose();
+    _typeCtrl.dispose();
+    _contentRatingCtrl.dispose();
     _previewCtrl.dispose();
-    _classCtrl.dispose();
-    _tagsCtrl.dispose();
+    _classInputCtrl.dispose();
+    _tagInputCtrl.dispose();
     super.dispose();
   }
 
@@ -161,26 +158,54 @@ class _EditDialogState extends State<EditDialog> {
                 const SizedBox(height: 8),
                 _buildField('描述', _descCtrl, maxLines: 4),
                 const SizedBox(height: 8),
-                _buildPresetField('创建者', _creatorCtrl, 'creator'),
+                _buildAutoField(label: '创建者', controller: _creatorCtrl, options: widget.state.uniqueCreators),
                 const SizedBox(height: 8),
               ],
               if (widget.isBatch) ...[
                 _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 4)),
                 const SizedBox(height: 6),
-                _buildCheckableField('创建者', _cbCreator, _buildPresetField('', _creatorCtrl, 'creator')),
+                _buildCheckableField('创建者', _cbCreator, _buildAutoField(label: '', controller: _creatorCtrl, options: widget.state.uniqueCreators)),
                 const SizedBox(height: 6),
               ],
               _buildRowFields(
-                _buildDropdownField('类型', _type, _typeOptions, (v) => setState(() => _type = v!), widget.isBatch),
-                _buildDropdownField('分级', _contentRating, _ratingOptions, (v) => setState(() => _contentRating = v!), widget.isBatch),
+                _buildAutoField(label: '类型', controller: _typeCtrl, options: widget.state.uniqueTypes, isBatch: widget.isBatch, checked: _cbType, onCheckedChanged: (v) => _cbType = v),
+                _buildAutoField(label: '分级', controller: _contentRatingCtrl, options: widget.state.uniqueContentRatings, isBatch: widget.isBatch, checked: _cbContentRating, onCheckedChanged: (v) => _cbContentRating = v),
               ),
               const SizedBox(height: 8),
               if (!widget.isBatch) _buildRatingSlider(),
               if (widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
               const SizedBox(height: 8),
-              _buildClassOrTagsSection('class'),
+              _buildChipSection(
+                isClass: true,
+                label: '分类标签 (class)',
+                values: _classes,
+                showInput: _showClassInput,
+                suggestions: widget.state.uniqueClasses,
+                inputCtrl: _classInputCtrl,
+                onChanged: (v) => setState(() => _classes = v),
+                onShowInputChanged: (v) => setState(() => _showClassInput = v),
+                isBatch: widget.isBatch,
+                checked: _cbClass,
+                onCheckedChanged: (v) => _cbClass = v,
+                mode: _classMode,
+                onModeChanged: (v) => _classMode = v,
+              ),
               const SizedBox(height: 8),
-              _buildClassOrTagsSection('tags'),
+              _buildChipSection(
+                isClass: false,
+                label: '标签 (tags)',
+                values: _tags,
+                showInput: _showTagInput,
+                suggestions: widget.state.uniqueTags,
+                inputCtrl: _tagInputCtrl,
+                onChanged: (v) => setState(() => _tags = v),
+                onShowInputChanged: (v) => setState(() => _showTagInput = v),
+                isBatch: widget.isBatch,
+                checked: _cbTags,
+                onCheckedChanged: (v) => _cbTags = v,
+                mode: _tagsMode,
+                onModeChanged: (v) => _tagsMode = v,
+              ),
               const SizedBox(height: 8),
               _buildStarField(widget.isBatch),
               const SizedBox(height: 8),
@@ -217,8 +242,85 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
-  List<String> get _typeOptions => _presets['type'] ?? PresetService.defaults['type']!;
-  List<String> get _ratingOptions => _presets['contentRating'] ?? PresetService.defaults['contentRating']!;
+  Widget _buildAutoField({
+    required String label,
+    required TextEditingController controller,
+    required List<String> options,
+    bool isBatch = false,
+    bool checked = false,
+    ValueChanged<bool>? onCheckedChanged,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    final content = Autocomplete<String>(
+      initialValue: TextEditingValue(text: controller.text),
+      optionsBuilder: (textEditingValue) {
+        final text = textEditingValue.text.toLowerCase();
+        if (text.isEmpty) return options;
+        return options.where((o) => o.toLowerCase().contains(text));
+      },
+      onSelected: (selection) {
+        controller.text = selection;
+        controller.selection = TextSelection.collapsed(offset: selection.length);
+      },
+      fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
+        return TextField(
+          controller: acController,
+          focusNode: focusNode,
+          style: TextStyle(fontSize: 12, color: cs.onSurface),
+          onChanged: (v) => controller.text = v,
+          decoration: _inputDecoration(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, opts) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: cs.surface,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: (opts.length * 32).clamp(0, 160).toDouble(),
+              child: SmoothScroll(
+                builder: (context, scrollController, physics) => ListView.builder(
+                  controller: scrollController,
+                  physics: physics,
+                  padding: EdgeInsets.zero,
+                  itemCount: opts.length,
+                  itemBuilder: (context, index) {
+                    final option = opts.elementAt(index);
+                    return InkWell(
+                      onTap: () => onSelected(option),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Text(option, style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (isBatch) {
+      return _buildCheckableField(label, checked, content);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          ),
+        content,
+      ],
+    );
+  }
 
   Widget _buildCheckableField(String label, bool checked, Widget child) {
     final cs = Theme.of(context).colorScheme;
@@ -291,145 +393,85 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
-  Widget _buildPresetField(String label, TextEditingController ctrl, String presetKey) {
+  Widget _buildChipSection({
+    required bool isClass,
+    required String label,
+    required List<String> values,
+    required bool showInput,
+    required List<String> suggestions,
+    required TextEditingController inputCtrl,
+    required ValueChanged<List<String>> onChanged,
+    required ValueChanged<bool> onShowInputChanged,
+    bool isBatch = false,
+    bool checked = false,
+    ValueChanged<bool>? onCheckedChanged,
+    String mode = 'overwrite',
+    ValueChanged<String>? onModeChanged,
+  }) {
     final cs = Theme.of(context).colorScheme;
-    final presets = _presets[presetKey] ?? [];
-    return Column(
+
+    Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-          ),
-        Autocomplete<String>(
-          initialValue: TextEditingValue(text: ctrl.text),
-          optionsBuilder: (textEditingValue) {
-            if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-            return presets.where((option) =>
-                option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-          },
-          onSelected: (selection) {
-            if (presetKey == 'class' || presetKey == 'tags') {
-              final current = ctrl.text.trim();
-              final parts = current.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-              if (!parts.contains(selection)) {
-                parts.add(selection);
-                ctrl.text = parts.join(', ');
-                ctrl.selection = TextSelection.collapsed(offset: ctrl.text.length);
-              }
-            } else {
-              ctrl.text = selection;
-              ctrl.selection = TextSelection.collapsed(offset: selection.length);
-            }
-          },
-          fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
-            return TextField(
-              controller: acController,
-              focusNode: focusNode,
-              style: TextStyle(fontSize: 12, color: cs.onSurface),
-              onChanged: (v) => ctrl.text = v,
-              decoration: _inputDecoration(),
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                color: cs.surface,
-                elevation: 4,
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  height: (options.length * 32).clamp(0, 160).toDouble(),
-                  child: SmoothScroll(
-                    builder: (context, controller, physics) => ListView.builder(
-                      controller: controller,
-                      physics: physics,
-                      padding: EdgeInsets.zero,
-                      itemCount: options.length,
-                      itemBuilder: (context, index) {
-                        final option = options.elementAt(index);
-                        return InkWell(
-                          onTap: () => onSelected(option),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            child: Text(option, style: TextStyle(fontSize: 12, color: cs.onSurface)),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ...values.map((v) => Chip(
+              label: Text(v, style: TextStyle(fontSize: 11, color: cs.onSurface)),
+              deleteIcon: Icon(Icons.close, size: 14, color: cs.onSurfaceVariant),
+              onDeleted: () => onChanged(values.where((x) => x != v).toList()),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              labelPadding: const EdgeInsets.only(left: 4, right: 2),
+            )),
+            if (showInput)
+              _buildInlineChipInput(
+                controller: inputCtrl,
+                suggestions: suggestions,
+                currentValues: values,
+                onAdd: (v) {
+                  if (!values.contains(v)) {
+                    onChanged([...values, v]);
+                  }
+                  inputCtrl.clear();
+                  onShowInputChanged(false);
+                },
+                onCancel: () {
+                  inputCtrl.clear();
+                  onShowInputChanged(false);
+                },
               ),
-            );
-          },
+            if (!showInput)
+              ActionChip(
+                avatar: Icon(Icons.add, size: 14, color: cs.primary),
+                label: Text('添加', style: TextStyle(fontSize: 11, color: cs.primary)),
+                onPressed: () => onShowInputChanged(true),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              ),
+          ],
         ),
       ],
     );
-  }
 
-  Widget _buildDropdownField(String label, String value, List<String> options, ValueChanged<String?> onChanged, bool isBatch) {
-    final cs = Theme.of(context).colorScheme;
-    final content = DropdownButtonFormField<String>(
-      initialValue: options.contains(value) ? value : null,
-      isDense: true,
-      style: TextStyle(fontSize: 12, color: cs.onSurface),
-      decoration: _inputDecoration(),
-      items: options
-          .map((o) => DropdownMenuItem(value: o, child: Text(o, style: TextStyle(fontSize: 12, color: cs.onSurface))))
-          .toList(),
-      onChanged: onChanged,
-    );
-    if (isBatch) {
-      return _buildCheckableField(label, label == '类型' ? _cbType : _cbContentRating, content);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (label.isNotEmpty)
+    if (!isBatch) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
-        content,
-      ],
-    );
-  }
-
-  Widget _buildRatingSlider() {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('评分：${(_rating / 2).toStringAsFixed(1)} / 5',
-            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 32,
-          child: Slider(
-            value: _rating.toDouble(),
-            min: 0,
-            max: 10,
-            divisions: 10,
-            onChanged: (v) => setState(() => _rating = v.round()),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildClassOrTagsSection(String key) {
-    final isClass = key == 'class';
-    final cs = Theme.of(context).colorScheme;
-    final label = isClass ? '分类标签 (class, 逗号分隔)' : '标签 (tags, 逗号分隔)';
-    final ctrl = isClass ? _classCtrl : _tagsCtrl;
-    final checked = isClass ? _cbClass : _cbTags;
-    final mode = isClass ? _classMode : _tagsMode;
-
-    if (!widget.isBatch) {
-      return _buildPresetField(label, ctrl, key);
+          content,
+        ],
+      );
     }
 
+    // 批量模式
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -453,7 +495,7 @@ class _EditDialogState extends State<EditDialog> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            Expanded(child: _buildPresetField('', ctrl, key)),
+            Expanded(child: content),
           ],
         ),
         if (checked) ...[
@@ -461,13 +503,121 @@ class _EditDialogState extends State<EditDialog> {
           Padding(
             padding: const EdgeInsets.only(left: 24),
             child: _buildModeRadios(mode, (v) {
-              setState(() {
-                if (isClass) { _classMode = v; }
-                else { _tagsMode = v; }
-              });
+              if (isClass) { _classMode = v; }
+              else { _tagsMode = v; }
             }),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildInlineChipInput({
+    required TextEditingController controller,
+    required List<String> suggestions,
+    required List<String> currentValues,
+    required ValueChanged<String> onAdd,
+    required VoidCallback onCancel,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Autocomplete<String>(
+      optionsBuilder: (textEditingValue) {
+        final text = textEditingValue.text.toLowerCase();
+        if (text.isEmpty) return suggestions.where((s) => !currentValues.contains(s));
+        return suggestions
+            .where((s) => !currentValues.contains(s) && s.toLowerCase().contains(text));
+      },
+      onSelected: (selection) {
+        onAdd(selection);
+      },
+      fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
+        return Container(
+          width: 140,
+          height: 28,
+          alignment: Alignment.centerLeft,
+          child: TextField(
+            controller: acController,
+            focusNode: focusNode,
+            autofocus: true,
+            style: TextStyle(fontSize: 11, color: cs.onSurface),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+              hintText: '输入...',
+              hintStyle: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+              suffixIcon: IconButton(
+                icon: Icon(Icons.check, size: 14, color: cs.primary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: () {
+                  final text = acController.text.trim();
+                  if (text.isNotEmpty) {
+                    onAdd(text);
+                  } else {
+                    onCancel();
+                  }
+                },
+              ),
+            ),
+            onSubmitted: (value) {
+              final text = value.trim();
+              if (text.isNotEmpty) {
+                onAdd(text);
+              }
+            },
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, opts) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: cs.surface,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: (opts.length * 28).clamp(0, 140).toDouble(),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: opts.length,
+                itemBuilder: (context, index) {
+                  final option = opts.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Text(option, style: TextStyle(fontSize: 11, color: cs.onSurface)),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRatingSlider() {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('评分：${(_rating / 2).toStringAsFixed(1)} / 5',
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 32,
+          child: Slider(
+            value: _rating.toDouble(),
+            min: 0,
+            max: 10,
+            divisions: 10,
+            onChanged: (v) => setState(() => _rating = v.round()),
+          ),
+        ),
       ],
     );
   }
@@ -573,7 +723,6 @@ class _EditDialogState extends State<EditDialog> {
         ],
       );
     }
-    // 批量模式：勾选 + 编辑器 + 模式单选
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -663,14 +812,6 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
-  List<String> _parseList(String text) {
-    return text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
   Future<void> _save() async {
     setState(() => _isSaving = true);
     try {
@@ -681,10 +822,10 @@ class _EditDialogState extends State<EditDialog> {
             folderPaths: widget.folderTargets.map((e) => e.path).toList(),
             description: _cbDesc ? _descCtrl.text.trim() : null,
             creator: _cbCreator ? _creatorCtrl.text.trim() : null,
-            type: _cbType ? _type : null,
-            contentRating: _cbContentRating ? _contentRating : null,
-            tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
-            classes: _cbClass ? _parseList(_classCtrl.text) : null,
+            type: _cbType ? _typeCtrl.text.trim() : null,
+            contentRating: _cbContentRating ? _contentRatingCtrl.text.trim() : null,
+            tags: _cbTags ? _tags : null,
+            classes: _cbClass ? _classes : null,
             classMode: _classMode,
             tagsMode: _tagsMode,
             define: _cbDefine ? _define : null,
@@ -698,10 +839,10 @@ class _EditDialogState extends State<EditDialog> {
             itemPaths: widget.targets.map((e) => e.path).toList(),
             description: _cbDesc ? _descCtrl.text.trim() : null,
             creator: _cbCreator ? _creatorCtrl.text.trim() : null,
-            type: _cbType ? _type : null,
-            contentRating: _cbContentRating ? _contentRating : null,
-            tags: _cbTags ? _parseList(_tagsCtrl.text) : null,
-            classes: _cbClass ? _parseList(_classCtrl.text) : null,
+            type: _cbType ? _typeCtrl.text.trim() : null,
+            contentRating: _cbContentRating ? _contentRatingCtrl.text.trim() : null,
+            tags: _cbTags ? _tags : null,
+            classes: _cbClass ? _classes : null,
             classMode: _classMode,
             tagsMode: _tagsMode,
             define: _cbDefine ? _define : null,
@@ -712,7 +853,6 @@ class _EditDialogState extends State<EditDialog> {
           );
         }
       } else {
-        // 单编辑：项目或文件夹统一走控制器值构建 newInfo
         final isFolder = widget.folderTargets.isNotEmpty;
         final targetPath = isFolder
             ? widget.folderTargets.first.path
@@ -729,11 +869,11 @@ class _EditDialogState extends State<EditDialog> {
           creator: _creatorCtrl.text.trim().isEmpty
               ? null
               : _creatorCtrl.text.trim(),
-          type: _type,
-          contentRating: _contentRating,
+          type: _typeCtrl.text.trim().isEmpty ? oldInfo.type : _typeCtrl.text.trim(),
+          contentRating: _contentRatingCtrl.text.trim().isEmpty ? oldInfo.contentRating : _contentRatingCtrl.text.trim(),
           rating: _rating,
-          tags: _parseList(_tagsCtrl.text),
-          classes: _parseList(_classCtrl.text),
+          tags: _tags,
+          classes: _classes,
           preview: _previewCtrl.text.trim().isEmpty
               ? null
               : _previewCtrl.text.trim(),
