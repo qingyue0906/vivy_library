@@ -85,21 +85,19 @@ class _FolderCardState extends State<FolderCard> {
             ),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
               SizedBox(height: 4 * c),
-              Expanded(
-                child: Text(
-                  widget.node.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11 * c,
-                    fontWeight: FontWeight.w500,
-                    color: cs.onSurface,
-                  ),
+              Text(
+                widget.node.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11 * c,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurface,
                 ),
               ),
             ],

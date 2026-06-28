@@ -131,8 +131,8 @@ class GridArea extends StatelessWidget {
 
         final imgHeight = cardWidth / aspectRatio;
         final mainAxisExtent = imgHeight + 38 * c;
-        final folderMainAxisExtent = 48 * c + 4 * c + 34 * c + 12 * c; // 图标+间距+2行文字+vertical padding
-        final fileMainAxisExtent = 56 * c + 4 * c + 34 * c + 8 * c; // 图标+间距+2行文字+vertical padding
+        final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c; // 图标(宽高比x0.5)+间距+2行文字+padding
+        final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c; // 图标(宽高比x0.5)+间距+2行文字+padding
 
         return SmoothScroll(
           builder: (context, controller, physics) => CustomScrollView(
