@@ -801,14 +801,31 @@ class LibraryState extends ChangeNotifier {
   /// 重命名项目文件夹内的某个文件或子文件夹,重命名后刷新文件面板
   Future<String?> renameFile(String oldPath, String newName) async {
     try {
-      final dirSegments = oldPath.replaceAll('\\', '/').split('/')
-        ..removeLast();
-      final newPath = '${dirSegments.join('/')}/$newName';
+      final sep = oldPath.contains('\\') ? '\\' : '/';
+      final dirParts = oldPath.split(sep);
+      final parentDir = dirParts.take(dirParts.length - 1).join(sep);
+      final newPath = '$parentDir$sep$newName';
       final type = await FileSystemEntity.type(oldPath);
       if (type == FileSystemEntityType.directory) {
         await Directory(oldPath).rename(newPath);
       } else {
         await File(oldPath).rename(newPath);
+      }
+      // 更新缓存中的文件条目（直接文件）
+      if (type != FileSystemEntityType.directory) {
+        final node = _categoryRoot.findByPath(parentDir);
+        if (node != null) {
+          final idx = node.files.indexWhere((f) => f.path == oldPath);
+          if (idx != -1) {
+            final old = node.files[idx];
+            node.files[idx] = DirectFile(
+              path: newPath,
+              name: newName,
+              sizeInBytes: old.sizeInBytes,
+              modifiedTime: old.modifiedTime,
+            );
+          }
+        }
       }
       notifyListeners();
       return null;

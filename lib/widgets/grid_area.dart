@@ -9,6 +9,9 @@ import 'folder_card.dart';
 import 'file_card.dart';
 import 'dart:io';
 import 'file_browser_panel.dart';
+import 'file_properties_dialog.dart';
+import 'exe_picker_dialog.dart';
+import '../models/exe_record.dart';
 import 'class_nav_bar.dart';
 import 'package:flutter/services.dart';
 import 'compact_level.dart';
@@ -453,11 +456,31 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.open_in_new, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('打开', style: TextStyle(fontSize: 11 * c)),
+            Text('以默认方式打开', style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
-          value: 'open_folder',
+          value: 'open_as',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.apps, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('打开方式...', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'rename',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.drive_file_rename_outline, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('重命名', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'locate',
           height: 28 * c,
           child: Row(children: [
             Icon(Icons.folder_open, size: 13 * c),
@@ -465,15 +488,89 @@ class GridArea extends StatelessWidget {
             Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
+        PopupMenuItem(
+          value: 'properties',
+          height: 28 * c,
+          child: Row(children: [
+            Icon(Icons.info_outline, size: 13 * c),
+            SizedBox(width: 6 * c),
+            Text('属性', style: TextStyle(fontSize: 11 * c)),
+          ]),
+        ),
       ],
-    ).then((value) {
+    ).then((value) async {
       if (value == null) return;
       switch (value) {
         case 'open':
           _openFile(file.path);
-        case 'open_folder':
-          _openInExplorer(file.path);
+        case 'open_as':
+          final record = await showDialog<ExeRecord>(
+            context: context,
+            builder: (_) => const ExePickerDialog(),
+          );
+          if (record != null) {
+            Process.run(record.path, [file.path]);
+          }
+        case 'rename':
+          _showRenameDialog(context, file);
+        case 'locate':
+          Process.run('explorer', ['/select,', file.path]);
+        case 'properties':
+          showDialog(
+            context: context,
+            builder: (_) => FilePropertiesDialog(file: File(file.path)),
+          );
       }
     });
+  }
+
+  void _showRenameDialog(BuildContext context, DirectFile file) {
+    final currentName = file.name;
+    final dotIndex = currentName.lastIndexOf('.');
+    final nameWithoutExt =
+        dotIndex > 0 ? currentName.substring(0, dotIndex) : currentName;
+
+    final ctrl = TextEditingController(text: currentName);
+    ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: nameWithoutExt.length);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('重命名', style: TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: '新文件名',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onSubmitted: (_) => _doRename(dialogContext, file, ctrl.text.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => _doRename(dialogContext, file, ctrl.text.trim()),
+            child: const Text('重命名'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doRename(
+      BuildContext dialogContext, DirectFile file, String newName) async {
+    if (newName.isEmpty) return;
+    Navigator.pop(dialogContext);
+
+    final error = await state.renameFile(file.path, newName);
+    if (error != null && dialogContext.mounted) {
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        SnackBar(content: Text('重命名失败: $error'), backgroundColor: Colors.red),
+      );
+    }
   }
 }
