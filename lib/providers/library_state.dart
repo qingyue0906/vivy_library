@@ -115,7 +115,11 @@ class LibraryState extends ChangeNotifier {
   List<CategoryNode> get currentSubDirs {
     if (!_selectedShowsSubDirs) return [];
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
-    return node?.subDirs ?? [];
+    final result = node?.subDirs ?? [];
+    return result.toList()..sort((a, b) {
+      final cmp = a.name.compareTo(b.name);
+      return _sortOrder == SortOrder.ascending ? cmp : -cmp;
+    });
   }
 
   /// 当前选中分类下的直接文件（逻辑与 _itemsInSelectedCategory 对等）。
@@ -123,16 +127,25 @@ class LibraryState extends ChangeNotifier {
   /// - 文件夹展开 / 根目录：仅直接文件。
   /// - 文件夹折叠：该文件夹下所有递归文件。
   List<DirectFile> get currentDirectFiles {
-    if (_selectedCategoryPath == null) return _categoryRoot.allFiles;
-    if (_selectedShowsSubDirs) {
+    List<DirectFile> result;
+    if (_selectedCategoryPath == null) {
+      result = _categoryRoot.allFiles;
+    } else if (_selectedShowsSubDirs) {
       final node = _categoryRoot.findByPath(_selectedCategoryPath!);
-      return node?.files ?? [];
+      result = node?.files.toList() ?? [];
+    } else {
+      final node = _categoryRoot.findByPath(_selectedCategoryPath!);
+      result = node?.allFiles ?? [];
     }
-    final node = _categoryRoot.findByPath(_selectedCategoryPath!);
-    if (node == null) {
-      return [];
-    }
-    return node.allFiles;
+    return result..sort((a, b) {
+      int cmp;
+      switch (_sortField) {
+        case SortField.name: cmp = a.name.compareTo(b.name);
+        case SortField.size: cmp = a.sizeInBytes.compareTo(b.sizeInBytes);
+        case SortField.date: cmp = a.modifiedTime.compareTo(b.modifiedTime);
+      }
+      return _sortOrder == SortOrder.ascending ? cmp : -cmp;
+    });
   }
 
   /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
