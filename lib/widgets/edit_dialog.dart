@@ -503,8 +503,10 @@ class _EditDialogState extends State<EditDialog> {
           Padding(
             padding: const EdgeInsets.only(left: 24),
             child: _buildModeRadios(mode, (v) {
-              if (isClass) { _classMode = v; }
-              else { _tagsMode = v; }
+              setState(() {
+                if (isClass) { _classMode = v; }
+                else { _tagsMode = v; }
+              });
             }),
           ),
         ],

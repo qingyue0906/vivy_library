@@ -100,20 +100,6 @@ class _VivyAppState extends State<VivyApp> {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
-        scrollbarTheme: ScrollbarThemeData(
-          thumbVisibility: const WidgetStatePropertyAll(true),
-          trackVisibility: const WidgetStatePropertyAll(true),
-          thickness: const WidgetStatePropertyAll(8),
-          radius: const Radius.circular(4),
-          thumbColor: WidgetStateProperty.resolveWith((states) {
-            final cs = ColorScheme.fromSeed(seedColor: Colors.deepPurple);
-            return cs.onSurface.withValues(alpha: 0.45);
-          }),
-          trackColor: WidgetStateProperty.resolveWith((states) {
-            final cs = ColorScheme.fromSeed(seedColor: Colors.deepPurple);
-            return cs.onSurface.withValues(alpha: 0.1);
-          }),
-        ),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -132,16 +118,6 @@ class _VivyAppState extends State<VivyApp> {
           outlineVariant: _vscodeDarkBorder,
         ),
         scaffoldBackgroundColor: _vscodeDarkSurface,
-        scrollbarTheme: ScrollbarThemeData(
-          thumbVisibility: const WidgetStatePropertyAll(true),
-          trackVisibility: const WidgetStatePropertyAll(true),
-          thickness: const WidgetStatePropertyAll(8),
-          radius: const Radius.circular(4),
-          thumbColor: WidgetStateProperty.resolveWith((states) =>
-              _vscodeDarkText.withValues(alpha: 0.45)),
-          trackColor: WidgetStateProperty.resolveWith((states) =>
-              _vscodeDarkText.withValues(alpha: 0.1)),
-        ),
       ),
       themeMode: _themeMode,
       home: ShellPage(
