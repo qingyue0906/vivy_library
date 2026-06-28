@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/library_item.dart';
 import '../providers/library_state.dart';
 import '../services/library_scanner.dart';
+import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import 'exe_picker_dialog.dart';
@@ -10,11 +11,13 @@ import '../models/exe_record.dart';
 import 'file_properties_dialog.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
+import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
 
 class FileBrowserPanel extends StatelessWidget {
   final LibraryItem item;
   final LibraryState state;
+  final ScriptService scriptService;
   final double height;
   final double backgroundOpacity;
   final GifDisplayMode gifMode;
@@ -23,6 +26,7 @@ class FileBrowserPanel extends StatelessWidget {
     super.key,
     required this.item,
     required this.state,
+    required this.scriptService,
     required this.height,
     this.backgroundOpacity = 1.0,
     this.gifMode = GifDisplayMode.hover,
@@ -233,9 +237,18 @@ class FileBrowserPanel extends StatelessWidget {
             ],
           ),
         ),
+        ..._buildScriptMenuItems(context),
       ],
     ).then((value) async {
       if (value == null) return;
+      if (value.startsWith('script:')) {
+        final scriptId = value.substring(7);
+        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        if (script != null) {
+          _runScript(context, script, [file.path]);
+        }
+        return;
+      }
       switch (value) {
         case 'open':
           _openFile(file.path);
@@ -258,6 +271,46 @@ class FileBrowserPanel extends StatelessWidget {
           );
       }
     });
+  }
+
+  List<PopupMenuEntry<String>> _buildScriptMenuItems(BuildContext context) {
+    final scripts = scriptService.scripts.where((s) => s.enabled).toList();
+    if (scripts.isEmpty) return const [];
+    return [
+      const PopupMenuDivider(),
+      for (final script in scripts)
+        PopupMenuItem<String>(
+          value: 'script:${script.id}',
+          height: 32,
+          child: Tooltip(
+            waitDuration: Duration.zero,
+            message: scriptService.readDescriptionSync(script),
+            child: Row(children: [
+              const Icon(Icons.code, size: 14),
+              const SizedBox(width: 8),
+              Expanded(child: Text(script.name, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+            ]),
+          ),
+        ),
+    ];
+  }
+
+  void _runScript(BuildContext context, ScriptEntry script, List<String> paths) {
+    if (script.execMode == ScriptExecMode.terminal) {
+      scriptService.executeScriptTerminal(script, paths);
+    } else {
+      final future = script.execMode == ScriptExecMode.silent
+          ? scriptService.executeScriptSilent(script, paths)
+          : scriptService.executeScript(script, paths);
+      future.then((result) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => ScriptResultDialog(result: result),
+          );
+        }
+      });
+    }
   }
 
   void _showRenameDialog(BuildContext context, FileSystemEntity file) {

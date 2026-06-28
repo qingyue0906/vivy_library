@@ -13,9 +13,11 @@ import 'file_browser_panel.dart';
 import 'file_properties_dialog.dart';
 import 'exe_picker_dialog.dart';
 import '../models/exe_record.dart';
+import '../services/script_service.dart';
 import 'class_nav_bar.dart';
 import 'package:flutter/services.dart';
 import 'compact_level.dart';
+import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
 
 class GridArea extends StatelessWidget {
@@ -23,6 +25,7 @@ class GridArea extends StatelessWidget {
   final List<CategoryNode> subDirs;
   final List<DirectFile> files;
   final LibraryState state;
+  final ScriptService scriptService;
   final double filePanelHeight;
   final void Function(double delta) onFilePanelResize;
   final VoidCallback? onFilePanelResizeEnd;
@@ -38,6 +41,7 @@ class GridArea extends StatelessWidget {
     required this.subDirs,
     required this.files,
     required this.state,
+    required this.scriptService,
     required this.filePanelHeight,
     required this.onFilePanelResize,
     this.onFilePanelResizeEnd,
@@ -89,6 +93,7 @@ class GridArea extends StatelessWidget {
             FileBrowserPanel(
               item: state.selectedItem!,
               state: state,
+              scriptService: scriptService,
               height: filePanelHeight,
               backgroundOpacity: middleOpacity,
               gifMode: gridSettings.fileGifMode,
@@ -323,9 +328,18 @@ class GridArea extends StatelessWidget {
             Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
+        ..._buildScriptMenuItems(context),
       ],
     ).then((value) {
       if (value == null) return;
+      if (value.startsWith('script:')) {
+        final scriptId = value.substring(7);
+        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        if (script != null) {
+          _runScript(context, script, selectedFolders.map((f) => f.path).toList());
+        }
+        return;
+      }
       switch (value) {
         case 'edit':
           if (isBatch) {
@@ -398,9 +412,18 @@ class GridArea extends StatelessWidget {
             ],
           ),
         ),
+        ..._buildScriptMenuItems(context),
       ],
     ).then((value) {
       if (value == null) return;
+      if (value.startsWith('script:')) {
+        final scriptId = value.substring(7);
+        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        if (script != null) {
+          _runScript(context, script, selectedItems.map((i) => i.path).toList());
+        }
+        return;
+      }
       switch (value) {
         case 'edit':
           onEditRequest(selectedItems, isBatch);
@@ -498,9 +521,18 @@ class GridArea extends StatelessWidget {
             Text(Strings.t('properties'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
+        ..._buildScriptMenuItems(context),
       ],
     ).then((value) async {
       if (value == null) return;
+      if (value.startsWith('script:')) {
+        final scriptId = value.substring(7);
+        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        if (script != null) {
+          _runScript(context, script, [file.path]);
+        }
+        return;
+      }
       switch (value) {
         case 'open':
           _openFile(file.path);
@@ -523,6 +555,47 @@ class GridArea extends StatelessWidget {
           );
       }
     });
+  }
+
+  List<PopupMenuEntry<String>> _buildScriptMenuItems(BuildContext context) {
+    final c = CompactLevel.of(context);
+    final scripts = scriptService.scripts.where((s) => s.enabled).toList();
+    if (scripts.isEmpty) return const [];
+    return [
+      PopupMenuDivider(),
+      for (final script in scripts)
+        PopupMenuItem<String>(
+          value: 'script:${script.id}',
+          height: 28 * c,
+          child: Tooltip(
+            waitDuration: Duration.zero,
+            message: scriptService.readDescriptionSync(script),
+            child: Row(children: [
+              Icon(Icons.code, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Expanded(child: Text(script.name, style: TextStyle(fontSize: 11 * c), overflow: TextOverflow.ellipsis)),
+            ]),
+          ),
+        ),
+    ];
+  }
+
+  void _runScript(BuildContext context, ScriptEntry script, List<String> paths) {
+    if (script.execMode == ScriptExecMode.terminal) {
+      scriptService.executeScriptTerminal(script, paths);
+    } else {
+      final future = script.execMode == ScriptExecMode.silent
+          ? scriptService.executeScriptSilent(script, paths)
+          : scriptService.executeScript(script, paths);
+      future.then((result) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => ScriptResultDialog(result: result),
+          );
+        }
+      });
+    }
   }
 
   void _showRenameDialog(BuildContext context, DirectFile file) {

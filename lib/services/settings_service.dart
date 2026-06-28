@@ -309,6 +309,20 @@ class SettingsService {
     await prefs.setString(_localeKey, locale.name);
   }
 
+  // --- Python path ---
+
+  static const _pythonPathKey = 'python_path';
+
+  static Future<String> loadPythonPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_pythonPathKey) ?? '';
+  }
+
+  static Future<void> savePythonPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pythonPathKey, path);
+  }
+
   // --- Background settings ---
 
   static Future<BackgroundSettings> loadBackgroundSettings() async {

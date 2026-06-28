@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/library_root.dart';
 import '../services/library_root_service.dart';
+import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import '../utils/app_quit.dart';
@@ -18,6 +21,7 @@ class SettingsPage extends StatefulWidget {
   final BackgroundSettings backgroundSettings;
   final void Function(BackgroundSettings settings) onBackgroundChanged;
   final void Function(AppLocale locale) onLocaleChanged;
+  final ScriptService scriptService;
 
   const SettingsPage({
     super.key,
@@ -27,6 +31,7 @@ class SettingsPage extends StatefulWidget {
     required this.backgroundSettings,
     required this.onBackgroundChanged,
     required this.onLocaleChanged,
+    required this.scriptService,
   });
 
   @override
@@ -45,7 +50,7 @@ class _SettingsPageState extends State<SettingsPage>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
+    _tabCtrl = TabController(length: 6, vsync: this);
     _bgSettings = widget.backgroundSettings;
     _locale = Strings.currentLocale;
     _load();
@@ -122,6 +127,7 @@ class _SettingsPageState extends State<SettingsPage>
               Tab(text: Strings.t('tabData')),
               Tab(text: Strings.t('tabTheme')),
               Tab(text: Strings.t('tabUi')),
+              Tab(text: Strings.t('tabScripts')),
               Tab(text: Strings.t('tabAbout')),
             ],
           ),
@@ -137,6 +143,7 @@ class _SettingsPageState extends State<SettingsPage>
             _buildDataTab(),
             _buildThemeTab(),
             _buildUiTab(),
+            _buildScriptsTab(),
             _buildAboutTab(),
           ],
         ),
@@ -452,6 +459,293 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
+  Widget _buildScriptsTab() {
+    final scripts = widget.scriptService.scripts;
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Python 路径
+          Text(Strings.t('pythonPath'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    widget.scriptService.pythonPath.isEmpty
+                        ? Strings.t('pythonPathDefault')
+                        : widget.scriptService.pythonPath,
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _pickPythonPath,
+                child: Text(Strings.t('pythonBrowse'), style: const TextStyle(fontSize: 12)),
+              ),
+              if (widget.scriptService.pythonPath.isNotEmpty)
+                TextButton(
+                  onPressed: _clearPythonPath,
+                  child: Text(Strings.t('pythonReset'), style: const TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // 脚本管理
+          Row(
+            children: [
+              Text(Strings.t('scriptManage'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              _smallButton(Strings.t('scriptImport'), Icons.add, _importScript),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (scripts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(Strings.t('noScripts'),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ),
+            )
+          else
+            Expanded(
+              child: SmoothScroll(
+                builder: (context, controller, physics) => ListView(
+                  controller: controller,
+                  physics: physics,
+                  children: [
+                    for (final script in scripts) _buildScriptItem(script),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScriptItem(ScriptEntry script) {
+    final cs = Theme.of(context).colorScheme;
+    final desc = widget.scriptService.readDescriptionSync(script);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.code, size: 16, color: cs.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(script.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(script.fileName,
+                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                if (desc.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(desc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
+                ],
+              ],
+            ),
+          ),
+          _execModeToggle(script),
+          SizedBox(
+            width: 36,
+            height: 20,
+            child: Switch(
+              value: script.enabled,
+              onChanged: (v) {
+                final updated = script.copyWith(enabled: v);
+                widget.scriptService.updateScript(updated);
+                setState(() {});
+              },
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          _smallIconBtn(Icons.edit_outlined, Strings.t('scriptEdit'), () => _editScript(script)),
+          _smallIconBtn(Icons.file_download_outlined, Strings.t('scriptExport'), () => _exportScript(script)),
+          _smallIconBtn(Icons.delete_outline, Strings.t('scriptDelete'), () => _deleteScript(script), Colors.red),
+        ],
+      ),
+    );
+  }
+
+  Widget _execModeToggle(ScriptEntry script) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuButton<ScriptExecMode>(
+      tooltip: _execModeLabel(script.execMode),
+      onSelected: (mode) {
+        final updated = script.copyWith(execMode: mode);
+        widget.scriptService.updateScript(updated);
+        setState(() {});
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_execModeIcon(script.execMode), size: 12, color: cs.onSurfaceVariant),
+            const SizedBox(width: 3),
+            Text(_execModeLabel(script.execMode),
+                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+          ],
+        ),
+      ),
+      itemBuilder: (_) => [
+        PopupMenuItem(value: ScriptExecMode.result, child: Text(Strings.t('execModeResult'), style: const TextStyle(fontSize: 12))),
+        PopupMenuItem(value: ScriptExecMode.terminal, child: Text(Strings.t('execModeTerminal'), style: const TextStyle(fontSize: 12))),
+        PopupMenuItem(value: ScriptExecMode.silent, child: Text(Strings.t('execModeSilent'), style: const TextStyle(fontSize: 12))),
+      ],
+    );
+  }
+
+  IconData _execModeIcon(ScriptExecMode mode) {
+    switch (mode) {
+      case ScriptExecMode.result: return Icons.description_outlined;
+      case ScriptExecMode.terminal: return Icons.terminal;
+      case ScriptExecMode.silent: return Icons.check_circle_outline;
+    }
+  }
+
+  String _execModeLabel(ScriptExecMode mode) {
+    switch (mode) {
+      case ScriptExecMode.result: return Strings.t('execModeResult');
+      case ScriptExecMode.terminal: return Strings.t('execModeTerminal');
+      case ScriptExecMode.silent: return Strings.t('execModeSilent');
+    }
+  }
+
+  Widget _smallButton(String label, IconData icon, VoidCallback onTap) {
+    return TextButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+    );
+  }
+
+  Widget _smallIconBtn(IconData icon, String tooltip, VoidCallback onTap, [Color? color]) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(icon, size: 16, color: color),
+      tooltip: tooltip,
+      padding: const EdgeInsets.all(4),
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+    );
+  }
+
+  Future<void> _pickPythonPath() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: Strings.t('pythonPickTitle'),
+      type: FileType.custom,
+      allowedExtensions: ['exe'],
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final path = result.files.first.path;
+      if (path != null) {
+        await widget.scriptService.savePythonPath(path);
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _clearPythonPath() async {
+    await widget.scriptService.savePythonPath('');
+    setState(() {});
+  }
+
+  Future<void> _importScript() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: Strings.t('scriptImportTitle'),
+      type: FileType.custom,
+      allowedExtensions: ['py'],
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final path = result.files.first.path;
+      if (path != null) {
+        await widget.scriptService.importScript(path);
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _editScript(ScriptEntry script) async {
+    final scriptPath = '${_resolveScriptsDir()}/${script.fileName}';
+    await Process.run('cmd', ['/c', 'start', '', scriptPath]);
+  }
+
+  String _resolveScriptsDir() {
+    final appData = Platform.environment['APPDATA'] ?? '${Platform.environment['HOME']}/.config';
+    return '$appData/vivy_library/scripts';
+  }
+
+  String _basename(String path) {
+    return path.replaceAll('\\', '/').split('/').last;
+  }
+
+  Future<void> _exportScript(ScriptEntry script) async {
+    final dest = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: Strings.t('scriptExportTitle'),
+    );
+    if (dest == null) return;
+    final src = File('${_resolveScriptsDir()}/${script.fileName}');
+    await src.copy('$dest/${script.fileName}');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Strings.t('scriptExported')), duration: const Duration(seconds: 2)),
+      );
+    }
+  }
+
+  Future<void> _deleteScript(ScriptEntry script) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(Strings.t('scriptDeleteConfirm'), style: const TextStyle(fontSize: 13)),
+        content: Text(Strings.tn('scriptDeleteMsg', {'name': script.name}),
+            style: const TextStyle(fontSize: 12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(Strings.t('cancel'), style: const TextStyle(fontSize: 12)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(Strings.t('scriptDelete'), style: const TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.scriptService.deleteScript(script);
+      setState(() {});
+    }
+  }
+
   Widget _buildAboutTab() {
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -643,13 +937,31 @@ class _SettingsPageState extends State<SettingsPage>
         'library_roots': roots.map((r) => {'name': r.name, 'path': r.path}).toList(),
       };
 
-      final file = File('$dir/vivy_library_export.json');
-      await file.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(export));
+      final archive = Archive();
+      archive.addFile(ArchiveFile('data.json', jsonEncode(export).codeUnits.length, utf8.encode(jsonEncode(export))));
+
+      final scriptsMeta = widget.scriptService.scripts.map((s) => s.toJson()).toList();
+      archive.addFile(ArchiveFile('scripts.json', jsonEncode(scriptsMeta).codeUnits.length, utf8.encode(jsonEncode(scriptsMeta))));
+
+      final scriptsDir = _resolveScriptsDir();
+      final scriptsFolder = Directory(scriptsDir);
+      if (await scriptsFolder.exists()) {
+        await for (final f in scriptsFolder.list()) {
+          if (f is File && f.path.endsWith('.py')) {
+            final bytes = await f.readAsBytes();
+            final name = _basename(f.path);
+            archive.addFile(ArchiveFile('scripts/$name', bytes.length, bytes));
+          }
+        }
+      }
+
+      final zipBytes = ZipEncoder().encode(archive);
+      final outPath = '$dir/vivy_library_export.zip';
+      await File(outPath).writeAsBytes(zipBytes);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(Strings.tn('exportedTo', {'path': '$dir/vivy_library_export.json'})),
+            content: Text(Strings.tn('exportedTo', {'path': outPath})),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -667,7 +979,8 @@ class _SettingsPageState extends State<SettingsPage>
     try {
       final result = await FilePicker.platform.pickFiles(
         dialogTitle: Strings.t('importFileTitle'),
-        type: FileType.any,
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
       );
       if (result == null || result.files.isEmpty) return;
       final path = result.files.single.path!;
@@ -682,7 +995,31 @@ class _SettingsPageState extends State<SettingsPage>
         return;
       }
 
-      final data = jsonDecode(await file.readAsString()) as Map;
+      final zipBytes = await file.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+
+      String? dataJson;
+      String? scriptsMetaJson;
+      for (final entry in archive) {
+        if (entry.isFile) {
+          if (entry.name == 'data.json') {
+            dataJson = utf8.decode(entry.content);
+          } else if (entry.name == 'scripts.json') {
+            scriptsMetaJson = utf8.decode(entry.content);
+          }
+        }
+      }
+
+      if (dataJson == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(Strings.t('invalidImportFile')), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final data = jsonDecode(dataJson) as Map;
       final prefs = await SharedPreferences.getInstance();
 
       if (data['theme_mode'] != null) {
@@ -715,6 +1052,24 @@ class _SettingsPageState extends State<SettingsPage>
             .toList();
         await LibraryRootService().saveAll(roots);
       }
+
+      if (scriptsMetaJson != null) {
+        final scriptsList = (jsonDecode(scriptsMetaJson) as List)
+            .map((e) => ScriptEntry.fromJson(e as Map<String, dynamic>))
+            .toList();
+        final scriptsDirPath = _resolveScriptsDir();
+        await Directory(scriptsDirPath).create(recursive: true);
+        for (final entry in archive) {
+          if (entry.isFile && entry.name.startsWith('scripts/')) {
+            final fileName = entry.name.substring('scripts/'.length);
+            if (fileName.isNotEmpty) {
+              await File('$scriptsDirPath/$fileName').writeAsBytes(entry.content);
+            }
+          }
+        }
+        await widget.scriptService.replaceAllScripts(scriptsList);
+      }
+
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

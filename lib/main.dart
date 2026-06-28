@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'services/script_service.dart';
 import 'services/settings_service.dart';
 import 'services/translations.dart';
 import 'utils/app_quit.dart';
@@ -29,7 +30,9 @@ void main() async {
     windowManager.addListener(_WindowStateListener());
   }
 
-  runApp(VivyApp(initialThemeMode: savedTheme));
+  final scriptService = ScriptService();
+  await scriptService.init();
+  runApp(VivyApp(initialThemeMode: savedTheme, scriptService: scriptService));
 }
 
 class _WindowStateListener with WindowListener {
@@ -41,8 +44,9 @@ class _WindowStateListener with WindowListener {
 
 class VivyApp extends StatefulWidget {
   final ThemeMode initialThemeMode;
+  final ScriptService scriptService;
 
-  const VivyApp({super.key, required this.initialThemeMode});
+  const VivyApp({super.key, required this.initialThemeMode, required this.scriptService});
 
   @override
   State<VivyApp> createState() => _VivyAppState();
@@ -138,6 +142,7 @@ class _VivyAppState extends State<VivyApp> {
       ),
       themeMode: _themeMode,
       home: ShellPage(
+        scriptService: widget.scriptService,
         onThemeChanged: _onThemeChanged,
         onGridSettingsChanged: _onGridSettingsChanged,
         gridSettings: _gridSettings,

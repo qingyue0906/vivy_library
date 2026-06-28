@@ -13,9 +13,11 @@ import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
 import 'compact_level.dart';
+import '../services/script_service.dart';
 import '../utils/app_quit.dart';
 
 class ShellPage extends StatefulWidget {
+  final ScriptService scriptService;
   final void Function(ThemeMode mode) onThemeChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
   final GridSettings gridSettings;
@@ -25,6 +27,7 @@ class ShellPage extends StatefulWidget {
 
   const ShellPage({
     super.key,
+    required this.scriptService,
     required this.onThemeChanged,
     required this.onGridSettingsChanged,
     required this.gridSettings,
@@ -109,6 +112,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       MaterialPageRoute(
         builder: (_) => SettingsPage(
           libraryRootPath: _state.currentRootPath,
+          scriptService: widget.scriptService,
           onThemeChanged: widget.onThemeChanged,
           onGridSettingsChanged: widget.onGridSettingsChanged,
           backgroundSettings: widget.backgroundSettings,
@@ -334,6 +338,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 subDirs: _state.currentSubDirs,
                 files: _state.currentDirectFiles,
                 state: _state,
+                scriptService: widget.scriptService,
                 filePanelHeight: fileHeight,
                 onFilePanelResize: _resizeFilePanel,
                 onFilePanelResizeEnd: _saveLayout,
