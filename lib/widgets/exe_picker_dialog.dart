@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../models/exe_record.dart';
 import '../services/exe_history_service.dart';
+import '../services/translations.dart';
 import 'smooth_scroll.dart';
 
 /// "打开方式"对话框:展示历史选过的程序列表,支持选择已有记录、
@@ -41,7 +42,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['exe'],
-      dialogTitle: '选择要使用的程序',
+      dialogTitle: Strings.t('selectExe'),
     );
 
     if (result == null || result.files.single.path == null) return;
@@ -71,7 +72,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('打开方式', style: TextStyle(fontSize: 15)),
+      title: Text(Strings.t('openWith'), style: const TextStyle(fontSize: 15)),
       content: SizedBox(
         width: 360,
         height: 320,
@@ -87,7 +88,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
                   OutlinedButton.icon(
                     onPressed: _browseForNewExe,
                     icon: const Icon(Icons.folder_open, size: 16),
-                    label: const Text('浏览选择其他程序...'),
+                    label: Text(Strings.t('browseOther')),
                   ),
                 ],
               ),
@@ -95,7 +96,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(Strings.t('cancel')),
         ),
       ],
     );
@@ -105,7 +106,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
     if (_records.isEmpty) {
       return Center(
         child: Text(
-          '还没有使用过的程序\n点击下方按钮浏览选择',
+          Strings.t('noRecords'),
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
         ),
@@ -135,7 +136,7 @@ class _ExePickerDialogState extends State<ExePickerDialog> {
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 16),
               onPressed: () => _deleteRecord(record),
-              tooltip: '删除此记录',
+              tooltip: Strings.t('deleteRecord'),
             ),
           );
         },

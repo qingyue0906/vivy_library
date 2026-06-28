@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/goto_entry.dart';
+import '../services/translations.dart';
 
 /// goto 列表编辑器：每条显示 name + uuid + path 输入框，可添加/删除。
 ///
@@ -123,7 +124,7 @@ class _GotoEditorState extends State<GotoEditor> {
                     style: TextStyle(fontSize: 11, color: cs.onSurface),
                     decoration: InputDecoration(
                       isDense: true,
-                      hintText: '名称',
+                      hintText: Strings.t('gotoName'),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 6),
                       border: OutlineInputBorder(
@@ -140,7 +141,7 @@ class _GotoEditorState extends State<GotoEditor> {
                         fontSize: 11, color: cs.onSurface, fontFamily: 'monospace'),
                     decoration: InputDecoration(
                       isDense: true,
-                      hintText: '相对路径（可空）',
+                      hintText: Strings.t('gotoPath'),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 6),
                       border: OutlineInputBorder(
@@ -157,7 +158,7 @@ class _GotoEditorState extends State<GotoEditor> {
                         fontSize: 11, color: cs.onSurface, fontFamily: 'monospace'),
                     decoration: InputDecoration(
                       isDense: true,
-                      hintText: 'uuid（可空）',
+                      hintText: Strings.t('gotoUuid'),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 6),
                       border: OutlineInputBorder(
@@ -179,7 +180,7 @@ class _GotoEditorState extends State<GotoEditor> {
         OutlinedButton.icon(
           onPressed: _add,
           icon: const Icon(Icons.add, size: 14),
-          label: const Text('添加关联', style: TextStyle(fontSize: 11)),
+          label: Text(Strings.t('addRelation'), style: const TextStyle(fontSize: 11)),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             minimumSize: Size.zero,

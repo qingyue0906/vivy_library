@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
+import '../services/translations.dart';
 import 'compact_level.dart';
 
 class TopBar extends StatelessWidget {
@@ -28,7 +29,7 @@ class TopBar extends StatelessWidget {
         children: [
           IconButton(
             icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
-            tooltip: '设置',
+            tooltip: Strings.t('settingsTooltip'),
             onPressed: onSettingsTap,
             padding: EdgeInsets.zero,
             constraints: BoxConstraints(minWidth: 24 * c, minHeight: 24 * c),
@@ -54,7 +55,7 @@ class TopBar extends StatelessWidget {
         controller: searchController,
         style: TextStyle(color: cs.onSurface, fontSize: 11 * c),
         decoration: InputDecoration(
-          hintText: '搜索...',
+          hintText: Strings.t('searchHint'),
           hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 11 * c),
           prefixIcon: Icon(Icons.search, size: 12 * c, color: cs.onSurfaceVariant),
           isDense: true,
@@ -90,9 +91,9 @@ class TopBar extends StatelessWidget {
   Widget _buildSortFieldDropdown(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     final labels = {
-      SortField.name: '名称',
-      SortField.size: '大小',
-      SortField.date: '日期',
+      SortField.name: Strings.t('sortName'),
+      SortField.size: Strings.t('sortSize'),
+      SortField.date: Strings.t('sortDate'),
     };
     return SizedBox(
       height: 22 * c,
@@ -141,7 +142,7 @@ class TopBar extends StatelessWidget {
   Widget _buildSortOrderButton(double c) {
     final isAsc = state.sortOrder == SortOrder.ascending;
     return IconButton(
-      tooltip: isAsc ? '当前:升序' : '当前:降序',
+      tooltip: isAsc ? Strings.t('sortAsc') : Strings.t('sortDesc'),
       icon: Icon(
         isAsc ? Icons.arrow_upward : Icons.arrow_downward,
         size: 12 * c,
@@ -154,7 +155,7 @@ class TopBar extends StatelessWidget {
 
   Widget _buildRefreshButton(double c) {
     return IconButton(
-      tooltip: '刷新',
+      tooltip: Strings.t('refreshTooltip'),
       icon: Icon(Icons.refresh, size: 14 * c),
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),

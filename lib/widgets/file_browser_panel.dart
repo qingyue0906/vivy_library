@@ -4,6 +4,7 @@ import '../models/library_item.dart';
 import '../providers/library_state.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
+import '../services/translations.dart';
 import 'exe_picker_dialog.dart';
 import '../models/exe_record.dart';
 import 'file_properties_dialog.dart';
@@ -58,7 +59,7 @@ class FileBrowserPanel extends StatelessWidget {
           Icon(Icons.folder_open, size: 12 * c, color: cs.onSurfaceVariant),
           SizedBox(width: 4 * c),
           Text(
-            '${item.info.title} 的内容',
+            Strings.tn('fileContent', {'title': item.info.title}),
             style: TextStyle(
                 fontSize: 11 * c, fontWeight: FontWeight.w500, color: cs.onSurface),
           ),
@@ -72,7 +73,7 @@ class FileBrowserPanel extends StatelessWidget {
               size: 14 * c,
             ),
             label: Text(
-              state.showSystemFiles ? '隐藏 Info/Preview' : '显示 Info/Preview',
+              state.showSystemFiles ? Strings.t('hideInfo') : Strings.t('showInfo'),
               style: TextStyle(fontSize: 11 * c),
             ),
             style: TextButton.styleFrom(
@@ -94,7 +95,7 @@ class FileBrowserPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12 * c),
               ),
               child: Text(
-                '✕ 关闭',
+                Strings.t('closePanel'),
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 11 * c,
@@ -110,7 +111,7 @@ class FileBrowserPanel extends StatelessWidget {
   Widget _buildFileGrid(double c) {
     final dir = Directory(item.path);
     if (!dir.existsSync()) {
-      return Center(child: Text('文件夹不存在'));
+      return Center(child: Text(Strings.t('folderNotExist')));
     }
 
     final entries = dir
@@ -131,7 +132,7 @@ class FileBrowserPanel extends StatelessWidget {
     if (visible.isEmpty) {
       return Center(
         child: Text(
-          '没有可显示的文件',
+          Strings.t('noFiles'),
           style: TextStyle(color: Colors.grey.shade500, fontSize: 12 * c),
         ),
       );
@@ -174,7 +175,7 @@ class FileBrowserPanel extends StatelessWidget {
         globalPos.dx + 1,
         globalPos.dy + 1,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'open',
           height: 32,
@@ -182,7 +183,7 @@ class FileBrowserPanel extends StatelessWidget {
             children: [
               Icon(Icons.open_in_new, size: 14),
               SizedBox(width: 8),
-              Text('以默认方式打开', style: TextStyle(fontSize: 12)),
+              Text(Strings.t('defaultOpen'), style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
@@ -193,11 +194,11 @@ class FileBrowserPanel extends StatelessWidget {
             children: [
               Icon(Icons.apps, size: 14),
               SizedBox(width: 8),
-              Text('打开方式...', style: TextStyle(fontSize: 12)),
+              Text(Strings.t('openAs'), style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
-        PopupMenuDivider(),
+        const PopupMenuDivider(),
         PopupMenuItem(
           value: 'rename',
           height: 32,
@@ -205,11 +206,11 @@ class FileBrowserPanel extends StatelessWidget {
             children: [
               Icon(Icons.drive_file_rename_outline, size: 14),
               SizedBox(width: 8),
-              Text('重命名', style: TextStyle(fontSize: 12)),
+              Text(Strings.t('rename'), style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
-        PopupMenuDivider(),
+        const PopupMenuDivider(),
         PopupMenuItem(
           value: 'locate',
           height: 32,
@@ -217,7 +218,7 @@ class FileBrowserPanel extends StatelessWidget {
             children: [
               Icon(Icons.folder_open, size: 14),
               SizedBox(width: 8),
-              Text('在资源管理器中显示', style: TextStyle(fontSize: 12)),
+              Text(Strings.t('showInExplorer'), style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
@@ -228,7 +229,7 @@ class FileBrowserPanel extends StatelessWidget {
             children: [
               Icon(Icons.info_outline, size: 14),
               SizedBox(width: 8),
-              Text('属性', style: TextStyle(fontSize: 12)),
+              Text(Strings.t('properties'), style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
@@ -272,12 +273,12 @@ class FileBrowserPanel extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('重命名', style: TextStyle(fontSize: 15)),
+        title: Text(Strings.t('rename'), style: const TextStyle(fontSize: 15)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           decoration: InputDecoration(
-            labelText: '新文件名',
+            labelText: Strings.t('newFileName'),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onSubmitted: (_) => _doRename(dialogContext, file, ctrl.text.trim()),
@@ -285,11 +286,11 @@ class FileBrowserPanel extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(Strings.t('cancel')),
           ),
           FilledButton(
             onPressed: () => _doRename(dialogContext, file, ctrl.text.trim()),
-            child: const Text('重命名'),
+            child: Text(Strings.t('rename')),
           ),
         ],
       ),
@@ -304,7 +305,7 @@ class FileBrowserPanel extends StatelessWidget {
     final error = await state.renameFile(file.path, newName);
     if (error != null && dialogContext.mounted) {
       ScaffoldMessenger.of(dialogContext).showSnackBar(
-        SnackBar(content: Text('重命名失败: $error'), backgroundColor: Colors.red),
+        SnackBar(content: Text(Strings.tn('renameFailed', {'error': error.toString()})), backgroundColor: Colors.red),
       );
     }
   }

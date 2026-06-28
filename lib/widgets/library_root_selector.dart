@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import 'dart:io';
+import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -41,7 +42,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   void _showPanel() {
     showGeneralDialog(
       context: context,
-      barrierLabel: '资源库选择器',
+      barrierLabel: Strings.t('librarySelector'),
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.05),
       transitionDuration: const Duration(milliseconds: 120),
@@ -103,7 +104,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   }
 
   String _displayLabel() {
-    if (widget.currentPath.isEmpty) return '选择资源库';
+    if (widget.currentPath.isEmpty) return Strings.t('selectLibrary');
     final match = _allRoots.where((r) => r.path == widget.currentPath).toList();
     if (match.isNotEmpty && match.first.name.isNotEmpty) return match.first.name;
     final segments = widget.currentPath.replaceAll('\\', '/').split('/');
@@ -170,7 +171,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
 
   Future<void> _openOtherLibrary() async {
     final path = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: '选择资源库根目录',
+      dialogTitle: Strings.t('selectLibraryDir'),
     );
     if (path == null) return;
 
@@ -245,7 +246,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                       autofocus: true,
                       onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
-                        hintText: '搜索资源库名称或路径...',
+                        hintText: Strings.t('searchLibrary'),
                         prefixIcon: const Icon(Icons.search, size: 16),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
@@ -262,7 +263,7 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                         ? Padding(
                             padding: const EdgeInsets.all(16),
                             child: Text(
-                              _allRoots.isEmpty ? '还没有添加任何资源库' : '没有匹配的资源库',
+                              _allRoots.isEmpty ? Strings.t('noLibraries') : Strings.t('noMatch'),
                               style: TextStyle(
                                   fontSize: 11, color: Colors.grey.shade500),
                             ),
@@ -299,15 +300,15 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                   const Divider(height: 1),
                   InkWell(
                     onTap: _openOtherLibrary,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.create_new_folder_outlined, size: 16),
-                          SizedBox(width: 8),
-                          Text('打开其他资源库...',
-                              style: TextStyle(fontSize: 12.5)),
+                          const Icon(Icons.create_new_folder_outlined, size: 16),
+                          const SizedBox(width: 8),
+                          Text(Strings.t('openOtherLibrary'),
+                              style: const TextStyle(fontSize: 12.5)),
                         ],
                       ),
                     ),
@@ -408,7 +409,7 @@ class _RootListTile extends StatelessWidget {
                 style: const TextStyle(fontSize: 12.5),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: '资源库显示名称',
+                  hintText: Strings.t('libraryDisplayName'),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   border: OutlineInputBorder(
@@ -420,14 +421,14 @@ class _RootListTile extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.check, size: 16, color: Colors.green),
               onPressed: onConfirmRename,
-              tooltip: '保存',
+              tooltip: Strings.t('save'),
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 16, color: Colors.grey),
               onPressed: onCancelRename,
-              tooltip: '取消',
+              tooltip: Strings.t('cancel'),
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             ),
@@ -446,20 +447,20 @@ class _RootListTile extends StatelessWidget {
           _menuItem(
             context,
             icon: Icons.drive_file_rename_outline,
-            label: '命名资源库',
+            label: Strings.t('renameLibrary'),
             onTap: onStartRename,
           ),
           Divider(height: 1, color: cs.outlineVariant),
           _menuItem(
             context,
             icon: Icons.folder_open,
-            label: '在资源管理器中打开',
+            label: Strings.t('openInExplorer'),
             onTap: onOpenExplorer,
           ),
           _menuItem(
             context,
             icon: Icons.delete_outline,
-            label: '从列表中删除',
+            label: Strings.t('removeFromList'),
             onTap: onRemove,
             isDestructive: true,
           ),

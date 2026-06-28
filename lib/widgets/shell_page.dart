@@ -8,6 +8,7 @@ import 'top_bar.dart';
 import 'edit_dialog.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
+import '../services/translations.dart';
 import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
@@ -20,6 +21,7 @@ class ShellPage extends StatefulWidget {
   final GridSettings gridSettings;
   final BackgroundSettings backgroundSettings;
   final void Function(BackgroundSettings settings) onBackgroundChanged;
+  final void Function(AppLocale locale) onLocaleChanged;
 
   const ShellPage({
     super.key,
@@ -28,6 +30,7 @@ class ShellPage extends StatefulWidget {
     required this.gridSettings,
     required this.backgroundSettings,
     required this.onBackgroundChanged,
+    required this.onLocaleChanged,
   });
 
   @override
@@ -110,6 +113,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           onGridSettingsChanged: widget.onGridSettingsChanged,
           backgroundSettings: widget.backgroundSettings,
           onBackgroundChanged: widget.onBackgroundChanged,
+          onLocaleChanged: widget.onLocaleChanged,
         ),
       ),
     );
@@ -233,7 +237,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     }
     if (_state.error != null) {
       return Center(
-        child: Text('扫描失败: ${_state.error}',
+        child: Text(Strings.tn('scanFailed', {'error': '${_state.error}'}),
             style: const TextStyle(color: Colors.red)),
       );
     }
@@ -254,11 +258,11 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
               ),
             ),
           ),
-          const Expanded(
+          Expanded(
             child: Center(
               child: Text(
-                '请先选择一个资源库目录',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                Strings.t('selectLibraryFirst'),
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             ),
           ),
@@ -393,9 +397,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   }
                   if (!ok && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('找不到目标项目'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(Strings.t('targetNotFound')),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   }

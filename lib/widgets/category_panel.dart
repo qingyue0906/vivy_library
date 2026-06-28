@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/category_node.dart';
+import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -44,10 +45,10 @@ class _CategoryPanelState extends State<CategoryPanel> {
           children: [
             // Part 1: 全部项目 + 根目录
             _buildItem(context, c,
-                label: '全部项目', value: null, depth: 0, node: null,
+                label: Strings.t('allItems'), value: null, depth: 0, node: null,
                 icon: Icons.apps),
             _buildItem(context, c,
-                label: '根目录', value: widget.root.path, depth: 0, node: widget.root,
+                label: Strings.t('rootDir'), value: widget.root.path, depth: 0, node: widget.root,
                 icon: Icons.folder_open),
             Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
             // Part 2: 根级直接文件夹展开树

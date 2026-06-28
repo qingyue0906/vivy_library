@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../models/library_root.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
+import '../services/translations.dart';
 import '../utils/app_quit.dart';
 import 'smooth_scroll.dart';
 
@@ -16,6 +17,7 @@ class SettingsPage extends StatefulWidget {
   final void Function(GridSettings settings) onGridSettingsChanged;
   final BackgroundSettings backgroundSettings;
   final void Function(BackgroundSettings settings) onBackgroundChanged;
+  final void Function(AppLocale locale) onLocaleChanged;
 
   const SettingsPage({
     super.key,
@@ -24,6 +26,7 @@ class SettingsPage extends StatefulWidget {
     required this.onGridSettingsChanged,
     required this.backgroundSettings,
     required this.onBackgroundChanged,
+    required this.onLocaleChanged,
   });
 
   @override
@@ -37,12 +40,14 @@ class _SettingsPageState extends State<SettingsPage>
   ThemeMode _themeMode = ThemeMode.system;
   GridSettings _gridSettings = const GridSettings();
   late BackgroundSettings _bgSettings;
+  late AppLocale _locale;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _bgSettings = widget.backgroundSettings;
+    _locale = Strings.currentLocale;
     _load();
   }
 
@@ -112,11 +117,12 @@ class _SettingsPageState extends State<SettingsPage>
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             labelStyle: const TextStyle(fontSize: 12),
-            tabs: const [
-              Tab(text: '数据'),
-              Tab(text: '主题'),
-              Tab(text: '界面'),
-              Tab(text: '关于'),
+            tabs: [
+              Tab(text: Strings.t('tabGeneral')),
+              Tab(text: Strings.t('tabData')),
+              Tab(text: Strings.t('tabTheme')),
+              Tab(text: Strings.t('tabUi')),
+              Tab(text: Strings.t('tabAbout')),
             ],
           ),
               ),
@@ -127,6 +133,7 @@ class _SettingsPageState extends State<SettingsPage>
               child: TabBarView(
           controller: _tabCtrl,
           children: [
+            _buildGeneralTab(),
             _buildDataTab(),
             _buildThemeTab(),
             _buildUiTab(),
@@ -139,19 +146,57 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
+  Widget _buildGeneralTab() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(Strings.t('language'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text(Strings.t('languageDesc'), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          const SizedBox(height: 12),
+          ...AppLocale.values.map((locale) {
+            final selected = _locale == locale;
+            return InkWell(
+              onTap: () {
+                setState(() => _locale = locale);
+                widget.onLocaleChanged(locale);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: selected ? Colors.deepPurple : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(locale.displayName, style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDataTab() {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('数据管理', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(Strings.t('dataManage'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
-          _buildActionButton('导出数据', Icons.file_upload_outlined, _exportData),
+          _buildActionButton(Strings.t('exportData'), Icons.file_upload_outlined, _exportData),
           const SizedBox(height: 10),
-          _buildActionButton('导入数据（覆盖）', Icons.file_download_outlined, _importData),
+          _buildActionButton(Strings.t('importData'), Icons.file_download_outlined, _importData),
           const SizedBox(height: 10),
-          _buildActionButton('清空数据', Icons.delete_outline, _clearData,
+          _buildActionButton(Strings.t('clearData'), Icons.delete_outline, _clearData,
               color: Colors.red.shade700),
         ],
       ),
@@ -169,27 +214,27 @@ class _SettingsPageState extends State<SettingsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('主题', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(Strings.t('themeSection'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
-            _buildThemeOption('跟随系统', ThemeMode.system),
-            _buildThemeOption('亮色', ThemeMode.light),
-            _buildThemeOption('暗色', ThemeMode.dark),
+            _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
+            _buildThemeOption(Strings.t('light'), ThemeMode.light),
+            _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
             const SizedBox(height: 20),
-            const Text('自定义背景', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(Strings.t('customBg'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
             Row(
               children: [
                 OutlinedButton.icon(
                   onPressed: _pickBackgroundImage,
                   icon: const Icon(Icons.image, size: 16),
-                  label: const Text('选择背景', style: TextStyle(fontSize: 12)),
+                  label: Text(Strings.t('selectBg'), style: const TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
                 if (hasBg) ...[
                   OutlinedButton.icon(
                     onPressed: _clearBackground,
                     icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade700),
-                    label: Text('清除背景',
+                    label: Text(Strings.t('clearBg'),
                         style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
                   ),
                 ],
@@ -203,17 +248,17 @@ class _SettingsPageState extends State<SettingsPage>
               ),
             ],
             const SizedBox(height: 16),
-            const Text('面板不透明度', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(Strings.t('panelOpacity'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
-            _buildOpacitySlider('左栏', _bgSettings.leftOpacity, hasBg, (v) {
+            _buildOpacitySlider(Strings.t('leftPanel'), _bgSettings.leftOpacity, hasBg, (v) {
               _bgSettings = _bgSettings.copyWith(leftOpacity: v);
               _saveBackground();
             }),
-            _buildOpacitySlider('中栏', _bgSettings.middleOpacity, hasBg, (v) {
+            _buildOpacitySlider(Strings.t('middlePanel'), _bgSettings.middleOpacity, hasBg, (v) {
               _bgSettings = _bgSettings.copyWith(middleOpacity: v);
               _saveBackground();
             }),
-            _buildOpacitySlider('右栏', _bgSettings.rightOpacity, hasBg, (v) {
+            _buildOpacitySlider(Strings.t('rightPanel'), _bgSettings.rightOpacity, hasBg, (v) {
               _bgSettings = _bgSettings.copyWith(rightOpacity: v);
               _saveBackground();
             }),
@@ -267,7 +312,7 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _pickBackgroundImage() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
-      dialogTitle: '选择背景图片',
+      dialogTitle: Strings.t('selectBgTitle'),
     );
     if (result == null || result.files.single.path == null) return;
     final path = result.files.single.path!;
@@ -298,12 +343,12 @@ class _SettingsPageState extends State<SettingsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('网格设置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(Strings.t('gridSettings'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
-            _buildSliderField('卡片最小宽度', _gridSettings.minCardWidth, 80, 300,
+            _buildSliderField(Strings.t('minCardWidth'), _gridSettings.minCardWidth, 80, 300,
                 (v) => _gridSettings = _gridSettings.copyWith(minCardWidth: v)),
             const SizedBox(height: 16),
-            _buildSliderField('卡片最大宽度', _gridSettings.maxCardWidth, 120, 400,
+            _buildSliderField(Strings.t('maxCardWidth'), _gridSettings.maxCardWidth, 120, 400,
                 (v) => _gridSettings = _gridSettings.copyWith(maxCardWidth: v)),
             const SizedBox(height: 16),
             _buildAspectRatioSelector(),
@@ -312,13 +357,13 @@ class _SettingsPageState extends State<SettingsPage>
             const SizedBox(height: 20),
             _buildCompactLevelSlider(),
             const SizedBox(height: 20),
-            const Text('动图展示方式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text(Strings.t('gifDisplayMode'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
-            _buildGifModeSelector('卡片动图', _gridSettings.cardGifMode, (v) {
+            _buildGifModeSelector(Strings.t('cardGifMode'), _gridSettings.cardGifMode, (v) {
               setState(() => _gridSettings = _gridSettings.copyWith(cardGifMode: v));
             }),
             const SizedBox(height: 12),
-            _buildGifModeSelector('底部区域动图', _gridSettings.fileGifMode, (v) {
+            _buildGifModeSelector(Strings.t('fileGifMode'), _gridSettings.fileGifMode, (v) {
               setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
             }),
             const SizedBox(height: 20),
@@ -326,7 +371,7 @@ class _SettingsPageState extends State<SettingsPage>
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: _saveGridSettings,
-                child: const Text('应用', style: TextStyle(fontSize: 12)),
+                child: Text(Strings.t('apply'), style: const TextStyle(fontSize: 12)),
               ),
             ),
           ],
@@ -341,7 +386,7 @@ class _SettingsPageState extends State<SettingsPage>
       children: [
         Row(
           children: [
-            const Text('紧凑度', style: TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            Text(Strings.t('compactLevel'), style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
             const SizedBox(width: 8),
             Text('${(_gridSettings.compactLevel * 100).round()}%',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
@@ -369,10 +414,10 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildGifModeSelector(String label, GifDisplayMode current, ValueChanged<GifDisplayMode> onChanged) {
-    const labels = {
-      GifDisplayMode.unlimited: '无限制',
-      GifDisplayMode.hover: 'hover时播放',
-      GifDisplayMode.static: '展示为静态图',
+    final labels = {
+      GifDisplayMode.unlimited: Strings.t('gifUnlimited'),
+      GifDisplayMode.hover: Strings.t('gifHover'),
+      GifDisplayMode.static: Strings.t('gifStatic'),
     };
     final cs = Theme.of(context).colorScheme;
     return Row(
@@ -415,9 +460,9 @@ class _SettingsPageState extends State<SettingsPage>
         children: [
           const Text('Vivy Library', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('版本 0.1.0 Build260627', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(Strings.t('appVersion'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 16),
-          const Text('项目地址', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(Strings.t('projectUrl'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           GestureDetector(
             onTap: () {},
@@ -510,8 +555,8 @@ class _SettingsPageState extends State<SettingsPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('卡片宽高比',
-            style: TextStyle(fontSize: 11, color: Color(0xFF616161))),
+        Text(Strings.t('aspectRatio'),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
         const SizedBox(height: 8),
         Row(
           children: ratios.map((r) {
@@ -536,8 +581,8 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildItemsPerRowField() {
     return Row(
       children: [
-        const Text('每行固定数量（0=自动）',
-            style: TextStyle(fontSize: 11, color: Color(0xFF616161))),
+        Text(Strings.t('itemsPerRow'),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
         const SizedBox(width: 12),
         SizedBox(
           width: 60,
@@ -566,14 +611,14 @@ class _SettingsPageState extends State<SettingsPage>
     SettingsService.saveGridSettings(_gridSettings);
     widget.onGridSettingsChanged(_gridSettings);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('网格设置已保存'), duration: Duration(seconds: 1)),
+      SnackBar(content: Text(Strings.t('gridSaved')), duration: const Duration(seconds: 1)),
     );
   }
 
   Future<void> _exportData() async {
     try {
       final dir = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: '选择导出目录',
+        dialogTitle: Strings.t('exportDirTitle'),
       );
       if (dir == null) return;
 
@@ -604,7 +649,7 @@ class _SettingsPageState extends State<SettingsPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('已导出到 $dir/vivy_library_export.json'),
+            content: Text(Strings.tn('exportedTo', {'path': '$dir/vivy_library_export.json'})),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -612,7 +657,7 @@ class _SettingsPageState extends State<SettingsPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(Strings.tn('exportFailed', {'error': '$e'})), backgroundColor: Colors.red),
         );
       }
     }
@@ -621,7 +666,7 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _importData() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        dialogTitle: '选择导入文件',
+        dialogTitle: Strings.t('importFileTitle'),
         type: FileType.any,
       );
       if (result == null || result.files.isEmpty) return;
@@ -631,7 +676,7 @@ class _SettingsPageState extends State<SettingsPage>
       if (!file.existsSync()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('文件不存在'), duration: Duration(seconds: 2)),
+            SnackBar(content: Text(Strings.t('fileNotExist')), duration: const Duration(seconds: 2)),
           );
         }
         return;
@@ -673,13 +718,13 @@ class _SettingsPageState extends State<SettingsPage>
       if (mounted) setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('数据已导入'), duration: Duration(seconds: 2)),
+          SnackBar(content: Text(Strings.t('dataImported')), duration: const Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(Strings.tn('importFailed', {'error': '$e'})), backgroundColor: Colors.red),
         );
       }
     }
@@ -689,18 +734,18 @@ class _SettingsPageState extends State<SettingsPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('确认清空', style: TextStyle(fontSize: 13)),
-        content: const Text('确定要清空所有数据吗？此操作不可撤销。',
-            style: TextStyle(fontSize: 12)),
+        title: Text(Strings.t('confirmClear'), style: const TextStyle(fontSize: 13)),
+        content: Text(Strings.t('confirmClearMsg'),
+            style: const TextStyle(fontSize: 12)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消', style: TextStyle(fontSize: 12)),
+            child: Text(Strings.t('cancel'), style: const TextStyle(fontSize: 12)),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('确认清空', style: TextStyle(fontSize: 12)),
+            child: Text(Strings.t('confirm'), style: const TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -712,13 +757,13 @@ class _SettingsPageState extends State<SettingsPage>
       await prefs.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('数据已清空'), duration: Duration(seconds: 2)),
+          SnackBar(content: Text(Strings.t('dataCleared')), duration: const Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('清空失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(Strings.tn('clearFailed', {'error': '$e'})), backgroundColor: Colors.red),
         );
       }
     }

@@ -14,6 +14,8 @@ enum SortField { name, size, date }
 enum SortOrder { ascending, descending }
 
 class LibraryState extends ChangeNotifier {
+  static const kAllClass = '__all__';
+  static const kUnclassified = '__unclass__';
   CategoryNode _categoryRoot = CategoryNode(path: '', name: '');
   List<LibraryItem> _allItems = [];
   Map<String, LibraryItem> _itemByUuid = {};
@@ -24,7 +26,7 @@ class LibraryState extends ChangeNotifier {
 
   String _searchQuery = '';
   String? _selectedCategoryPath; // null=全部，否则为文件夹绝对路径
-  String _selectedClass = '全部';
+  String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
   SortOrder _sortOrder = SortOrder.ascending;
 
@@ -170,8 +172,8 @@ class LibraryState extends ChangeNotifier {
     final sortedClassNames = classCounts.keys.toList()..sort();
 
     return [
-      MapEntry('全部', totalCount),
-      MapEntry('未分类', uncategorizedCount),
+      MapEntry(kAllClass, totalCount),
+      MapEntry(kUnclassified, uncategorizedCount),
       ...sortedClassNames.map((c) => MapEntry(c, classCounts[c]!)),
     ];
   }
@@ -224,9 +226,9 @@ class LibraryState extends ChangeNotifier {
     var result = _itemsInSelectedCategory;
 
     // 1.5 顶部 class 导航筛选
-    if (_selectedClass == '未分类') {
+    if (_selectedClass == kUnclassified) {
       result = result.where((e) => e.info.classes.isEmpty).toList();
-    } else if (_selectedClass != '全部') {
+    } else if (_selectedClass != kAllClass) {
       result =
           result.where((e) => e.info.classes.contains(_selectedClass)).toList();
     }
@@ -284,7 +286,7 @@ class LibraryState extends ChangeNotifier {
   /// 选中左侧文件夹（null=全部）。
   void setSelectedCategory(String? path) {
     _selectedCategoryPath = path;
-    _selectedClass = '全部';
+    _selectedClass = kAllClass;
     _selectedItem = null;
     _selectedFolder = null;
     _selectedPaths.clear();
@@ -302,7 +304,7 @@ class LibraryState extends ChangeNotifier {
     final ancestors = _categoryRoot.ancestorPaths(folderPath);
     _expandedPaths.addAll(ancestors);
     _selectedCategoryPath = folderPath;
-    _selectedClass = '全部';
+    _selectedClass = kAllClass;
     _selectedItem = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
@@ -852,7 +854,7 @@ class LibraryState extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _selectedCategoryPath = null;
-    _selectedClass = '全部';
+    _selectedClass = kAllClass;
     _selectedItem = null;
     _selectedFolder = null;
     _selectedPaths.clear();

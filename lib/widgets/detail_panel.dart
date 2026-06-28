@@ -6,6 +6,7 @@ import '../models/category_node.dart';
 import '../models/direct_file.dart';
 import '../models/goto_entry.dart';
 import '../services/library_scanner.dart' show previewExtensions;
+import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -46,7 +47,7 @@ class DetailPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Center(
       child: Text(
-        '选择一个项目\n查看详情',
+        Strings.t('selectHint'),
         textAlign: TextAlign.center,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12 * c),
       ),
@@ -80,20 +81,20 @@ class DetailPanel extends StatelessWidget {
         SizedBox(height: 8 * c),
         Divider(height: 1 * c),
         SizedBox(height: 6 * c),
-        _buildDescriptionRow(context, c, '描述', info.description),
-        _buildRow(context, c, '创建者', info.creator ?? ''),
-        _buildRow(context, c, '类型', info.type),
-        _buildRow(context, c, '分级', info.contentRating),
-        _buildRow(context, c, '评分', '${info.rating / 2} / 5'),
-        _buildRow(context, c, '分类', info.classes.join('、')),
-        _buildRow(context, c, '标签', info.tags.join('、')),
-        _buildRow(context, c, '文件夹', item.category),
+        _buildDescriptionRow(context, c, Strings.t('description'), info.description),
+        _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
+        _buildRow(context, c, Strings.t('type'), info.type),
+        _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
+        _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
+        _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、')),
+        _buildRow(context, c, Strings.t('tags'), info.tags.join('、')),
+        _buildRow(context, c, Strings.t('folderLabel'), item.category),
         SizedBox(height: 6 * c),
         Divider(height: 1 * c),
         SizedBox(height: 6 * c),
-        _buildRow(context, c, '大小', _formatSize(item.sizeInBytes)),
-        _buildRow(context, c, '修改时间', _formatDate(item.modifiedTime)),
-        _buildRow(context, c, '路径', item.path),
+        _buildRow(context, c, Strings.t('size'), _formatSize(item.sizeInBytes)),
+        _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(item.modifiedTime)),
+        _buildRow(context, c, Strings.t('path'), item.path),
         if (info.goto.isNotEmpty) ...[
           SizedBox(height: 8 * c),
           Divider(height: 1 * c),
@@ -126,20 +127,20 @@ class DetailPanel extends StatelessWidget {
         Divider(height: 1 * c),
         SizedBox(height: 6 * c),
         if (hasInfo) ...[
-          _buildDescriptionRow(context, c, '描述', info.description),
-          _buildRow(context, c, '创建者', info.creator ?? ''),
-          _buildRow(context, c, '类型', info.type),
-          _buildRow(context, c, '分级', info.contentRating),
-          _buildRow(context, c, '评分', '${info.rating / 2} / 5'),
-          _buildRow(context, c, '分类', info.classes.join('、')),
-          _buildRow(context, c, '标签', info.tags.join('、')),
+          _buildDescriptionRow(context, c, Strings.t('description'), info.description),
+          _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
+          _buildRow(context, c, Strings.t('type'), info.type),
+          _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
+          _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
+          _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、')),
+          _buildRow(context, c, Strings.t('tags'), info.tags.join('、')),
           SizedBox(height: 6 * c),
           Divider(height: 1 * c),
           SizedBox(height: 6 * c),
         ],
-        _buildRow(context, c, '路径', folder.path),
-        _buildRow(context, c, '子文件夹数', '${folder.subDirs.length}'),
-        _buildRow(context, c, '直接项目数', '${folder.items.length}'),
+        _buildRow(context, c, Strings.t('path'), folder.path),
+        _buildRow(context, c, Strings.t('subfolderCount'), '${folder.subDirs.length}'),
+        _buildRow(context, c, Strings.t('directItemCount'), '${folder.items.length}'),
       ],
       ),
     );
@@ -178,13 +179,13 @@ class DetailPanel extends StatelessWidget {
           SizedBox(height: 8 * c),
           Divider(height: 1 * c),
           SizedBox(height: 6 * c),
-          _buildRow(context, c, '扩展名', ext.isNotEmpty ? '.$ext' : '(无)'),
-          _buildRow(context, c, '大小', _formatSize(file.sizeInBytes)),
-          _buildRow(context, c, '修改时间', _formatDate(file.modifiedTime)),
+          _buildRow(context, c, Strings.t('extension'), ext.isNotEmpty ? '.$ext' : Strings.t('noExt')),
+          _buildRow(context, c, Strings.t('size'), _formatSize(file.sizeInBytes)),
+          _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(file.modifiedTime)),
           SizedBox(height: 6 * c),
           Divider(height: 1 * c),
           SizedBox(height: 6 * c),
-          _buildRow(context, c, '路径', file.path),
+          _buildRow(context, c, Strings.t('path'), file.path),
         ],
       ),
     );
@@ -228,7 +229,7 @@ class DetailPanel extends StatelessWidget {
         Padding(
           padding: EdgeInsets.only(bottom: 6 * c),
           child: Text(
-            '关联项目',
+            Strings.t('relatedItems'),
             style: TextStyle(
               fontSize: 11 * c,
               fontWeight: FontWeight.w600,

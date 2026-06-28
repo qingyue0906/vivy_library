@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/settings_service.dart';
+import 'services/translations.dart';
 import 'utils/app_quit.dart';
 import 'widgets/shell_page.dart';
 
@@ -51,14 +52,18 @@ class _VivyAppState extends State<VivyApp> {
   late ThemeMode _themeMode;
   late GridSettings _gridSettings;
   BackgroundSettings _backgroundSettings = const BackgroundSettings();
+  // ignore: unused_field - triggers rebuild on locale change
+  late AppLocale _locale;
 
   @override
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
     _gridSettings = const GridSettings();
+    _locale = AppLocale.system;
     _loadGridSettings();
     _loadBackgroundSettings();
+    _loadLocale();
   }
 
   Future<void> _loadGridSettings() async {
@@ -71,6 +76,12 @@ class _VivyAppState extends State<VivyApp> {
     setState(() => _backgroundSettings = bg);
   }
 
+  Future<void> _loadLocale() async {
+    final locale = await SettingsService.loadLocale();
+    Strings.setLocale(locale);
+    setState(() => _locale = locale);
+  }
+
   void _onThemeChanged(ThemeMode mode) {
     setState(() => _themeMode = mode);
   }
@@ -81,6 +92,12 @@ class _VivyAppState extends State<VivyApp> {
 
   void _onBackgroundChanged(BackgroundSettings settings) {
     setState(() => _backgroundSettings = settings);
+  }
+
+  void _onLocaleChanged(AppLocale locale) {
+    Strings.setLocale(locale);
+    SettingsService.saveLocale(locale);
+    setState(() => _locale = locale);
   }
 
   // VS Code 暗色配色
@@ -126,6 +143,7 @@ class _VivyAppState extends State<VivyApp> {
         gridSettings: _gridSettings,
         backgroundSettings: _backgroundSettings,
         onBackgroundChanged: _onBackgroundChanged,
+        onLocaleChanged: _onLocaleChanged,
       ),
     );
   }

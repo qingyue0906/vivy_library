@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../services/translations.dart';
 
 /// 简易文件属性对话框,展示路径/大小/创建时间/修改时间。
 /// 不依赖系统原生属性窗口,避免 Windows Shell 在不同版本上的兼容性问题。
@@ -11,7 +12,7 @@ class FilePropertiesDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('属性', style: TextStyle(fontSize: 15)),
+      title: Text(Strings.t('propTitle'), style: const TextStyle(fontSize: 15)),
       content: SizedBox(
         width: 360,
         child: FutureBuilder<_SizeAndStat>(
@@ -29,15 +30,15 @@ class FilePropertiesDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildRow('文件名', _baseName(file.path)),
-                _buildRow('位置', _dirName(file.path)),
-                _buildRow('大小', _formatSize(size)),
-                _buildRow('修改时间', _formatDate(stat.modified)),
-                _buildRow('访问时间', _formatDate(stat.accessed)),
+                _buildRow(Strings.t('propFileName'), _baseName(file.path)),
+                _buildRow(Strings.t('propLocation'), _dirName(file.path)),
+                _buildRow(Strings.t('propSize'), _formatSize(size)),
+                _buildRow(Strings.t('propModified'), _formatDate(stat.modified)),
+                _buildRow(Strings.t('propAccessed'), _formatDate(stat.accessed)),
                 // 注意:Windows 上 FileStat 没有单独的"创建时间"字段,
                 // changed 在 Windows 上实际反映的是文件元数据变化时间,
                 // 不完全等价于资源管理器属性框里的"创建时间",这里如实标注用途
-                _buildRow('元数据变化时间', _formatDate(stat.changed)),
+                _buildRow(Strings.t('propChanged'), _formatDate(stat.changed)),
               ],
             );
           },
@@ -46,7 +47,7 @@ class FilePropertiesDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('关闭'),
+          child: Text(Strings.t('close')),
         ),
       ],
     );

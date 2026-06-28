@@ -4,6 +4,7 @@ import '../models/category_node.dart';
 import '../models/direct_file.dart';
 import '../providers/library_state.dart';
 import '../services/settings_service.dart';
+import '../services/translations.dart';
 import 'item_card.dart';
 import 'folder_card.dart';
 import 'file_card.dart';
@@ -66,7 +67,7 @@ class GridArea extends StatelessWidget {
           ClassNavBar(state: state),
           Expanded(
             child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
-                ? Center(child: Text('没有找到项目', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
+                ? Center(child: Text(Strings.t('noItems'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
                 : Padding(
                     padding: EdgeInsets.all(8 * c),
                     child: _buildGrid(context, c),
@@ -144,7 +145,7 @@ class GridArea extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.only(bottom: 4 * c, left: 2 * c),
                     child: Text(
-                      '文件夹',
+                      Strings.t('folderSection'),
                       style: TextStyle(
                         fontSize: 11 * c,
                         fontWeight: FontWeight.w600,
@@ -185,7 +186,7 @@ class GridArea extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.only(top: 8 * c, bottom: 4 * c, left: 2 * c),
                     child: Text(
-                      '项目',
+                      Strings.t('itemSection'),
                       style: TextStyle(
                         fontSize: 11 * c,
                         fontWeight: FontWeight.w600,
@@ -227,7 +228,7 @@ class GridArea extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.only(top: 8 * c, bottom: 4 * c, left: 2 * c),
                     child: Text(
-                      '文件',
+                      Strings.t('fileSection'),
                       style: TextStyle(
                         fontSize: 11 * c,
                         fontWeight: FontWeight.w600,
@@ -290,7 +291,7 @@ class GridArea extends StatelessWidget {
             Icon(Icons.edit, size: 13 * c),
             SizedBox(width: 6 * c),
             Text(
-              isBatch ? '批量编辑 (${selectedFolders.length} 项)' : '编辑',
+              isBatch ? Strings.tn('batchEditN', {'n': '${selectedFolders.length}'}) : Strings.t('edit'),
               style: TextStyle(fontSize: 11 * c),
             ),
           ]),
@@ -301,7 +302,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.location_searching, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('定位到此处', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('locateHere'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
@@ -310,7 +311,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.folder_open, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('进入文件夹', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('enterFolder'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
@@ -319,7 +320,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.open_in_new, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
       ],
@@ -369,7 +370,7 @@ class GridArea extends StatelessWidget {
               Icon(Icons.edit, size: 13 * c),
               SizedBox(width: 6 * c),
               Text(
-                isBatch ? '批量编辑 (${selectedItems.length} 项)' : '编辑',
+                isBatch ? Strings.tn('batchEditN', {'n': '${selectedItems.length}'}) : Strings.t('edit'),
                 style: TextStyle(fontSize: 11 * c),
               ),
             ],
@@ -382,7 +383,7 @@ class GridArea extends StatelessWidget {
             children: [
               Icon(Icons.location_searching, size: 13 * c),
               SizedBox(width: 6 * c),
-              Text('定位到此处', style: TextStyle(fontSize: 11 * c)),
+              Text(Strings.t('locateHere'), style: TextStyle(fontSize: 11 * c)),
             ],
           ),
         ),
@@ -393,7 +394,7 @@ class GridArea extends StatelessWidget {
             children: [
               Icon(Icons.folder_open, size: 13 * c),
               SizedBox(width: 6 * c),
-              Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
+              Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
             ],
           ),
         ),
@@ -456,7 +457,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.open_in_new, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('以默认方式打开', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('openWithDefault'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
@@ -465,7 +466,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.apps, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('打开方式...', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('openAs'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuDivider(),
@@ -475,7 +476,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.drive_file_rename_outline, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('重命名', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('rename'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuDivider(),
@@ -485,7 +486,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.folder_open, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('在资源管理器中显示', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
         PopupMenuItem(
@@ -494,7 +495,7 @@ class GridArea extends StatelessWidget {
           child: Row(children: [
             Icon(Icons.info_outline, size: 13 * c),
             SizedBox(width: 6 * c),
-            Text('属性', style: TextStyle(fontSize: 11 * c)),
+            Text(Strings.t('properties'), style: TextStyle(fontSize: 11 * c)),
           ]),
         ),
       ],
@@ -537,12 +538,12 @@ class GridArea extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('重命名', style: TextStyle(fontSize: 15)),
+        title: Text(Strings.t('rename'), style: const TextStyle(fontSize: 15)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           decoration: InputDecoration(
-            labelText: '新文件名',
+            labelText: Strings.t('newFileName'),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onSubmitted: (_) => _doRename(dialogContext, file, ctrl.text.trim()),
@@ -550,11 +551,11 @@ class GridArea extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(Strings.t('cancel')),
           ),
           FilledButton(
             onPressed: () => _doRename(dialogContext, file, ctrl.text.trim()),
-            child: const Text('重命名'),
+            child: Text(Strings.t('rename')),
           ),
         ],
       ),
@@ -569,7 +570,7 @@ class GridArea extends StatelessWidget {
     final error = await state.renameFile(file.path, newName);
     if (error != null && dialogContext.mounted) {
       ScaffoldMessenger.of(dialogContext).showSnackBar(
-        SnackBar(content: Text('重命名失败: $error'), backgroundColor: Colors.red),
+        SnackBar(content: Text(Strings.tn('renameFailed', {'error': error.toString()})), backgroundColor: Colors.red),
       );
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/library_state.dart';
+import 'translations.dart';
 
 class LayoutState {
   final double leftPanelWidth;
@@ -288,6 +289,24 @@ class SettingsService {
         await prefs.setString('$_gridPrefix${entry.key}', v);
       }
     }
+  }
+
+  // --- Locale ---
+
+  static const _localeKey = 'app_locale';
+
+  static Future<AppLocale> loadLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getString(_localeKey);
+    return AppLocale.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => AppLocale.system,
+    );
+  }
+
+  static Future<void> saveLocale(AppLocale locale) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_localeKey, locale.name);
   }
 
   // --- Background settings ---

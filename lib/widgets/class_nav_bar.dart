@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
+import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -41,6 +42,11 @@ class ClassNavBar extends StatelessWidget {
 
   Widget _buildChip(String label, int count, ColorScheme cs, double c) {
     final isSelected = state.selectedClass == label;
+    final displayLabel = switch (label) {
+      LibraryState.kAllClass => Strings.t('allClass'),
+      LibraryState.kUnclassified => Strings.t('unclassified'),
+      _ => label,
+    };
     final chipBg = isSelected
         ? cs.primary
         : (cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer);
@@ -59,7 +65,7 @@ class ClassNavBar extends StatelessWidget {
           ),
         ),
         child: Text(
-          '$label ($count)',
+          '$displayLabel ($count)',
           style: TextStyle(
             fontSize: 10 * c,
             color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,

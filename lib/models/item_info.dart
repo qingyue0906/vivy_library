@@ -1,4 +1,5 @@
 import 'goto_entry.dart';
+import '../services/translations.dart';
 
 /// 对应每个项目文件夹里 info.json 的内容。
 /// 字段尽量保持 final(不可变),要"修改"时通过 copyWith 生成新对象。
@@ -39,7 +40,7 @@ class ItemInfo {
       uuid: null,
       define: 'item',
       title: folderName,
-      description: '无描述',
+      description: Strings.t('noDescription'),
       creator: null,
       type: 'application',
       contentRating: 'G',

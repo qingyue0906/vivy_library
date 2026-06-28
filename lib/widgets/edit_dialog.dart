@@ -4,8 +4,18 @@ import '../models/goto_entry.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../providers/library_state.dart';
+import '../services/translations.dart';
 import 'goto_editor.dart';
 import 'smooth_scroll.dart';
+
+const _kDesc = 'kDesc';
+const _kCreator = 'kCreator';
+const _kRating = 'kRating';
+const _kType = 'kType';
+const _kContentRating = 'kContentRating';
+const _kDefine = 'kDefine';
+const _kPreview = 'kPreview';
+const _kStar = 'kStar';
 
 class EditDialog extends StatefulWidget {
   final List<LibraryItem> targets;
@@ -136,11 +146,11 @@ class _EditDialogState extends State<EditDialog> {
       title: Text(
         widget.folderTargets.isNotEmpty
             ? widget.isBatch
-                ? '批量编辑文件夹 (${widget.folderTargets.length} 项)'
-                : '编辑文件夹：${widget.folderTargets.first.name}'
+                ? Strings.tn('batchEditFolder', {'n': '${widget.folderTargets.length}'})
+                : Strings.tn('editFolder', {'name': widget.folderTargets.first.name})
             : widget.isBatch
-                ? '批量编辑 (${widget.targets.length} 项)'
-                : '编辑：${widget.targets.first.info.title}',
+                ? Strings.tn('batchEdit', {'n': '${widget.targets.length}'})
+                : Strings.tn('editItem', {'name': widget.targets.first.info.title}),
         style: const TextStyle(fontSize: 14),
       ),
       content: SizedBox(
@@ -154,30 +164,30 @@ class _EditDialogState extends State<EditDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
               if (!widget.isBatch) ...[
-                _buildField('标题', _titleCtrl),
+                _buildField(Strings.t('title'), _titleCtrl),
                 const SizedBox(height: 8),
-                _buildField('描述', _descCtrl, maxLines: 4),
+                _buildField(Strings.t('description'), _descCtrl, maxLines: 4),
                 const SizedBox(height: 8),
-                _buildAutoField(label: '创建者', controller: _creatorCtrl, options: widget.state.uniqueCreators),
+                _buildAutoField(label: Strings.t('creator'), controller: _creatorCtrl, options: widget.state.uniqueCreators),
                 const SizedBox(height: 8),
               ],
               if (widget.isBatch) ...[
-                _buildCheckableField('描述', _cbDesc, _buildField('', _descCtrl, maxLines: 4)),
+                _buildCheckableField(Strings.t('description'), _cbDesc, _buildField('', _descCtrl, maxLines: 4), id: _kDesc),
                 const SizedBox(height: 6),
-                _buildCheckableField('创建者', _cbCreator, _buildAutoField(label: '', controller: _creatorCtrl, options: widget.state.uniqueCreators)),
+                _buildCheckableField(Strings.t('creator'), _cbCreator, _buildAutoField(label: '', controller: _creatorCtrl, options: widget.state.uniqueCreators), id: _kCreator),
                 const SizedBox(height: 6),
               ],
               _buildRowFields(
-                _buildAutoField(label: '类型', controller: _typeCtrl, options: widget.state.uniqueTypes, isBatch: widget.isBatch, checked: _cbType, onCheckedChanged: (v) => _cbType = v),
-                _buildAutoField(label: '分级', controller: _contentRatingCtrl, options: widget.state.uniqueContentRatings, isBatch: widget.isBatch, checked: _cbContentRating, onCheckedChanged: (v) => _cbContentRating = v),
+                _buildAutoField(label: Strings.t('type'), controller: _typeCtrl, options: widget.state.uniqueTypes, isBatch: widget.isBatch, checked: _cbType, onCheckedChanged: (v) => _cbType = v, id: _kType),
+                _buildAutoField(label: Strings.t('contentRating'), controller: _contentRatingCtrl, options: widget.state.uniqueContentRatings, isBatch: widget.isBatch, checked: _cbContentRating, onCheckedChanged: (v) => _cbContentRating = v, id: _kContentRating),
               ),
               const SizedBox(height: 8),
               if (!widget.isBatch) _buildRatingSlider(),
-              if (widget.isBatch) _buildCheckableField('评分', _cbRating, _buildRatingSlider()),
+              if (widget.isBatch) _buildCheckableField(Strings.t('rating'), _cbRating, _buildRatingSlider(), id: _kRating),
               const SizedBox(height: 8),
               _buildChipSection(
                 isClass: true,
-                label: '分类标签 (class)',
+                label: Strings.t('classLabel'),
                 values: _classes,
                 showInput: _showClassInput,
                 suggestions: widget.state.uniqueClasses,
@@ -193,7 +203,7 @@ class _EditDialogState extends State<EditDialog> {
               const SizedBox(height: 8),
               _buildChipSection(
                 isClass: false,
-                label: '标签 (tags)',
+                label: Strings.t('tags'),
                 values: _tags,
                 showInput: _showTagInput,
                 suggestions: widget.state.uniqueTags,
@@ -227,7 +237,7 @@ class _EditDialogState extends State<EditDialog> {
       actions: [
         TextButton(
           onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('取消', style: TextStyle(fontSize: 12)),
+          child: Text(Strings.t('cancel'), style: const TextStyle(fontSize: 12)),
         ),
         FilledButton(
           onPressed: _isSaving ? null : _save,
@@ -236,7 +246,7 @@ class _EditDialogState extends State<EditDialog> {
                   width: 14, height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('保存', style: TextStyle(fontSize: 12)),
+              : Text(Strings.t('save'), style: const TextStyle(fontSize: 12)),
         ),
       ],
     );
@@ -249,6 +259,7 @@ class _EditDialogState extends State<EditDialog> {
     bool isBatch = false,
     bool checked = false,
     ValueChanged<bool>? onCheckedChanged,
+    String? id,
   }) {
     final cs = Theme.of(context).colorScheme;
 
@@ -306,7 +317,7 @@ class _EditDialogState extends State<EditDialog> {
     );
 
     if (isBatch) {
-      return _buildCheckableField(label, checked, content);
+      return _buildCheckableField(label, checked, content, id: id);
     }
 
     return Column(
@@ -322,9 +333,9 @@ class _EditDialogState extends State<EditDialog> {
     );
   }
 
-  Widget _buildCheckableField(String label, bool checked, Widget child) {
+  Widget _buildCheckableField(String label, bool checked, Widget child, {String? id}) {
     final cs = Theme.of(context).colorScheme;
-    final showLabel = label.isNotEmpty && label != '评分';
+    final showLabel = label.isNotEmpty && id != _kRating;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -342,15 +353,14 @@ class _EditDialogState extends State<EditDialog> {
               child: Checkbox(
                 value: checked,
                 onChanged: (v) => setState(() {
-                  if (label == '描述') { _cbDesc = v ?? false; }
-                  else if (label == '创建者') { _cbCreator = v ?? false; }
-                  else if (label == '评分') { _cbRating = v ?? false; }
-                  else if (label == '类型') { _cbType = v ?? false; }
-                  else if (label == '分级') { _cbContentRating = v ?? false; }
-                  else if (label == '定义') { _cbDefine = v ?? false; }
-                  else if (label == '预览图') { _cbPreview = v ?? false; }
-                  else if (label == '标星') { _cbStar = v ?? false; }
-                  else if (label == 'goto') { _cbGoto = v ?? false; }
+                  if (id == _kDesc) { _cbDesc = v ?? false; }
+                  else if (id == _kCreator) { _cbCreator = v ?? false; }
+                  else if (id == _kRating) { _cbRating = v ?? false; }
+                  else if (id == _kType) { _cbType = v ?? false; }
+                  else if (id == _kContentRating) { _cbContentRating = v ?? false; }
+                  else if (id == _kDefine) { _cbDefine = v ?? false; }
+                  else if (id == _kPreview) { _cbPreview = v ?? false; }
+                  else if (id == _kStar) { _cbStar = v ?? false; }
                 }),
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -447,7 +457,7 @@ class _EditDialogState extends State<EditDialog> {
             if (!showInput)
               ActionChip(
                 avatar: Icon(Icons.add, size: 14, color: cs.primary),
-                label: Text('添加', style: TextStyle(fontSize: 11, color: cs.primary)),
+                label: Text(Strings.t('add'), style: TextStyle(fontSize: 11, color: cs.primary)),
                 onPressed: () => onShowInputChanged(true),
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -547,7 +557,7 @@ class _EditDialogState extends State<EditDialog> {
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-              hintText: '输入...',
+              hintText: Strings.t('inputPlaceholder'),
               hintStyle: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
               suffixIcon: IconButton(
                 icon: Icon(Icons.check, size: 14, color: cs.primary),
@@ -607,7 +617,7 @@ class _EditDialogState extends State<EditDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('评分：${(_rating / 2).toStringAsFixed(1)} / 5',
+        Text(Strings.tn('ratingValue', {'n': (_rating / 2).toStringAsFixed(1)}),
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         const SizedBox(height: 4),
         SizedBox(
@@ -635,7 +645,7 @@ class _EditDialogState extends State<EditDialog> {
           size: 18,
         ),
         label: Text(
-          '高级',
+          Strings.t('advanced'),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
         ),
         style: TextButton.styleFrom(
@@ -654,22 +664,22 @@ class _EditDialogState extends State<EditDialog> {
       isDense: true,
       style: TextStyle(fontSize: 12, color: cs.onSurface),
       decoration: _inputDecoration(),
-      items: const [
-        DropdownMenuItem(value: 'item', child: Text('item（项目）')),
-        DropdownMenuItem(value: 'dir', child: Text('dir（文件夹）')),
-        DropdownMenuItem(value: 'hide', child: Text('hide（隐藏）')),
+      items: [
+        DropdownMenuItem(value: 'item', child: Text(Strings.t('defineItem'))),
+        DropdownMenuItem(value: 'dir', child: Text(Strings.t('defineDir'))),
+        DropdownMenuItem(value: 'hide', child: Text(Strings.t('defineHide'))),
       ],
       onChanged: (v) => setState(() => _define = v ?? 'item'),
     );
     if (isBatch) {
-      return _buildCheckableField('定义', _cbDefine, content);
+      return _buildCheckableField(Strings.t('define'), _cbDefine, content, id: _kDefine);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 2),
-          child: Text('定义', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          child: Text(Strings.t('define'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ),
         content,
       ],
@@ -678,10 +688,10 @@ class _EditDialogState extends State<EditDialog> {
 
   Widget _buildPreviewField(bool isBatch) {
     if (isBatch) {
-      return _buildCheckableField('预览图', _cbPreview,
-          _buildField('', _previewCtrl));
+      return _buildCheckableField(Strings.t('preview'), _cbPreview,
+          _buildField('', _previewCtrl), id: _kPreview);
     }
-    return _buildField('预览图（相对路径，留空自动选择）', _previewCtrl);
+    return _buildField(Strings.t('previewHint'), _previewCtrl);
   }
 
   Widget _buildStarField(bool isBatch) {
@@ -694,13 +704,13 @@ class _EditDialogState extends State<EditDialog> {
       ),
     );
     if (isBatch) {
-      return _buildCheckableField('标星', _cbStar, content);
+      return _buildCheckableField(Strings.t('star'), _cbStar, content, id: _kStar);
     }
     return Row(
       children: [
         SizedBox(
           width: 56,
-          child: Text('标星', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+          child: Text(Strings.t('star'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         ),
         Expanded(child: content),
       ],
@@ -715,7 +725,7 @@ class _EditDialogState extends State<EditDialog> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Text('关联项目 (goto)',
+            child: Text(Strings.t('gotoSection'),
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           ),
           GotoEditor(
@@ -742,7 +752,7 @@ class _EditDialogState extends State<EditDialog> {
               ),
             ),
             Expanded(
-              child: Text('关联项目 (goto)',
+              child: Text(Strings.t('gotoSection'),
                   style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
             ),
           ],
@@ -767,11 +777,11 @@ class _EditDialogState extends State<EditDialog> {
   Widget _buildModeRadios(String currentMode, ValueChanged<String> onChanged) {
     return Row(
       children: [
-        _buildRadio('覆盖', 'overwrite', currentMode, onChanged),
+        _buildRadio(Strings.t('overwrite'), 'overwrite', currentMode, onChanged),
         const SizedBox(width: 8),
-        _buildRadio('追加', 'append', currentMode, onChanged),
+        _buildRadio(Strings.t('append'), 'append', currentMode, onChanged),
         const SizedBox(width: 8),
-        _buildRadio('删除', 'remove', currentMode, onChanged),
+        _buildRadio(Strings.t('remove'), 'remove', currentMode, onChanged),
       ],
     );
   }
@@ -895,7 +905,7 @@ class _EditDialogState extends State<EditDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(Strings.tn('saveFailed', {'error': '$e'})), backgroundColor: Colors.red),
         );
       }
     } finally {
