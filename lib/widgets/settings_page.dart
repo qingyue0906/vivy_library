@@ -758,9 +758,9 @@ class _SettingsPageState extends State<SettingsPage>
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
-              onTap: () => Process.run('cmd', ['/c', 'start', 'https://github.com/qingyue0906/vivy-library']),
+              onTap: () => Process.run('cmd', ['/c', 'start', 'https://github.com/qingyue0906/vivy_library']),
               child: const Text(
-                'https://github.com/qingyue0906/vivy-library',
+                'https://github.com/qingyue0906/vivy_library',
                 style: TextStyle(fontSize: 12, color: Colors.blue),
               ),
             ),

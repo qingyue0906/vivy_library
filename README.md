@@ -30,26 +30,6 @@ A cross-platform Flutter desktop app for managing a local media/content library.
 - **VS Code dark theme** — Carefully tuned dark palette matching VS Code's aesthetics
 - **Window state persistence** — Remembers position, size, and layout across restarts
 
-## Screenshots
-
-*(Coming soon)*
-
-## Getting Started
-
-### Prerequisites
-
-- Flutter SDK 3.x+
-- Windows / macOS / Linux desktop target
-
-### Setup
-
-```bash
-git clone https://github.com/qingyue0906/vivy-library.git
-cd vivy_library
-flutter pub get
-flutter run -d windows
-```
-
 ## Info.json Format
 
 Each folder inside a library root can contain an `info.json` file that describes its contents:
