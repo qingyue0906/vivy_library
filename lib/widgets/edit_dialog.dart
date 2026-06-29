@@ -698,9 +698,13 @@ class _EditDialogState extends State<EditDialog> {
     final cs = Theme.of(context).colorScheme;
     final content = Align(
       alignment: Alignment.centerLeft,
-      child: Switch(
-        value: _star,
-        onChanged: (v) => setState(() => _star = v),
+      child: Transform.scale(
+        scale: 0.75,
+        child: Switch(
+          value: _star,
+          onChanged: (v) => setState(() => _star = v),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
     if (isBatch) {

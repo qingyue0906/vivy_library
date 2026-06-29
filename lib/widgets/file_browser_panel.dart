@@ -90,19 +90,19 @@ class FileBrowserPanel extends StatelessWidget {
           SizedBox(width: 8 * c),
           InkWell(
             onTap: state.hideFileBrowser,
-            borderRadius: BorderRadius.circular(12 * c),
+            borderRadius: BorderRadius.circular(8 * c),
             child: Container(
               padding:
-                  EdgeInsets.symmetric(horizontal: 10 * c, vertical: 4 * c),
+                  EdgeInsets.symmetric(horizontal: 8 * c, vertical: 2 * c),
               decoration: BoxDecoration(
                 color: Colors.red.shade400,
-                borderRadius: BorderRadius.circular(12 * c),
+                borderRadius: BorderRadius.circular(8 * c),
               ),
               child: Text(
                 Strings.t('closePanel'),
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 11 * c,
+                    fontSize: 10 * c,
                     fontWeight: FontWeight.bold),
               ),
             ),

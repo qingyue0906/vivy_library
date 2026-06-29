@@ -567,9 +567,8 @@ class _SettingsPageState extends State<SettingsPage>
             ),
           ),
           _execModeToggle(script),
-          SizedBox(
-            width: 36,
-            height: 20,
+          Transform.scale(
+            scale: 0.75,
             child: Switch(
               value: script.enabled,
               onChanged: (v) {

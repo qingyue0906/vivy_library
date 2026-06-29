@@ -3,7 +3,7 @@ enum AppLocale { system, zhHans, zhHant, en, ja }
 extension AppLocaleX on AppLocale {
   String get displayName {
     switch (this) {
-      case AppLocale.system: return '跟随系统';
+      case AppLocale.system: return Strings.t('followSystem');
       case AppLocale.zhHans: return '中文(简体)';
       case AppLocale.zhHant: return '中文(繁體)';
       case AppLocale.en: return 'English';
