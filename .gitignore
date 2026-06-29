@@ -63,3 +63,4 @@ app.*.map.json
 !vivy_library.iml
 
 !/lib/
+!/vivy_library_scripts/
