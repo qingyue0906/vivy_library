@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'app_data_service.dart';
 
 enum ScriptExecMode { result, terminal, silent }
 
@@ -61,35 +61,29 @@ class ScriptResult {
 }
 
 class ScriptService extends ChangeNotifier {
-  static const _scriptsKey = 'scripts';
-  static const _pythonPathKey = 'python_path';
-
   List<ScriptEntry> _scripts = [];
   String _pythonPath = '';
 
   List<ScriptEntry> get scripts => List.unmodifiable(_scripts);
   String get pythonPath => _pythonPath;
 
-  String get _scriptsDir {
-    final appData = Platform.environment['APPDATA'] ?? '${Platform.environment['HOME']}/.config';
-    return '$appData/vivy_library/scripts';
-  }
+  String get _scriptsDir => '${AppDataService.baseDir}/scripts';
 
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _pythonPath = prefs.getString(_pythonPathKey) ?? '';
-    final raw = prefs.getString(_scriptsKey);
+    _pythonPath = (await AppDataService.getString('python_path')) ?? '';
+    final raw = await AppDataService.readScriptsMeta();
     if (raw != null) {
-      final list = jsonDecode(raw) as List;
-      _scripts = list.map((e) => ScriptEntry.fromJson(e as Map<String, dynamic>)).toList();
+      try {
+        final list = jsonDecode(raw) as List;
+        _scripts = list.map((e) => ScriptEntry.fromJson(e as Map<String, dynamic>)).toList();
+      } catch (_) {}
     }
     _syncFiles();
   }
 
   Future<void> savePythonPath(String path) async {
     _pythonPath = path;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_pythonPathKey, path);
+    await AppDataService.setString('python_path', path);
     notifyListeners();
   }
 
@@ -212,9 +206,8 @@ class ScriptService extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
     final raw = jsonEncode(_scripts.map((s) => s.toJson()).toList());
-    await prefs.setString(_scriptsKey, raw);
+    await AppDataService.writeScriptsMeta(raw);
   }
 
   String _generateId() {

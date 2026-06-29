@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/library_root.dart';
+import '../services/app_data_service.dart';
 import '../services/library_root_service.dart';
 import '../services/script_service.dart';
 import '../services/settings_service.dart';
@@ -697,10 +697,8 @@ class _SettingsPageState extends State<SettingsPage>
     await Process.run('cmd', ['/c', 'start', '', scriptPath]);
   }
 
-  String _resolveScriptsDir() {
-    final appData = Platform.environment['APPDATA'] ?? '${Platform.environment['HOME']}/.config';
-    return '$appData/vivy_library/scripts';
-  }
+  String get _baseDir => AppDataService.baseDir;
+  String _resolveScriptsDir() => '$_baseDir/scripts';
 
   String _basename(String path) {
     return path.replaceAll('\\', '/').split('/').last;
@@ -916,25 +914,12 @@ class _SettingsPageState extends State<SettingsPage>
       );
       if (dir == null) return;
 
-      final prefs = await SharedPreferences.getInstance();
-      final theme = prefs.getString('theme_mode') ?? 'system';
-      final sortField = prefs.getString('sort_field') ?? 'name';
-      final sortOrder = prefs.getString('sort_order') ?? 'ascending';
-      final gridSettings = await SettingsService.loadGridSettings();
-      final layout = await SettingsService.loadLayout();
-      final windowState = await SettingsService.loadWindowState();
-      final roots = await LibraryRootService().loadAll();
+      final settings = await AppDataService.loadSettings();
 
       final export = {
         'version': '0.1.0',
         'exported_at': DateTime.now().toIso8601String(),
-        'theme_mode': theme,
-        'sort_field': sortField,
-        'sort_order': sortOrder,
-        'grid_settings': gridSettings.toMap(),
-        'layout': layout.toMap(),
-        'window_state': windowState.toMap(),
-        'library_roots': roots.map((r) => {'name': r.name, 'path': r.path}).toList(),
+        'settings': settings,
       };
 
       final archive = Archive();
@@ -1020,37 +1005,54 @@ class _SettingsPageState extends State<SettingsPage>
       }
 
       final data = jsonDecode(dataJson) as Map;
-      final prefs = await SharedPreferences.getInstance();
-
-      if (data['theme_mode'] != null) {
-        await prefs.setString('theme_mode', data['theme_mode'] as String);
-      }
-      if (data['sort_field'] != null) {
-        await prefs.setString('sort_field', data['sort_field'] as String);
-      }
-      if (data['sort_order'] != null) {
-        await prefs.setString('sort_order', data['sort_order'] as String);
-      }
-      if (data['grid_settings'] != null) {
-        final gs = GridSettings.fromMap(data['grid_settings'] as Map<String, dynamic>);
-        await SettingsService.saveGridSettings(gs);
-        widget.onGridSettingsChanged(gs);
-      }
-      if (data['layout'] != null) {
-        final l = LayoutState.fromMap(
-            (data['layout'] as Map).map((k, v) => MapEntry(k as String, (v as num).toDouble())));
-        await SettingsService.saveLayout(l);
-      }
-      if (data['window_state'] != null) {
-        final w = WindowState.fromMap(
-            (data['window_state'] as Map).map((k, v) => MapEntry(k as String, (v as num).toDouble())));
-        await SettingsService.saveWindowState(w);
-      }
-      if (data['library_roots'] != null) {
-        final roots = (data['library_roots'] as List)
-            .map((r) => LibraryRoot(name: r['name'] as String, path: r['path'] as String))
-            .toList();
-        await LibraryRootService().saveAll(roots);
+      if (data['settings'] != null) {
+        final importedSettings = data['settings'] as Map<String, dynamic>;
+        final oldTheme = importedSettings['theme_mode'] as String?;
+        if (oldTheme != null) {
+          final themeMode = ThemeMode.values.firstWhere((e) => e.name == oldTheme, orElse: () => ThemeMode.system);
+          await SettingsService.saveThemeMode(themeMode);
+          widget.onThemeChanged(themeMode);
+        }
+        final oldGrid = importedSettings['grid_minCardWidth'];
+        if (oldGrid != null) {
+          final gs = GridSettings.fromMap({
+            'minCardWidth': importedSettings['grid_minCardWidth'],
+            'maxCardWidth': importedSettings['grid_maxCardWidth'],
+            'aspectRatio': importedSettings['grid_aspectRatio'],
+            'itemsPerRow': importedSettings['grid_itemsPerRow'],
+            'compactLevel': importedSettings['grid_compactLevel'],
+            'cardGifMode': importedSettings['grid_cardGifMode'],
+            'fileGifMode': importedSettings['grid_fileGifMode'],
+          });
+          await SettingsService.saveGridSettings(gs);
+          widget.onGridSettingsChanged(gs);
+        }
+        if (importedSettings['layout_leftPanelWidth'] != null) {
+          final l = LayoutState.fromMap({
+            'leftPanelWidth': (importedSettings['layout_leftPanelWidth'] as num?)?.toDouble(),
+            'rightPanelWidth': (importedSettings['layout_rightPanelWidth'] as num?)?.toDouble(),
+            'filePanelHeight': (importedSettings['layout_filePanelHeight'] as num?)?.toDouble(),
+          });
+          await SettingsService.saveLayout(l);
+        }
+        if (importedSettings['window_dx'] != null) {
+          final w = WindowState.fromMap({
+            'dx': (importedSettings['window_dx'] as num?)?.toDouble(),
+            'dy': (importedSettings['window_dy'] as num?)?.toDouble(),
+            'width': (importedSettings['window_width'] as num?)?.toDouble(),
+            'height': (importedSettings['window_height'] as num?)?.toDouble(),
+          });
+          await SettingsService.saveWindowState(w);
+        }
+        final rootsStr = importedSettings['library_roots'] as String?;
+        if (rootsStr != null) {
+          try {
+            final roots = (jsonDecode(rootsStr) as List)
+                .map((r) => LibraryRoot(name: r['name'] as String, path: r['path'] as String))
+                .toList();
+            await LibraryRootService().saveAll(roots);
+          } catch (_) {}
+        }
       }
 
       if (scriptsMetaJson != null) {
@@ -1108,8 +1110,7 @@ class _SettingsPageState extends State<SettingsPage>
     if (confirmed != true) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      await AppDataService.clearAll();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(Strings.t('dataCleared')), duration: const Duration(seconds: 2)),

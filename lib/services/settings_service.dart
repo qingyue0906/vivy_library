@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/library_state.dart';
+import 'app_data_service.dart';
 import 'translations.dart';
 
 class LayoutState {
@@ -179,171 +179,144 @@ class BackgroundSettings {
 class SettingsService {
   static const _sortFieldKey = 'sort_field';
   static const _sortOrderKey = 'sort_order';
-
   static const _layoutPrefix = 'layout_';
   static const _windowPrefix = 'window_';
   static const _themeKey = 'theme_mode';
   static const _gridPrefix = 'grid_';
   static const _bgPrefix = 'bg_';
+  static const _localeKey = 'app_locale';
+  static const _pythonPathKey = 'python_path';
 
   static Future<(SortField, SortOrder)> loadSortPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    final fieldStr = prefs.getString(_sortFieldKey);
-    final orderStr = prefs.getString(_sortOrderKey);
-
-    final field = SortField.values.firstWhere(
-      (e) => e.name == fieldStr,
-      orElse: () => SortField.name,
+    final fieldStr = await AppDataService.getString(_sortFieldKey);
+    final orderStr = await AppDataService.getString(_sortOrderKey);
+    return (
+      SortField.values.firstWhere((e) => e.name == fieldStr, orElse: () => SortField.name),
+      SortOrder.values.firstWhere((e) => e.name == orderStr, orElse: () => SortOrder.ascending),
     );
-    final order = SortOrder.values.firstWhere(
-      (e) => e.name == orderStr,
-      orElse: () => SortOrder.ascending,
-    );
-    return (field, order);
   }
 
-  static Future<void> saveSortPreferences(
-      SortField field, SortOrder order) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_sortFieldKey, field.name);
-    await prefs.setString(_sortOrderKey, order.name);
+  static Future<void> saveSortPreferences(SortField field, SortOrder order) async {
+    await AppDataService.setString(_sortFieldKey, field.name);
+    await AppDataService.setString(_sortOrderKey, order.name);
   }
 
-  // --- Layout (panel sizes) ---
+  // --- Layout ---
 
   static Future<LayoutState> loadLayout() async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     return LayoutState.fromMap({
-      'leftPanelWidth': prefs.getDouble('${_layoutPrefix}leftPanelWidth'),
-      'rightPanelWidth': prefs.getDouble('${_layoutPrefix}rightPanelWidth'),
-      'filePanelHeight': prefs.getDouble('${_layoutPrefix}filePanelHeight'),
+      'leftPanelWidth': data['${_layoutPrefix}leftPanelWidth'] as double?,
+      'rightPanelWidth': data['${_layoutPrefix}rightPanelWidth'] as double?,
+      'filePanelHeight': data['${_layoutPrefix}filePanelHeight'] as double?,
     });
   }
 
   static Future<void> saveLayout(LayoutState state) async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     for (final entry in state.toMap().entries) {
-      await prefs.setDouble('$_layoutPrefix${entry.key}', entry.value);
+      data['$_layoutPrefix${entry.key}'] = entry.value;
     }
+    await AppDataService.saveSettings(data);
   }
 
   // --- Window state ---
 
   static Future<WindowState> loadWindowState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     return WindowState.fromMap({
-      'dx': prefs.getDouble('${_windowPrefix}dx'),
-      'dy': prefs.getDouble('${_windowPrefix}dy'),
-      'width': prefs.getDouble('${_windowPrefix}width'),
-      'height': prefs.getDouble('${_windowPrefix}height'),
+      'dx': data['${_windowPrefix}dx'] as double?,
+      'dy': data['${_windowPrefix}dy'] as double?,
+      'width': data['${_windowPrefix}width'] as double?,
+      'height': data['${_windowPrefix}height'] as double?,
     });
   }
 
   static Future<void> saveWindowState(WindowState state) async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     for (final entry in state.toMap().entries) {
-      await prefs.setDouble('$_windowPrefix${entry.key}', entry.value);
+      data['$_windowPrefix${entry.key}'] = entry.value;
     }
+    await AppDataService.saveSettings(data);
   }
 
   // --- Theme ---
 
   static Future<ThemeMode> loadThemeMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final val = prefs.getString(_themeKey);
-    return ThemeMode.values.firstWhere(
-      (e) => e.name == val,
-      orElse: () => ThemeMode.system,
-    );
+    final val = await AppDataService.getString(_themeKey);
+    return ThemeMode.values.firstWhere((e) => e.name == val, orElse: () => ThemeMode.system);
   }
 
   static Future<void> saveThemeMode(ThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeKey, mode.name);
+    await AppDataService.setString(_themeKey, mode.name);
   }
 
   // --- Grid/UI settings ---
 
   static Future<GridSettings> loadGridSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     return GridSettings.fromMap({
-      'minCardWidth': prefs.getDouble('${_gridPrefix}minCardWidth'),
-      'maxCardWidth': prefs.getDouble('${_gridPrefix}maxCardWidth'),
-      'aspectRatio': prefs.getString('${_gridPrefix}aspectRatio'),
-      'itemsPerRow': prefs.getInt('${_gridPrefix}itemsPerRow'),
-      'compactLevel': prefs.getDouble('${_gridPrefix}compactLevel'),
-      'cardGifMode': prefs.getString('${_gridPrefix}cardGifMode'),
-      'fileGifMode': prefs.getString('${_gridPrefix}fileGifMode'),
+      'minCardWidth': data['${_gridPrefix}minCardWidth'],
+      'maxCardWidth': data['${_gridPrefix}maxCardWidth'],
+      'aspectRatio': data['${_gridPrefix}aspectRatio'],
+      'itemsPerRow': data['${_gridPrefix}itemsPerRow'],
+      'compactLevel': data['${_gridPrefix}compactLevel'],
+      'cardGifMode': data['${_gridPrefix}cardGifMode'],
+      'fileGifMode': data['${_gridPrefix}fileGifMode'],
     });
   }
 
   static Future<void> saveGridSettings(GridSettings settings) async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     for (final entry in settings.toMap().entries) {
-      final v = entry.value;
-      if (v is double) {
-        await prefs.setDouble('$_gridPrefix${entry.key}', v);
-      } else if (v is int) {
-        await prefs.setInt('$_gridPrefix${entry.key}', v);
-      } else if (v is String) {
-        await prefs.setString('$_gridPrefix${entry.key}', v);
-      }
+      data['$_gridPrefix${entry.key}'] = entry.value;
     }
+    await AppDataService.saveSettings(data);
   }
 
   // --- Locale ---
 
-  static const _localeKey = 'app_locale';
-
   static Future<AppLocale> loadLocale() async {
-    final prefs = await SharedPreferences.getInstance();
-    final val = prefs.getString(_localeKey);
-    return AppLocale.values.firstWhere(
-      (e) => e.name == val,
-      orElse: () => AppLocale.system,
-    );
+    final val = await AppDataService.getString(_localeKey);
+    return AppLocale.values.firstWhere((e) => e.name == val, orElse: () => AppLocale.system);
   }
 
   static Future<void> saveLocale(AppLocale locale) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_localeKey, locale.name);
+    await AppDataService.setString(_localeKey, locale.name);
   }
 
   // --- Python path ---
 
-  static const _pythonPathKey = 'python_path';
-
   static Future<String> loadPythonPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_pythonPathKey) ?? '';
+    return (await AppDataService.getString(_pythonPathKey)) ?? '';
   }
 
   static Future<void> savePythonPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_pythonPathKey, path);
+    await AppDataService.setString(_pythonPathKey, path);
   }
 
   // --- Background settings ---
 
   static Future<BackgroundSettings> loadBackgroundSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     return BackgroundSettings(
-      path: prefs.getString('${_bgPrefix}path'),
-      leftOpacity: prefs.getDouble('${_bgPrefix}leftOpacity') ?? 1.0,
-      middleOpacity: prefs.getDouble('${_bgPrefix}middleOpacity') ?? 1.0,
-      rightOpacity: prefs.getDouble('${_bgPrefix}rightOpacity') ?? 1.0,
+      path: data['${_bgPrefix}path'] as String?,
+      leftOpacity: (data['${_bgPrefix}leftOpacity'] as num?)?.toDouble() ?? 1.0,
+      middleOpacity: (data['${_bgPrefix}middleOpacity'] as num?)?.toDouble() ?? 1.0,
+      rightOpacity: (data['${_bgPrefix}rightOpacity'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
   static Future<void> saveBackgroundSettings(BackgroundSettings settings) async {
-    final prefs = await SharedPreferences.getInstance();
+    final data = await AppDataService.loadSettings();
     if (settings.path != null) {
-      await prefs.setString('${_bgPrefix}path', settings.path!);
+      data['${_bgPrefix}path'] = settings.path;
     } else {
-      await prefs.remove('${_bgPrefix}path');
+      data.remove('${_bgPrefix}path');
     }
-    await prefs.setDouble('${_bgPrefix}leftOpacity', settings.leftOpacity);
-    await prefs.setDouble('${_bgPrefix}middleOpacity', settings.middleOpacity);
-    await prefs.setDouble('${_bgPrefix}rightOpacity', settings.rightOpacity);
+    data['${_bgPrefix}leftOpacity'] = settings.leftOpacity;
+    data['${_bgPrefix}middleOpacity'] = settings.middleOpacity;
+    data['${_bgPrefix}rightOpacity'] = settings.rightOpacity;
+    await AppDataService.saveSettings(data);
   }
 }

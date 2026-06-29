@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'services/app_data_service.dart';
 import 'services/script_service.dart';
 import 'services/settings_service.dart';
 import 'services/translations.dart';
@@ -9,6 +10,8 @@ import 'widgets/shell_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await AppDataService.migrateIfNeeded();
 
   final savedTheme = await SettingsService.loadThemeMode();
 
