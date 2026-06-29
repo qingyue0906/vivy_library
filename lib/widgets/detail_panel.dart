@@ -284,7 +284,7 @@ class DetailPanel extends StatelessWidget {
       final url = match.group(0)!;
       spans.add(TextSpan(
         text: url,
-        style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
+        style: const TextStyle(color: Colors.blue),
         recognizer: TapGestureRecognizer()..onTap = () => _openUrl(url),
       ));
       lastEnd = match.end;

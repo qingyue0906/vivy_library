@@ -755,11 +755,14 @@ class _SettingsPageState extends State<SettingsPage>
           const SizedBox(height: 16),
           Text(Strings.t('projectUrl'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
-          GestureDetector(
-            onTap: () {},
-            child: const Text(
-              'https://github.com/qingyue0906/vivy-library',
-              style: TextStyle(fontSize: 12, color: Colors.blue),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => Process.run('cmd', ['/c', 'start', 'https://github.com/qingyue0906/vivy-library']),
+              child: const Text(
+                'https://github.com/qingyue0906/vivy-library',
+                style: TextStyle(fontSize: 12, color: Colors.blue),
+              ),
             ),
           ),
         ],
