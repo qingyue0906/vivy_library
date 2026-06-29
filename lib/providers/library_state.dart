@@ -150,16 +150,41 @@ class LibraryState extends ChangeNotifier {
     });
   }
 
-  /// 顶部 class 导航的选项列表，只统计当前左侧分类下的项目。
+  List<CategoryNode> get filteredSubDirs {
+    if (_selectedClass == kAllClass) return currentSubDirs;
+    if (_selectedClass == kUnclassified) {
+      return currentSubDirs.where((n) => (n.info?.classes ?? []).isEmpty).toList();
+    }
+    return currentSubDirs.where((n) => n.info?.classes.contains(_selectedClass) ?? false).toList();
+  }
+
+  List<DirectFile> get filteredDirectFiles {
+    if (_selectedClass == kAllClass) return currentDirectFiles;
+    if (_selectedClass == kUnclassified) return currentDirectFiles;
+    return const [];
+  }
+
+  /// 顶部 class 导航的选项列表，统计当前左侧分类下的项目和文件夹。
   List<MapEntry<String, int>> get classNavOptions {
     final inCategory = _itemsInSelectedCategory;
+    final inFolders = currentSubDirs;
 
-    int totalCount = inCategory.length;
+    int totalCount = inCategory.length + inFolders.length;
     int uncategorizedCount = 0;
     final classCounts = <String, int>{};
 
     for (final item in inCategory) {
       final classes = item.info.classes;
+      if (classes.isEmpty) {
+        uncategorizedCount++;
+      } else {
+        for (final c in classes) {
+          classCounts[c] = (classCounts[c] ?? 0) + 1;
+        }
+      }
+    }
+    for (final node in inFolders) {
+      final classes = node.info?.classes ?? [];
       if (classes.isEmpty) {
         uncategorizedCount++;
       } else {
