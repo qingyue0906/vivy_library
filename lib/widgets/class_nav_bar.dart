@@ -21,6 +21,7 @@ class ClassNavBar extends StatelessWidget {
       color: Colors.transparent,
       width: double.infinity,
       child: SmoothScroll(
+        scrollSpeed: 0.5,
         builder: (context, controller, physics) => SingleChildScrollView(
           controller: controller,
           physics: physics,
