@@ -480,6 +480,78 @@ class Strings {
       AppLocale.en: 'System Default',
       AppLocale.ja: 'システムデフォルト',
     },
+    'searchScope': {
+      AppLocale.zhHans: '搜索范围',
+      AppLocale.zhHant: '搜索範圍',
+      AppLocale.en: 'Search Scope',
+      AppLocale.ja: '検索範囲',
+    },
+    'searchScopeUuid': {
+      AppLocale.zhHans: 'UUID',
+      AppLocale.zhHant: 'UUID',
+      AppLocale.en: 'UUID',
+      AppLocale.ja: 'UUID',
+    },
+    'searchScopeDefine': {
+      AppLocale.zhHans: 'Define',
+      AppLocale.zhHant: 'Define',
+      AppLocale.en: 'Define',
+      AppLocale.ja: 'Define',
+    },
+    'searchScopeTitle': {
+      AppLocale.zhHans: '标题',
+      AppLocale.zhHant: '標題',
+      AppLocale.en: 'Title',
+      AppLocale.ja: 'タイトル',
+    },
+    'searchScopeDescription': {
+      AppLocale.zhHans: '描述',
+      AppLocale.zhHant: '描述',
+      AppLocale.en: 'Description',
+      AppLocale.ja: '説明',
+    },
+    'searchScopeCreator': {
+      AppLocale.zhHans: '作者',
+      AppLocale.zhHant: '作者',
+      AppLocale.en: 'Creator',
+      AppLocale.ja: '作者',
+    },
+    'searchScopeType': {
+      AppLocale.zhHans: '类型',
+      AppLocale.zhHant: '類型',
+      AppLocale.en: 'Type',
+      AppLocale.ja: 'タイプ',
+    },
+    'searchScopeContentrating': {
+      AppLocale.zhHans: '评级',
+      AppLocale.zhHant: '評級',
+      AppLocale.en: 'Content Rating',
+      AppLocale.ja: 'レーティング',
+    },
+    'searchScopeRating': {
+      AppLocale.zhHans: '评分',
+      AppLocale.zhHant: '評分',
+      AppLocale.en: 'Rating',
+      AppLocale.ja: '評価',
+    },
+    'searchScopeClass': {
+      AppLocale.zhHans: '分类',
+      AppLocale.zhHant: '分類',
+      AppLocale.en: 'Class',
+      AppLocale.ja: 'クラス',
+    },
+    'searchScopeTags': {
+      AppLocale.zhHans: '标签',
+      AppLocale.zhHant: '標籤',
+      AppLocale.en: 'Tags',
+      AppLocale.ja: 'タグ',
+    },
+    'searchScopeStar': {
+      AppLocale.zhHans: '标星',
+      AppLocale.zhHant: '標星',
+      AppLocale.en: 'Star',
+      AppLocale.ja: 'スター',
+    },
 
     // ======== edit_dialog ========
     'batchEditFolder': {

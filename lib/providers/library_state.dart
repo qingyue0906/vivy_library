@@ -7,6 +7,7 @@ import '../models/library_item.dart';
 import '../models/item_info.dart';
 import '../models/goto_entry.dart';
 import '../models/direct_file.dart';
+import '../models/search_query.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
 
@@ -25,6 +26,7 @@ class LibraryState extends ChangeNotifier {
   String _currentRootPath = '';
 
   String _searchQuery = '';
+  SearchScope _searchScope = SearchScope.defaults();
   String? _selectedCategoryPath; // null=全部，否则为文件夹绝对路径
   String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
@@ -53,6 +55,7 @@ class LibraryState extends ChangeNotifier {
   String? get error => _error;
   String get currentRootPath => _currentRootPath;
   String get searchQuery => _searchQuery;
+  SearchScope get searchScope => _searchScope;
   String? get selectedCategoryPath => _selectedCategoryPath;
   String? get selectedCategoryName {
     if (_selectedCategoryPath == null) return null;
@@ -151,16 +154,24 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<CategoryNode> get filteredSubDirs {
-    if (_selectedClass == kAllClass) return currentSubDirs;
+    var result = currentSubDirs;
     if (_selectedClass == kUnclassified) {
-      return currentSubDirs.where((n) => (n.info?.classes ?? []).isEmpty).toList();
+      result = result.where((n) => (n.info?.classes ?? []).isEmpty).toList();
+    } else if (_selectedClass != kAllClass) {
+      result = result.where((n) => n.info?.classes.contains(_selectedClass) ?? false).toList();
     }
-    return currentSubDirs.where((n) => n.info?.classes.contains(_selectedClass) ?? false).toList();
+    if (_searchQuery.isNotEmpty) {
+      final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
+      if (!parsed.isEmpty) {
+        result = result.where((n) => _matchesSearchForInfo(n.info, parsed)).toList();
+      }
+    }
+    return result;
   }
 
   List<DirectFile> get filteredDirectFiles {
-    if (_selectedClass == kAllClass) return currentDirectFiles;
-    if (_selectedClass == kUnclassified) return currentDirectFiles;
+    if (_searchQuery.isNotEmpty) return const [];
+    if (_selectedClass == kAllClass || _selectedClass == kUnclassified) return currentDirectFiles;
     return const [];
   }
 
@@ -260,15 +271,10 @@ class LibraryState extends ChangeNotifier {
 
     // 2 搜索过滤
     if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      result = result.where((item) {
-        final info = item.info;
-        return info.title.toLowerCase().contains(query) ||
-            info.description.toLowerCase().contains(query) ||
-            (info.creator?.toLowerCase().contains(query) ?? false) ||
-            info.tags.any((t) => t.toLowerCase().contains(query)) ||
-            info.classes.any((c) => c.toLowerCase().contains(query));
-      }).toList();
+      final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
+      if (!parsed.isEmpty) {
+        result = result.where((item) => _matchesSearch(item, parsed)).toList();
+      }
     }
     result.sort((a, b) {
       int cmp;
@@ -283,6 +289,63 @@ class LibraryState extends ChangeNotifier {
       return _sortOrder == SortOrder.ascending ? cmp : -cmp;
     });
     return result;
+  }
+
+  bool _matchesSearch(LibraryItem item, SearchQuery parsed) {
+    return _matchesSearchForInfo(item.info, parsed);
+  }
+
+  bool _matchesSearchForInfo(ItemInfo? info, SearchQuery parsed) {
+    if (info == null) return parsed.freeTokens.isEmpty && parsed.qualified.isEmpty;
+    final i = info;
+
+    // 精准限定 (不依赖搜索范围开关)
+    for (final e in parsed.qualified.entries) {
+      final field = e.key;
+      final value = e.value;
+      final lv = value.toLowerCase();
+      switch (field) {
+        case 'uuid':     if ((i.uuid ?? '').toLowerCase() != lv) return false;
+        case 'define':   if (i.define.toLowerCase() != lv) return false;
+        case 'title':    if (!i.title.toLowerCase().contains(lv)) return false;
+        case 'description': if (!i.description.toLowerCase().contains(lv)) return false;
+        case 'creator':  if (!(i.creator ?? '').toLowerCase().contains(lv)) return false;
+        case 'type':     if (!i.type.toLowerCase().contains(lv)) return false;
+        case 'contentrating': if (!i.contentRating.toLowerCase().contains(lv)) return false;
+        case 'rating':   { final r = int.tryParse(value); if (r == null || i.rating != r) return false; }
+        case 'class':    if (!i.classes.any((c) => c.toLowerCase().contains(lv))) return false;
+        case 'tags':     if (!i.tags.any((t) => t.toLowerCase().contains(lv))) return false;
+        case 'star':     { final b = _parseBool(value); if (b == null || i.star != b) return false; }
+      }
+    }
+
+    // 宽松 token (需命中至少一个开启的范围字段)
+    for (final token in parsed.freeTokens) {
+      bool tokenMatched = false;
+      final lt = token.toLowerCase();
+      if (_searchScope.isEnabled('uuid') && (i.uuid ?? '').toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('define') && i.define.toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('title') && i.title.toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('description') && i.description.toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('creator') && (i.creator ?? '').toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('type') && i.type.toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('contentrating') && i.contentRating.toLowerCase().contains(lt)) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('rating')) { final r = int.tryParse(token); if (r != null && i.rating == r) tokenMatched = true; }
+      if (!tokenMatched && _searchScope.isEnabled('class') && i.classes.any((c) => c.toLowerCase().contains(lt))) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('tags') && i.tags.any((t) => t.toLowerCase().contains(lt))) tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('star')) { final b = _parseBool(token); if (b != null && i.star == b) tokenMatched = true; }
+      if (!tokenMatched) return false;
+    }
+
+    return true;
+  }
+
+  static bool? _parseBool(String value) {
+    switch (value.toLowerCase()) {
+      case 'true': case 'yes': case '1': return true;
+      case 'false': case 'no': case '0': return false;
+      default: return null;
+    }
   }
 
   bool get fileBrowserVisible => _fileBrowserVisible;
@@ -305,6 +368,11 @@ class LibraryState extends ChangeNotifier {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    notifyListeners();
+  }
+
+  void setSearchScope(SearchScope scope) {
+    _searchScope = scope;
     notifyListeners();
   }
 
@@ -363,6 +431,7 @@ class LibraryState extends ChangeNotifier {
     final (field, order) = await SettingsService.loadSortPreferences();
     _sortField = field;
     _sortOrder = order;
+    _searchScope = await SettingsService.loadSearchScope();
     notifyListeners();
   }
 

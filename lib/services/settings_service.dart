@@ -3,6 +3,38 @@ import '../providers/library_state.dart';
 import 'app_data_service.dart';
 import 'translations.dart';
 
+class SearchScope {
+  static const defaultFields = {'title', 'description', 'creator', 'class', 'tags'};
+  static const allFields = {'uuid', 'define', 'title', 'description', 'creator', 'type', 'contentrating', 'rating', 'class', 'tags', 'star'};
+
+  final Set<String> enabled;
+
+  const SearchScope({required this.enabled});
+
+  factory SearchScope.defaults() => const SearchScope(enabled: defaultFields);
+
+  bool isEnabled(String field) => enabled.contains(field);
+
+  SearchScope copyWithEnabled(String field, bool value) {
+    final updated = Set<String>.from(enabled);
+    if (value) { updated.add(field); } else { updated.remove(field); }
+    return SearchScope(enabled: updated);
+  }
+
+  Map<String, dynamic> toMap() => {
+    for (final f in allFields) f: enabled.contains(f),
+  };
+
+  factory SearchScope.fromMap(Map<String, dynamic> map) {
+    final enabled = <String>{};
+    for (final f in allFields) {
+      if (map[f] == true) enabled.add(f);
+    }
+    if (enabled.isEmpty) return SearchScope.defaults();
+    return SearchScope(enabled: enabled);
+  }
+}
+
 class LayoutState {
   final double leftPanelWidth;
   final double rightPanelWidth;
@@ -293,6 +325,27 @@ class SettingsService {
 
   static Future<void> savePythonPath(String path) async {
     await AppDataService.setString(_pythonPathKey, path);
+  }
+
+  // --- Search scope ---
+
+  static const _searchScopePrefix = 'searchscope_';
+
+  static Future<SearchScope> loadSearchScope() async {
+    final data = await AppDataService.loadSettings();
+    final map = <String, dynamic>{};
+    for (final f in SearchScope.allFields) {
+      map[f] = data['$_searchScopePrefix$f'];
+    }
+    return SearchScope.fromMap(map);
+  }
+
+  static Future<void> saveSearchScope(SearchScope scope) async {
+    final data = await AppDataService.loadSettings();
+    for (final f in SearchScope.allFields) {
+      data['$_searchScopePrefix$f'] = scope.isEnabled(f);
+    }
+    await AppDataService.saveSettings(data);
   }
 
   // --- Background settings ---

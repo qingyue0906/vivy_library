@@ -118,6 +118,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           backgroundSettings: widget.backgroundSettings,
           onBackgroundChanged: widget.onBackgroundChanged,
           onLocaleChanged: widget.onLocaleChanged,
+          onSearchScopeChanged: _state.setSearchScope,
+          searchScope: _state.searchScope,
         ),
       ),
     );

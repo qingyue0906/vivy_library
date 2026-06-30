@@ -1,6 +1,6 @@
 # Vivy Library
 
-A cross-platform Flutter desktop app for managing a local media/content library. It scans file-system directories, reads per-folder `info.json` metadata, and presents everything in a VS Code-inspired three-panel UI with card-grid browsing, rich editing, and extensible scripting support.
+A ~~cross-platform~~ Flutter desktop app for managing a local media/content library. It scans file-system directories, reads per-folder `info.json` metadata, and presents everything in a VS Code-inspired three-panel UI with card-grid browsing, rich editing, and extensible scripting support.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Flutter-3.x-blue" alt="Flutter">

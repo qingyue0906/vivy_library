@@ -22,6 +22,8 @@ class SettingsPage extends StatefulWidget {
   final void Function(BackgroundSettings settings) onBackgroundChanged;
   final void Function(AppLocale locale) onLocaleChanged;
   final ScriptService scriptService;
+  final void Function(SearchScope scope) onSearchScopeChanged;
+  final SearchScope searchScope;
 
   const SettingsPage({
     super.key,
@@ -32,6 +34,8 @@ class SettingsPage extends StatefulWidget {
     required this.onBackgroundChanged,
     required this.onLocaleChanged,
     required this.scriptService,
+    required this.onSearchScopeChanged,
+    required this.searchScope,
   });
 
   @override
@@ -46,6 +50,8 @@ class _SettingsPageState extends State<SettingsPage>
   GridSettings _gridSettings = const GridSettings();
   late BackgroundSettings _bgSettings;
   late AppLocale _locale;
+  late SearchScope _searchScope;
+  bool _searchScopeExpanded = true;
 
   @override
   void initState() {
@@ -53,6 +59,7 @@ class _SettingsPageState extends State<SettingsPage>
     _tabCtrl = TabController(length: 6, vsync: this);
     _bgSettings = widget.backgroundSettings;
     _locale = Strings.currentLocale;
+    _searchScope = widget.searchScope;
     _load();
   }
 
@@ -186,9 +193,82 @@ class _SettingsPageState extends State<SettingsPage>
               ),
             );
           }),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 28,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 140,
+                  child: Text(Strings.t('searchScope'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+                SizedBox(
+                  width: 60,
+                  child: InkWell(
+                    onTap: () => setState(() => _searchScopeExpanded = !_searchScopeExpanded),
+                    child: Center(
+                      child: Icon(
+                        _searchScopeExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_searchScopeExpanded) ...[
+            const SizedBox(height: 8),
+            ..._buildSearchScopeToggles(),
+          ],
         ],
       ),
     );
+  }
+
+  List<Widget> _buildSearchScopeToggles() {
+    const fields = [
+      ('searchScopeUuid', 'uuid'),
+      ('searchScopeDefine', 'define'),
+      ('searchScopeTitle', 'title'),
+      ('searchScopeDescription', 'description'),
+      ('searchScopeCreator', 'creator'),
+      ('searchScopeType', 'type'),
+      ('searchScopeContentrating', 'contentrating'),
+      ('searchScopeRating', 'rating'),
+      ('searchScopeClass', 'class'),
+      ('searchScopeTags', 'tags'),
+      ('searchScopeStar', 'star'),
+    ];
+    return [
+      for (final (labelKey, field) in fields)
+        SizedBox(
+          height: 28,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 140,
+                child: Text(Strings.t(labelKey), style: const TextStyle(fontSize: 12)),
+              ),
+              Transform.scale(
+                scale: 0.75,
+                child: Switch(
+                  value: _searchScope.isEnabled(field),
+                  onChanged: (v) {
+                    final updated = _searchScope.copyWithEnabled(field, v);
+                    _searchScope = updated;
+                    SettingsService.saveSearchScope(updated);
+                    widget.onSearchScopeChanged(updated);
+                    setState(() {});
+                  },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
   }
 
   Widget _buildDataTab() {
