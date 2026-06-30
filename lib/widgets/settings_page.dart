@@ -5,9 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
-import '../models/library_root.dart';
 import '../services/app_data_service.dart';
-import '../services/library_root_service.dart';
 import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
@@ -1005,10 +1003,12 @@ class _SettingsPageState extends State<SettingsPage>
       };
 
       final archive = Archive();
-      archive.addFile(ArchiveFile('data.json', jsonEncode(export).codeUnits.length, utf8.encode(jsonEncode(export))));
+      final dataBytes = utf8.encode(jsonEncode(export));
+      archive.addFile(ArchiveFile('settings.json', dataBytes.length, dataBytes));
 
       final scriptsMeta = widget.scriptService.scripts.map((s) => s.toJson()).toList();
-      archive.addFile(ArchiveFile('scripts.json', jsonEncode(scriptsMeta).codeUnits.length, utf8.encode(jsonEncode(scriptsMeta))));
+      final scriptsBytes = utf8.encode(jsonEncode(scriptsMeta));
+      archive.addFile(ArchiveFile('scripts.json', scriptsBytes.length, scriptsBytes));
 
       final scriptsDir = _resolveScriptsDir();
       final scriptsFolder = Directory(scriptsDir);
@@ -1069,7 +1069,7 @@ class _SettingsPageState extends State<SettingsPage>
       String? scriptsMetaJson;
       for (final entry in archive) {
         if (entry.isFile) {
-          if (entry.name == 'data.json') {
+          if (entry.name == 'settings.json') {
             dataJson = utf8.decode(entry.content);
           } else if (entry.name == 'scripts.json') {
             scriptsMetaJson = utf8.decode(entry.content);
@@ -1089,15 +1089,15 @@ class _SettingsPageState extends State<SettingsPage>
       final data = jsonDecode(dataJson) as Map;
       if (data['settings'] != null) {
         final importedSettings = data['settings'] as Map<String, dynamic>;
+        await AppDataService.saveSettings(importedSettings);
+
         final oldTheme = importedSettings['theme_mode'] as String?;
         if (oldTheme != null) {
           final themeMode = ThemeMode.values.firstWhere((e) => e.name == oldTheme, orElse: () => ThemeMode.system);
-          await SettingsService.saveThemeMode(themeMode);
           widget.onThemeChanged(themeMode);
         }
-        final oldGrid = importedSettings['grid_minCardWidth'];
-        if (oldGrid != null) {
-          final gs = GridSettings.fromMap({
+        if (importedSettings['grid_minCardWidth'] != null) {
+          widget.onGridSettingsChanged(GridSettings.fromMap({
             'minCardWidth': importedSettings['grid_minCardWidth'],
             'maxCardWidth': importedSettings['grid_maxCardWidth'],
             'aspectRatio': importedSettings['grid_aspectRatio'],
@@ -1105,35 +1105,18 @@ class _SettingsPageState extends State<SettingsPage>
             'compactLevel': importedSettings['grid_compactLevel'],
             'cardGifMode': importedSettings['grid_cardGifMode'],
             'fileGifMode': importedSettings['grid_fileGifMode'],
-          });
-          await SettingsService.saveGridSettings(gs);
-          widget.onGridSettingsChanged(gs);
+          }));
         }
-        if (importedSettings['layout_leftPanelWidth'] != null) {
-          final l = LayoutState.fromMap({
-            'leftPanelWidth': (importedSettings['layout_leftPanelWidth'] as num?)?.toDouble(),
-            'rightPanelWidth': (importedSettings['layout_rightPanelWidth'] as num?)?.toDouble(),
-            'filePanelHeight': (importedSettings['layout_filePanelHeight'] as num?)?.toDouble(),
-          });
-          await SettingsService.saveLayout(l);
-        }
-        if (importedSettings['window_dx'] != null) {
-          final w = WindowState.fromMap({
-            'dx': (importedSettings['window_dx'] as num?)?.toDouble(),
-            'dy': (importedSettings['window_dy'] as num?)?.toDouble(),
-            'width': (importedSettings['window_width'] as num?)?.toDouble(),
-            'height': (importedSettings['window_height'] as num?)?.toDouble(),
-          });
-          await SettingsService.saveWindowState(w);
-        }
-        final rootsStr = importedSettings['library_roots'] as String?;
-        if (rootsStr != null) {
-          try {
-            final roots = (jsonDecode(rootsStr) as List)
-                .map((r) => LibraryRoot(name: r['name'] as String, path: r['path'] as String))
-                .toList();
-            await LibraryRootService().saveAll(roots);
-          } catch (_) {}
+        widget.onBackgroundChanged(BackgroundSettings.fromMap({
+          'path': importedSettings['bg_path'],
+          'leftOpacity': importedSettings['bg_leftOpacity'],
+          'middleOpacity': importedSettings['bg_middleOpacity'],
+          'rightOpacity': importedSettings['bg_rightOpacity'],
+        }));
+        final localeStr = importedSettings['app_locale'] as String?;
+        if (localeStr != null) {
+          final locale = AppLocale.values.firstWhere((e) => e.name == localeStr, orElse: () => AppLocale.system);
+          widget.onLocaleChanged(locale);
         }
       }
 
