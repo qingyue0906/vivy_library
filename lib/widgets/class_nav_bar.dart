@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
+import '../services/settings_service.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
@@ -15,7 +16,9 @@ class ClassNavBar extends StatelessWidget {
     final options = state.classNavOptions;
     final cs = Theme.of(context).colorScheme;
 
-    return Container(
+    return GestureDetector(
+      onSecondaryTapUp: (details) => _showSourceMenu(context, details.globalPosition),
+      child: Container(
       constraints: BoxConstraints(maxHeight: 60 * c),
       padding: EdgeInsets.fromLTRB(8 * c, 6 * c, 8 * c, 2 * c),
       color: Colors.transparent,
@@ -38,7 +41,44 @@ class ClassNavBar extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
+  }
+
+  void _showSourceMenu(BuildContext context, Offset globalPos) {
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1),
+      items: [
+        for (final source in ClassSource.values)
+          PopupMenuItem(
+            value: source.name,
+            height: 28,
+            child: Row(children: [
+              if (state.classSource == source) ...[
+                Icon(Icons.check, size: 14, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 6),
+              ],
+              Text(_sourceLabel(source), style: const TextStyle(fontSize: 12)),
+            ]),
+          ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      final source = ClassSource.values.firstWhere((s) => s.name == value);
+      state.setClassSource(source);
+    });
+  }
+
+  String _sourceLabel(ClassSource source) {
+    switch (source) {
+      case ClassSource.creator: return Strings.t('classSourceCreator');
+      case ClassSource.type: return Strings.t('classSourceType');
+      case ClassSource.contentrating: return Strings.t('classSourceContentrating');
+      case ClassSource.rating: return Strings.t('classSourceRating');
+      case ClassSource.class_: return Strings.t('classSourceClass');
+      case ClassSource.tags: return Strings.t('classSourceTags');
+    }
   }
 
   Widget _buildChip(String label, int count, ColorScheme cs, double c) {

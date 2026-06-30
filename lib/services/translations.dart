@@ -552,6 +552,42 @@ class Strings {
       AppLocale.en: 'Star',
       AppLocale.ja: 'スター',
     },
+    'classSourceCreator': {
+      AppLocale.zhHans: '作者',
+      AppLocale.zhHant: '作者',
+      AppLocale.en: 'Creator',
+      AppLocale.ja: '作者',
+    },
+    'classSourceType': {
+      AppLocale.zhHans: '类型',
+      AppLocale.zhHant: '類型',
+      AppLocale.en: 'Type',
+      AppLocale.ja: 'タイプ',
+    },
+    'classSourceContentrating': {
+      AppLocale.zhHans: '评级',
+      AppLocale.zhHant: '評級',
+      AppLocale.en: 'Content Rating',
+      AppLocale.ja: 'レーティング',
+    },
+    'classSourceRating': {
+      AppLocale.zhHans: '评分',
+      AppLocale.zhHant: '評分',
+      AppLocale.en: 'Rating',
+      AppLocale.ja: '評価',
+    },
+    'classSourceClass': {
+      AppLocale.zhHans: '分类',
+      AppLocale.zhHant: '分類',
+      AppLocale.en: 'Class',
+      AppLocale.ja: 'クラス',
+    },
+    'classSourceTags': {
+      AppLocale.zhHans: '标签',
+      AppLocale.zhHant: '標籤',
+      AppLocale.en: 'Tags',
+      AppLocale.ja: 'タグ',
+    },
 
     // ======== edit_dialog ========
     'batchEditFolder': {

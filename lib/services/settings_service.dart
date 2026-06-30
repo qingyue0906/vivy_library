@@ -3,6 +3,8 @@ import '../providers/library_state.dart';
 import 'app_data_service.dart';
 import 'translations.dart';
 
+enum ClassSource { creator, type, contentrating, rating, class_, tags }
+
 class SearchScope {
   static const defaultFields = {'title', 'description', 'creator', 'class', 'tags'};
   static const allFields = {'uuid', 'define', 'title', 'description', 'creator', 'type', 'contentrating', 'rating', 'class', 'tags', 'star'};
@@ -346,6 +348,19 @@ class SettingsService {
       data['$_searchScopePrefix$f'] = scope.isEnabled(f);
     }
     await AppDataService.saveSettings(data);
+  }
+
+  // --- Class source ---
+
+  static const _classSourceKey = 'class_source';
+
+  static Future<ClassSource> loadClassSource() async {
+    final val = await AppDataService.getString(_classSourceKey);
+    return ClassSource.values.firstWhere((e) => e.name == val, orElse: () => ClassSource.class_);
+  }
+
+  static Future<void> saveClassSource(ClassSource source) async {
+    await AppDataService.setString(_classSourceKey, source.name);
   }
 
   // --- Background settings ---

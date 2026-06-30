@@ -27,6 +27,7 @@ class LibraryState extends ChangeNotifier {
 
   String _searchQuery = '';
   SearchScope _searchScope = SearchScope.defaults();
+  ClassSource _classSource = ClassSource.class_;
   String? _selectedCategoryPath; // null=全部，否则为文件夹绝对路径
   String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
@@ -56,6 +57,7 @@ class LibraryState extends ChangeNotifier {
   String get currentRootPath => _currentRootPath;
   String get searchQuery => _searchQuery;
   SearchScope get searchScope => _searchScope;
+  ClassSource get classSource => _classSource;
   String? get selectedCategoryPath => _selectedCategoryPath;
   String? get selectedCategoryName {
     if (_selectedCategoryPath == null) return null;
@@ -155,11 +157,7 @@ class LibraryState extends ChangeNotifier {
 
   List<CategoryNode> get filteredSubDirs {
     var result = currentSubDirs;
-    if (_selectedClass == kUnclassified) {
-      result = result.where((n) => (n.info?.classes ?? []).isEmpty).toList();
-    } else if (_selectedClass != kAllClass) {
-      result = result.where((n) => n.info?.classes.contains(_selectedClass) ?? false).toList();
-    }
+    result = result.where((n) => _matchesClassFilter(n.info)).toList();
     if (_searchQuery.isNotEmpty) {
       final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
       if (!parsed.isEmpty) {
@@ -172,6 +170,7 @@ class LibraryState extends ChangeNotifier {
   List<DirectFile> get filteredDirectFiles {
     if (_searchQuery.isNotEmpty) return const [];
     if (_selectedClass == kAllClass || _selectedClass == kUnclassified) return currentDirectFiles;
+    if (_classSource == ClassSource.rating) return const [];
     return const [];
   }
 
@@ -182,36 +181,52 @@ class LibraryState extends ChangeNotifier {
 
     int totalCount = inCategory.length + inFolders.length;
     int uncategorizedCount = 0;
-    final classCounts = <String, int>{};
+    final counts = <String, int>{};
+
+    void add(String key) { counts[key] = (counts[key] ?? 0) + 1; }
+    void addUncategorized() { uncategorizedCount++; }
+
+    void processInfo(ItemInfo? info) {
+      switch (_classSource) {
+        case ClassSource.creator:
+          final v = info?.creator;
+          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+        case ClassSource.type:
+          final v = info?.type;
+          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+        case ClassSource.contentrating:
+          final v = info?.contentRating;
+          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+        case ClassSource.rating:
+          add((info?.rating ?? 0).toString());
+        case ClassSource.class_:
+          final vals = info?.classes ?? [];
+          if (vals.isEmpty) { addUncategorized(); } else { for (final v in vals) { add(v); } }
+        case ClassSource.tags:
+          final vals = info?.tags ?? [];
+          if (vals.isEmpty) { addUncategorized(); } else { for (final v in vals) { add(v); } }
+      }
+    }
 
     for (final item in inCategory) {
-      final classes = item.info.classes;
-      if (classes.isEmpty) {
-        uncategorizedCount++;
-      } else {
-        for (final c in classes) {
-          classCounts[c] = (classCounts[c] ?? 0) + 1;
-        }
-      }
+      processInfo(item.info);
     }
     for (final node in inFolders) {
-      final classes = node.info?.classes ?? [];
-      if (classes.isEmpty) {
-        uncategorizedCount++;
-      } else {
-        for (final c in classes) {
-          classCounts[c] = (classCounts[c] ?? 0) + 1;
-        }
-      }
+      processInfo(node.info);
     }
 
-    final sortedClassNames = classCounts.keys.toList()..sort();
+    final sortedKeys = counts.keys.toList()..sort();
 
-    return [
+    final entries = <MapEntry<String, int>>[
       MapEntry(kAllClass, totalCount),
-      MapEntry(kUnclassified, uncategorizedCount),
-      ...sortedClassNames.map((c) => MapEntry(c, classCounts[c]!)),
     ];
+    if (_classSource != ClassSource.rating) {
+      entries.add(MapEntry(kUnclassified, uncategorizedCount));
+    }
+    for (final k in sortedKeys) {
+      entries.add(MapEntry(k, counts[k]!));
+    }
+    return entries;
   }
 
   List<String> get uniqueTypes {
@@ -262,12 +277,7 @@ class LibraryState extends ChangeNotifier {
     var result = _itemsInSelectedCategory;
 
     // 1.5 顶部 class 导航筛选
-    if (_selectedClass == kUnclassified) {
-      result = result.where((e) => e.info.classes.isEmpty).toList();
-    } else if (_selectedClass != kAllClass) {
-      result =
-          result.where((e) => e.info.classes.contains(_selectedClass)).toList();
-    }
+    result = result.where((e) => _matchesClassFilter(e.info)).toList();
 
     // 2 搜索过滤
     if (_searchQuery.isNotEmpty) {
@@ -289,6 +299,29 @@ class LibraryState extends ChangeNotifier {
       return _sortOrder == SortOrder.ascending ? cmp : -cmp;
     });
     return result;
+  }
+
+  bool _matchesClassFilter(ItemInfo? info) {
+    if (_selectedClass == kAllClass) return true;
+    switch (_classSource) {
+      case ClassSource.creator:
+        if (_selectedClass == kUnclassified) return info?.creator == null || (info?.creator ?? '').isEmpty;
+        return info?.creator == _selectedClass;
+      case ClassSource.type:
+        if (_selectedClass == kUnclassified) return (info?.type ?? '').isEmpty;
+        return info?.type == _selectedClass;
+      case ClassSource.contentrating:
+        if (_selectedClass == kUnclassified) return (info?.contentRating ?? '').isEmpty;
+        return info?.contentRating == _selectedClass;
+      case ClassSource.rating:
+        return info?.rating.toString() == _selectedClass;
+      case ClassSource.class_:
+        if (_selectedClass == kUnclassified) return (info?.classes ?? []).isEmpty;
+        return info?.classes.contains(_selectedClass) ?? false;
+      case ClassSource.tags:
+        if (_selectedClass == kUnclassified) return (info?.tags ?? []).isEmpty;
+        return info?.tags.contains(_selectedClass) ?? false;
+    }
   }
 
   bool _matchesSearch(LibraryItem item, SearchQuery parsed) {
@@ -376,6 +409,13 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setClassSource(ClassSource source) {
+    _classSource = source;
+    _selectedClass = kAllClass;
+    SettingsService.saveClassSource(source);
+    notifyListeners();
+  }
+
   /// 选中左侧文件夹（null=全部）。
   void setSelectedCategory(String? path) {
     _selectedCategoryPath = path;
@@ -432,6 +472,7 @@ class LibraryState extends ChangeNotifier {
     _sortField = field;
     _sortOrder = order;
     _searchScope = await SettingsService.loadSearchScope();
+    _classSource = await SettingsService.loadClassSource();
     notifyListeners();
   }
 
