@@ -588,6 +588,30 @@ class Strings {
       AppLocale.en: 'Tags',
       AppLocale.ja: 'タグ',
     },
+    'grouping': {
+      AppLocale.zhHans: '分组',
+      AppLocale.zhHant: '分組',
+      AppLocale.en: 'Grouping',
+      AppLocale.ja: 'グループ化',
+    },
+    'year': {
+      AppLocale.zhHans: '年',
+      AppLocale.zhHant: '年',
+      AppLocale.en: '-',
+      AppLocale.ja: '年',
+    },
+    'month': {
+      AppLocale.zhHans: '月',
+      AppLocale.zhHant: '月',
+      AppLocale.en: '-',
+      AppLocale.ja: '月',
+    },
+    'day': {
+      AppLocale.zhHans: '日',
+      AppLocale.zhHant: '日',
+      AppLocale.en: '',
+      AppLocale.ja: '日',
+    },
 
     // ======== edit_dialog ========
     'batchEditFolder': {

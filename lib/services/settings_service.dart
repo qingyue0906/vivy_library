@@ -363,6 +363,16 @@ class SettingsService {
     await AppDataService.setString(_classSourceKey, source.name);
   }
 
+  // --- Grouping ---
+
+  static Future<bool> loadGroupingEnabled() async {
+    return (await AppDataService.getString('grouping_enabled')) == 'true';
+  }
+
+  static Future<void> saveGroupingEnabled(bool v) async {
+    await AppDataService.setString('grouping_enabled', v.toString());
+  }
+
   // --- Background settings ---
 
   static Future<BackgroundSettings> loadBackgroundSettings() async {

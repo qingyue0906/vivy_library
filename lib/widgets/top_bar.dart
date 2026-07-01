@@ -97,31 +97,63 @@ class TopBar extends StatelessWidget {
     };
     return SizedBox(
       height: 22 * c,
-      child: PopupMenuButton<SortField>(
-        initialValue: state.sortField,
-        onSelected: (field) => state.setSortField(field),
+      child: PopupMenuButton<String>(
+        initialValue: state.sortField.name,
+        onSelected: (val) {
+          final f = SortField.values.firstWhere((e) => e.name == val);
+          state.setSortField(f);
+        },
         offset: const Offset(0, 24),
         color: cs.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
           side: BorderSide(color: cs.outlineVariant, width: 0.5),
         ),
-        constraints: BoxConstraints(minWidth: 60 * c, maxWidth: 100 * c),
-        itemBuilder: (_) => labels.entries.map((e) {
-          final selected = e.key == state.sortField;
-          return PopupMenuItem<SortField>(
-            value: e.key,
-            height: 22 * c,
-            child: Text(
-              e.value,
-              style: TextStyle(
-                fontSize: 10 * c,
-                color: selected ? cs.primary : cs.onSurface,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+        constraints: BoxConstraints(minWidth: 60 * c, maxWidth: 130 * c),
+        itemBuilder: (_) => [
+          for (final e in labels.entries)
+            PopupMenuItem<String>(
+              value: e.key.name,
+              height: 22 * c,
+              child: Text(
+                e.value,
+                style: TextStyle(
+                  fontSize: 10 * c,
+                  color: e.key == state.sortField ? cs.primary : cs.onSurface,
+                  fontWeight: e.key == state.sortField ? FontWeight.w600 : FontWeight.normal,
+                ),
               ),
             ),
-          );
-        }).toList(),
+            PopupMenuDivider(height: 1),
+            PopupMenuItem<String>(
+            height: 22 * c,
+            padding: EdgeInsets.zero,
+            child: StatefulBuilder(
+              builder: (ctx, setMenuState) => Row(
+                children: [
+                  const SizedBox(width: 12),
+                  Text(Strings.t('grouping'), style: TextStyle(fontSize: 10 * c, color: cs.onSurface)),
+                  const Spacer(),
+                  SizedBox(
+                    height: 18 * c,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Switch(
+                        value: state.groupingEnabled,
+                        onChanged: (v) {
+                          state.setGroupingEnabled(v);
+                          setMenuState(() {});
+                        },
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+        ],
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 4 * c),
           child: Row(

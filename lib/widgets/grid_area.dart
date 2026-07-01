@@ -137,133 +137,66 @@ class GridArea extends StatelessWidget {
 
         final imgHeight = cardWidth / aspectRatio;
         final mainAxisExtent = imgHeight + 38 * c;
-        final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c; // 图标(宽高比x0.5)+间距+2行文字+padding
-        final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c; // 图标(宽高比x0.5)+间距+2行文字+padding
+        final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c;
+        final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c;
+
+        final gSubDirs = state.groupedSubDirs;
+        final gItems = state.groupedItems;
+        final gFiles = state.groupedFiles;
 
         return SmoothScroll(
           builder: (context, controller, physics) => CustomScrollView(
             controller: controller,
             physics: physics,
             slivers: [
-              if (subDirs.isNotEmpty) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 4 * c, left: 2 * c),
-                    child: Text(
-                      Strings.t('folderSection'),
-                      style: TextStyle(
-                        fontSize: 11 * c,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-                SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisExtent: folderMainAxisExtent,
-                    crossAxisSpacing: spacing,
-                    mainAxisSpacing: spacing,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final node = subDirs[index];
-                      return FolderCard(
-                        key: GlobalObjectKey(node.path),
-                        node: node,
-                        displayWidth: cardWidth,
-                        isSelected: state.isFolderSelected(node.path),
-                        onTap: () => state.setSelectedFolder(node),
-                        onDoubleTap: () => state.setSelectedCategory(node.path),
-                        onCtrlTap: () => state.toggleFolderSelection(node),
-                        onShiftTap: () => state.selectFolderRange(node, subDirs),
-                        onRightClick: (globalPos) =>
-                            _showFolderContextMenu(context, node, globalPos),
-                      );
-                    },
-                    childCount: subDirs.length,
+              if (gSubDirs.any((g) => g.entries.isNotEmpty)) ...[
+                _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
+                ..._buildGroupedSlivers(
+                  gSubDirs, crossAxisCount, folderMainAxisExtent, spacing, c, cs,
+                  (node) => FolderCard(
+                    key: GlobalObjectKey(node.path),
+                    node: node,
+                    displayWidth: cardWidth,
+                    isSelected: state.isFolderSelected(node.path),
+                    onTap: () => state.setSelectedFolder(node),
+                    onDoubleTap: () => state.setSelectedCategory(node.path),
+                    onCtrlTap: () => state.toggleFolderSelection(node),
+                    onShiftTap: () => state.selectFolderRange(node, subDirs),
+                    onRightClick: (globalPos) => _showFolderContextMenu(context, node, globalPos),
                   ),
                 ),
               ],
-              if (items.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 8 * c, bottom: 4 * c, left: 2 * c),
-                    child: Text(
-                      Strings.t('itemSection'),
-                      style: TextStyle(
-                        fontSize: 11 * c,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
+              if (gItems.any((g) => g.entries.isNotEmpty)) ...[
+                _sectionHeader(Strings.t('itemSection'), c, cs),
+                ..._buildGroupedSlivers(
+                  gItems, crossAxisCount, mainAxisExtent, spacing, c, cs,
+                  (item) => ItemCard(
+                    key: GlobalObjectKey(item.path),
+                    item: item,
+                    aspectRatio: aspectRatio,
+                    displayWidth: cardWidth,
+                    displayHeight: imgHeight,
+                    isSelected: state.isItemSelected(item.path),
+                    onTap: () => state.setSelectedItem(item),
+                    onCtrlTap: () => state.toggleItemSelection(item),
+                    onShiftTap: () => state.selectRange(item, items),
+                    onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),
+                    gifMode: gridSettings.cardGifMode,
                   ),
                 ),
-              SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisExtent: mainAxisExtent,
-                  crossAxisSpacing: spacing,
-                  mainAxisSpacing: spacing,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = items[index];
-                    return ItemCard(
-                      key: GlobalObjectKey(item.path),
-                      item: item,
-                      aspectRatio: aspectRatio,
-                      displayWidth: cardWidth,
-                      displayHeight: imgHeight,
-                      isSelected: state.isItemSelected(item.path),
-                      onTap: () => state.setSelectedItem(item),
-                      onCtrlTap: () => state.toggleItemSelection(item),
-                      onShiftTap: () => state.selectRange(item, items),
-                      onRightClick: (globalPos) =>
-                          _showContextMenu(context, item, globalPos),
-                      gifMode: gridSettings.cardGifMode,
-                    );
-                  },
-                  childCount: items.length,
-                ),
-              ),
-              if (files.isNotEmpty) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 8 * c, bottom: 4 * c, left: 2 * c),
-                    child: Text(
-                      Strings.t('fileSection'),
-                      style: TextStyle(
-                        fontSize: 11 * c,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-                SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisExtent: fileMainAxisExtent,
-                    crossAxisSpacing: spacing,
-                    mainAxisSpacing: spacing,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final file = files[index];
-                    return FileCard(
-                      key: GlobalObjectKey(file.path),
-                      file: file,
-                      displayWidth: cardWidth,
-                      isSelected: state.selectedFile?.path == file.path,
-                      onTap: () => state.setSelectedFile(file),
-                      onDoubleTap: () => _openFile(file.path),
-                      onRightClick: (globalPos) =>
-                          _showFileContextMenu(context, file, globalPos),
-                    );
-                    },
-                    childCount: files.length,
+              ],
+              if (gFiles.any((g) => g.entries.isNotEmpty)) ...[
+                _sectionHeader(Strings.t('fileSection'), c, cs),
+                ..._buildGroupedSlivers(
+                  gFiles, crossAxisCount, fileMainAxisExtent, spacing, c, cs,
+                  (file) => FileCard(
+                    key: GlobalObjectKey(file.path),
+                    file: file,
+                    displayWidth: cardWidth,
+                    isSelected: state.selectedFile?.path == file.path,
+                    onTap: () => state.setSelectedFile(file),
+                    onDoubleTap: () => _openFile(file.path),
+                    onRightClick: (globalPos) => _showFileContextMenu(context, file, globalPos),
                   ),
                 ),
               ],
@@ -272,6 +205,45 @@ class GridArea extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget _sectionHeader(String title, double c, ColorScheme cs, {bool top = true}) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.only(top: top ? 8 * c : 0, bottom: 4 * c, left: 2 * c),
+        child: Text(title, style: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupedSlivers<T>(List<GroupedEntries<T>> groups, int crossAxisCount,
+      double mainAxisExtent, double spacing, double c, ColorScheme cs,
+      Widget Function(T) cardBuilder) {
+    final slivers = <Widget>[];
+    for (final group in groups) {
+      if (group.entries.isEmpty) continue;
+      if (group.groupLabel.isNotEmpty) {
+        slivers.add(SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(2 * c, 4 * c, 0, 2 * c),
+            child: Text(group.groupLabel, style: TextStyle(fontSize: 10 * c, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
+          ),
+        ));
+      }
+      slivers.add(SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          mainAxisExtent: mainAxisExtent,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => cardBuilder(group.entries[index]),
+          childCount: group.entries.length,
+        ),
+      ));
+    }
+    return slivers;
   }
 
   void _showFolderContextMenu(

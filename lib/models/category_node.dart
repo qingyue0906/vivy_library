@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'item_info.dart';
 import 'library_item.dart';
 import 'direct_file.dart';
@@ -25,6 +26,11 @@ class CategoryNode {
     this.items = const [],
     this.files = const [],
   });
+
+  DateTime get modifiedTime {
+    try { return File(path).lastModifiedSync(); } catch (_) { return DateTime.now(); }
+  }
+  int get sizeInBytes => 0;
 
   /// 递归展平：返回该节点及其所有子文件夹下的全部项目。
   List<LibraryItem> get allItems {

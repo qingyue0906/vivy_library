@@ -10,6 +10,13 @@ import '../models/direct_file.dart';
 import '../models/search_query.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
+import '../services/translations.dart';
+
+class GroupedEntries<T> {
+  final String groupLabel;
+  final List<T> entries;
+  const GroupedEntries(this.groupLabel, this.entries);
+}
 
 enum SortField { name, size, date }
 enum SortOrder { ascending, descending }
@@ -32,6 +39,7 @@ class LibraryState extends ChangeNotifier {
   String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
   SortOrder _sortOrder = SortOrder.ascending;
+  bool _groupingEnabled = false;
 
   LibraryItem? _selectedItem;
   CategoryNode? _selectedFolder; // 选中的文件夹节点（用于右侧显示文件夹 info）
@@ -58,6 +66,7 @@ class LibraryState extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   SearchScope get searchScope => _searchScope;
   ClassSource get classSource => _classSource;
+  bool get groupingEnabled => _groupingEnabled;
   String? get selectedCategoryPath => _selectedCategoryPath;
   String? get selectedCategoryName {
     if (_selectedCategoryPath == null) return null;
@@ -172,6 +181,63 @@ class LibraryState extends ChangeNotifier {
     if (_selectedClass == kAllClass || _selectedClass == kUnclassified) return currentDirectFiles;
     if (_classSource == ClassSource.rating) return const [];
     return const [];
+  }
+
+  List<GroupedEntries<CategoryNode>> get groupedSubDirs {
+    if (!_groupingEnabled) return [GroupedEntries('', filteredSubDirs)];
+    return _groupBy(filteredSubDirs, (n) => _groupKey(n.name, n.modifiedTime, n.sizeInBytes));
+  }
+
+  List<GroupedEntries<LibraryItem>> get groupedItems {
+    if (!_groupingEnabled) return [GroupedEntries('', filteredAndSortedItems)];
+    return _groupBy(filteredAndSortedItems, (i) => _groupKey(i.info.title, i.modifiedTime, i.sizeInBytes));
+  }
+
+  List<GroupedEntries<DirectFile>> get groupedFiles {
+    if (!_groupingEnabled) return [GroupedEntries('', filteredDirectFiles)];
+    return _groupBy(filteredDirectFiles, (f) => _groupKey(f.name, f.modifiedTime, f.sizeInBytes));
+  }
+
+  List<GroupedEntries<T>> _groupBy<T>(List<T> items, String Function(T) keyFn) {
+    if (items.isEmpty) return [];
+    final result = <GroupedEntries<T>>[];
+    String? lastKey;
+    List<T>? currentGroup;
+    for (final item in items) {
+      final key = keyFn(item);
+      if (key != lastKey) {
+        if (currentGroup != null) result.add(GroupedEntries(lastKey!, currentGroup));
+        lastKey = key;
+        currentGroup = [item];
+      } else {
+        currentGroup!.add(item);
+      }
+    }
+    if (currentGroup != null) result.add(GroupedEntries(lastKey!, currentGroup));
+    return result;
+  }
+
+  String _groupKey(String name, DateTime dt, int size) {
+    switch (_sortField) {
+      case SortField.name:
+        if (name.isEmpty) return '#';
+        final first = name[0].toUpperCase();
+        if (RegExp(r'[A-Z]').hasMatch(first)) return first;
+        if (RegExp(r'[0-9]').hasMatch(first)) return '0-9';
+        return '#';
+      case SortField.size:
+        final mb = size / (1024 * 1024);
+        if (mb < 32) return '< 32 MB';
+        if (mb < 64) return '32 - 64 MB';
+        if (mb < 128) return '64 - 128 MB';
+        if (mb < 256) return '128 - 256 MB';
+        if (mb < 512) return '256 - 512 MB';
+        if (mb < 1024) return '512 MB - 1 GB';
+        if (mb < 2048) return '1 - 2 GB';
+        return '> 2 GB';
+      case SortField.date:
+        return '${dt.year}${Strings.t('year')}${dt.month}${Strings.t('month')}${dt.day}${Strings.t('day')}';
+    }
   }
 
   /// 顶部 class 导航的选项列表，统计当前左侧分类下的项目和文件夹。
@@ -416,6 +482,12 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setGroupingEnabled(bool v) {
+    _groupingEnabled = v;
+    SettingsService.saveGroupingEnabled(v);
+    notifyListeners();
+  }
+
   /// 选中左侧文件夹（null=全部）。
   void setSelectedCategory(String? path) {
     _selectedCategoryPath = path;
@@ -473,6 +545,7 @@ class LibraryState extends ChangeNotifier {
     _sortOrder = order;
     _searchScope = await SettingsService.loadSearchScope();
     _classSource = await SettingsService.loadClassSource();
+    _groupingEnabled = await SettingsService.loadGroupingEnabled();
     notifyListeners();
   }
 
