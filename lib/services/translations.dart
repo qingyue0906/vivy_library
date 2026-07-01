@@ -1100,6 +1100,12 @@ class Strings {
       AppLocale.en: 'Date',
       AppLocale.ja: '日付',
     },
+    'sortMethod': {
+      AppLocale.zhHans: '排序方式',
+      AppLocale.zhHant: '排序方式',
+      AppLocale.en: 'Sort Method',
+      AppLocale.ja: 'ソート方法',
+    },
     'sortAsc': {
       AppLocale.zhHans: '当前:升序',
       AppLocale.zhHant: '目前:升序',

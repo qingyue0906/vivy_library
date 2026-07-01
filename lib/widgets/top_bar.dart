@@ -98,6 +98,7 @@ class TopBar extends StatelessWidget {
     return SizedBox(
       height: 22 * c,
       child: PopupMenuButton<String>(
+        tooltip: Strings.t('sortMethod'),
         initialValue: state.sortField.name,
         onSelected: (val) {
           final f = SortField.values.firstWhere((e) => e.name == val);
