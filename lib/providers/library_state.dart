@@ -227,14 +227,22 @@ class LibraryState extends ChangeNotifier {
         return '#';
       case SortField.size:
         final mb = size / (1024 * 1024);
-        if (mb < 32) return '< 32 MB';
+        if (mb < 4) return '< 4 MB';
+        if (mb < 8) return '4 - 8 MB';
+        if (mb < 16) return '8 - 16 MB';
+        if (mb < 32) return '16 - 32 MB';
         if (mb < 64) return '32 - 64 MB';
         if (mb < 128) return '64 - 128 MB';
         if (mb < 256) return '128 - 256 MB';
         if (mb < 512) return '256 - 512 MB';
         if (mb < 1024) return '512 MB - 1 GB';
         if (mb < 2048) return '1 - 2 GB';
-        return '> 2 GB';
+        if (mb < 4096) return '2 - 4 GB';
+        if (mb < 8192) return '4 - 8 GB';
+        if (mb < 16384) return '8 - 16 GB';
+        if (mb < 32768) return '16 - 32 GB';
+        if (mb < 65536) return '32 - 64 GB';
+        return '> 64 GB';
       case SortField.date:
         return '${dt.year}${Strings.t('year')}${dt.month}${Strings.t('month')}${dt.day}${Strings.t('day')}';
     }
