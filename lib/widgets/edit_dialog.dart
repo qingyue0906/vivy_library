@@ -44,7 +44,7 @@ class _EditDialogState extends State<EditDialog> {
   late TextEditingController _previewCtrl;
   List<String> _classes = [];
   List<String> _tags = [];
-  int _rating = 10;
+  int _rating = 5;
   String _define = 'item';
   bool _star = false;
   List<GotoEntry> _goto = [];
@@ -69,7 +69,7 @@ class _EditDialogState extends State<EditDialog> {
   bool _cbGoto = false;
 
   String _classMode = 'overwrite';
-  String _tagsMode = 'overwrite';
+  String _tagsMode = 'append';
   String _gotoMode = 'overwrite';
 
   bool _showAdvanced = false;

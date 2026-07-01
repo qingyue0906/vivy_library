@@ -44,7 +44,7 @@ class ItemInfo {
       creator: null,
       type: 'application',
       contentRating: 'G',
-      rating: 10,
+      rating: 5,
       tags: const [],
       classes: const [],
       preview: null,
