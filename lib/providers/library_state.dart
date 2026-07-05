@@ -350,8 +350,8 @@ class LibraryState extends ChangeNotifier {
   List<LibraryItem> get filteredAndSortedItems {
     var result = _itemsInSelectedCategory;
 
-    // 1.5 顶部 class 导航筛选
-    result = result.where((e) => _matchesClassFilter(e.info)).toList();
+    // 1.5 顶部 class 导航筛选（用有效 info 以命中继承值）
+    result = result.where((e) => _matchesClassFilter(effectiveInfo(e))).toList();
 
     // 2 搜索过滤
     if (_searchQuery.isNotEmpty) {
@@ -399,7 +399,7 @@ class LibraryState extends ChangeNotifier {
   }
 
   bool _matchesSearch(LibraryItem item, SearchQuery parsed) {
-    return _matchesSearchForInfo(item.info, parsed);
+    return _matchesSearchForInfo(effectiveInfo(item), parsed);
   }
 
   bool _matchesSearchForInfo(ItemInfo? info, SearchQuery parsed) {
@@ -453,6 +453,34 @@ class LibraryState extends ChangeNotifier {
       case 'false': case 'no': case '0': return false;
       default: return null;
     }
+  }
+
+  /// 判断 item 是否有自己的 info.json（5 个可继承字段任一非哨兵值）。
+  static bool _hasOwnInfo(LibraryItem item) {
+    final i = item.info;
+    return i.type.isNotEmpty ||
+        i.contentRating.isNotEmpty ||
+        i.rating > 0 ||
+        i.classes.isNotEmpty ||
+        i.tags.isNotEmpty;
+  }
+
+  /// 获取父文件夹的 ItemInfo。
+  ItemInfo? parentInfoOf(String categoryPath) {
+    return _categoryRoot.findByPath(categoryPath)?.info;
+  }
+
+  /// 获取 item 的有效 info：三链回退（自身 → 父文件夹 → 硬编码保底）。
+  /// - 有自身 info.json → 不继承父文件夹，仅空字段走硬编码保底。
+  /// - 无自身 info.json → 从父文件夹继承 5 个字段，再走硬编码保底。
+  ItemInfo effectiveInfo(LibraryItem item) {
+    if (_hasOwnInfo(item)) {
+      return item.info.inheritedFrom(ItemInfo.hardcodedDefaults);
+    }
+    final parentInfo = parentInfoOf(item.categoryPath);
+    return item.info
+        .inheritedFrom(parentInfo ?? ItemInfo.hardcodedDefaults)
+        .inheritedFrom(ItemInfo.hardcodedDefaults);
   }
 
   bool get fileBrowserVisible => _fileBrowserVisible;

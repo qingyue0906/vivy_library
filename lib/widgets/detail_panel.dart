@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import '../models/item_info.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/direct_file.dart';
@@ -12,6 +13,7 @@ import 'smooth_scroll.dart';
 
 class DetailPanel extends StatelessWidget {
   final LibraryItem? item;
+  final ItemInfo? effectiveInfo; // 有效 info（含父文件夹继承 + 硬编码保底）
   final CategoryNode? folder;
   final DirectFile? file;
   final double backgroundOpacity;
@@ -20,6 +22,7 @@ class DetailPanel extends StatelessWidget {
   const DetailPanel({
     super.key,
     this.item,
+    this.effectiveInfo,
     this.folder,
     this.file,
     this.backgroundOpacity = 1.0,
@@ -55,7 +58,7 @@ class DetailPanel extends StatelessWidget {
   }
 
   Widget _buildItemDetail(BuildContext context, double c, LibraryItem item) {
-    final info = item.info;
+    final info = effectiveInfo ?? item.info;
     return SmoothScroll(
       builder: (context, controller, physics) => ListView(
         controller: controller,

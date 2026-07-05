@@ -102,7 +102,7 @@ class _EditDialogState extends State<EditDialog> {
       _contentRatingCtrl = TextEditingController();
       _previewCtrl = TextEditingController();
     } else if (!widget.isBatch) {
-      final info = widget.targets.first.info;
+      final info = widget.state.effectiveInfo(widget.targets.first);
       _titleCtrl = TextEditingController(text: info.title);
       _descCtrl = TextEditingController(text: info.description);
       _creatorCtrl = TextEditingController(text: info.creator ?? '');
@@ -116,11 +116,17 @@ class _EditDialogState extends State<EditDialog> {
       _classes = List.of(info.classes);
       _tags = List.of(info.tags);
     } else {
+      // 批量编辑：默认值使用第一个目标的父文件夹 info
+      final firstParentInfo = widget.state.parentInfoOf(widget.targets.first.categoryPath);
+      final defaults = firstParentInfo ?? ItemInfo.hardcodedDefaults;
       _titleCtrl = TextEditingController();
       _descCtrl = TextEditingController();
       _creatorCtrl = TextEditingController();
-      _typeCtrl = TextEditingController();
-      _contentRatingCtrl = TextEditingController();
+      _typeCtrl = TextEditingController(text: defaults.type);
+      _contentRatingCtrl = TextEditingController(text: defaults.contentRating);
+      _rating = defaults.rating;
+      _classes = List.of(defaults.classes);
+      _tags = List.of(defaults.tags);
       _previewCtrl = TextEditingController();
     }
   }

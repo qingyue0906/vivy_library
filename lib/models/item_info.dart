@@ -34,7 +34,9 @@ class ItemInfo {
     this.star = false,
   });
 
-  /// 默认值,对应 Python 里 scan_all_items 里那个写死的 info_data 初始字典
+  /// 默认值,对应 Python 里 scan_all_items 里那个写死的 info_data 初始字典。
+  /// 可继承字段（type/contentRating/rating/classes/tags）改为空哨兵值，
+  /// 实际使用时通过 [inheritedFrom] 三链回退。
   factory ItemInfo.defaults(String folderName) {
     return ItemInfo(
       uuid: null,
@@ -42,14 +44,42 @@ class ItemInfo {
       title: folderName,
       description: Strings.t('noDescription'),
       creator: null,
-      type: 'application',
-      contentRating: 'G',
-      rating: 5,
+      type: '',
+      contentRating: '',
+      rating: 0,
       tags: const [],
       classes: const [],
       preview: null,
       goto: const [],
       star: false,
+    );
+  }
+
+  /// 三链回退的终极硬编码保底。
+  static const hardcodedDefaults = ItemInfo(
+    type: 'default',
+    contentRating: 'G',
+    rating: 5,
+    tags: [],
+    classes: [],
+    title: '',
+    description: '',
+    creator: null,
+    uuid: null,
+    define: 'item',
+    preview: null,
+    goto: [],
+    star: false,
+  );
+
+  /// 继承父文件夹的可继承字段：自身对应字段为空/零值时用 [parent] 覆盖。
+  ItemInfo inheritedFrom(ItemInfo parent) {
+    return copyWith(
+      type: type.isNotEmpty ? type : parent.type,
+      contentRating: contentRating.isNotEmpty ? contentRating : parent.contentRating,
+      rating: rating > 0 ? rating : parent.rating,
+      classes: classes.isNotEmpty ? classes : parent.classes,
+      tags: tags.isNotEmpty ? tags : parent.tags,
     );
   }
 

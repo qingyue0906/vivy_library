@@ -390,6 +390,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
               width: width,
               child: DetailPanel(
                 item: _state.selectedItem,
+                effectiveInfo: _state.selectedItem != null
+                    ? _state.effectiveInfo(_state.selectedItem!)
+                    : null,
                 folder: _state.selectedFolder,
                 file: _state.selectedFile,
                 backgroundOpacity: rightAlpha,
