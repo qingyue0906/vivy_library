@@ -52,6 +52,8 @@ class LibraryState extends ChangeNotifier {
 
   bool _fileBrowserVisible = false;
   bool _showSystemFiles = false;
+  double _copyProgress = -1;
+  String _copyStatus = '';
 
   final Set<String> _selectedPaths = {};
   String? _selectionAnchorPath;
@@ -67,6 +69,8 @@ class LibraryState extends ChangeNotifier {
   SearchScope get searchScope => _searchScope;
   ClassSource get classSource => _classSource;
   bool get groupingEnabled => _groupingEnabled;
+  double get copyProgress => _copyProgress;
+  String get copyStatus => _copyStatus;
   String? get selectedCategoryPath => _selectedCategoryPath;
   String? get selectedCategoryName {
     if (_selectedCategoryPath == null) return null;
@@ -841,14 +845,78 @@ class LibraryState extends ChangeNotifier {
   }
 
   /// Create a new item: creates folder, writes info.json, saves preview, rescans.
+  void startCopy(String message) {
+    _copyProgress = 0.0;
+    _copyStatus = message;
+    notifyListeners();
+  }
+
+  void updateCopyProgress(double value, String message) {
+    _copyProgress = value;
+    _copyStatus = message;
+    notifyListeners();
+  }
+
+  void showCopyComplete(String message) {
+    _copyProgress = 1.0;
+    _copyStatus = message;
+    notifyListeners();
+    Future.delayed(const Duration(seconds: 3), () {
+      _copyProgress = -1;
+      _copyStatus = '';
+      notifyListeners();
+    });
+  }
+
+  Future<void> _copySingle(String src, String dest) async {
+    final entity = FileSystemEntity.typeSync(src);
+    if (entity == FileSystemEntityType.directory) {
+      await _copyDirectory(Directory(src), Directory(dest));
+    } else {
+      await File(src).copy(dest);
+    }
+  }
+
+  Future<void> _copyDirectory(Directory src, Directory dest) async {
+    await dest.create(recursive: true);
+    await for (final entity in src.list()) {
+      if (entity is File) {
+        final relative = entity.path.substring(src.path.length + 1);
+        await entity.copy("${dest.path}${Platform.pathSeparator}$relative");
+      } else if (entity is Directory) {
+        final relative = entity.path.substring(src.path.length + 1);
+        await _copyDirectory(entity, Directory("${dest.path}${Platform.pathSeparator}$relative"));
+      }
+    }
+  }
+
+  String _uniqueName(String destDir, String name) {
+    final dest = "$destDir${Platform.pathSeparator}$name";
+    if (!Directory(dest).existsSync() && !File(dest).existsSync()) return dest;
+    int counter = 1;
+    while (true) {
+      final alt = "$destDir${Platform.pathSeparator}${name}_$counter";
+      if (!Directory(alt).existsSync() && !File(alt).existsSync()) return alt;
+      counter++;
+    }
+  }
+
   Future<String?> createItem({
     required String parentPath,
     required String folderName,
     required ItemInfo info,
     Uint8List? croppedImage,
+    List<String> importedPaths = const [],
   }) async {
     final safeName = folderName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final itemPath = '$parentPath${Platform.pathSeparator}$safeName';
+    String itemPath = '$parentPath${Platform.pathSeparator}$safeName';
+    if (Directory(itemPath).existsSync()) {
+      int counter = 1;
+      do {
+        itemPath = '$parentPath${Platform.pathSeparator}${safeName}_$counter';
+        counter++;
+      } while (Directory(itemPath).existsSync());
+    }
     try {
       await Directory(itemPath).create(recursive: true);
       ItemInfo finalInfo = info;
@@ -864,6 +932,21 @@ class LibraryState extends ChangeNotifier {
       await jsonFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(finalInfo.toJson()),
       );
+      if (importedPaths.isNotEmpty) {
+        startCopy("Copying ${importedPaths.length} item(s)...");
+        for (int i = 0; i < importedPaths.length; i++) {
+          final src = importedPaths[i];
+          final srcName = src.replaceAll("\\", "/").split("/").last;
+          updateCopyProgress(i / importedPaths.length, "Copying $srcName (${i + 1}/${importedPaths.length})");
+          final dest = _uniqueName(itemPath, srcName);
+          try {
+            await _copySingle(src, dest);
+          } catch (e) {
+            debugPrint("copy error for $src: $e");
+          }
+        }
+        showCopyComplete("Copy complete");
+      }
       await rescan();
       return itemPath;
     } catch (e) {

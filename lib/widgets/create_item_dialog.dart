@@ -48,12 +48,19 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   final _classInputCtrl = TextEditingController();
   final _tagInputCtrl = TextEditingController();
   final _cropperKey = GlobalKey<ImageCropperState>();
+  final List<String> _importedPaths = [];
 
   @override
   void initState() {
     super.initState();
     _parentPath = widget.defaultParentPath;
     if (_parentPath != null) _applyParentDefaults(_parentPath!);
+    _titleCtrl.addListener(_onTitleChanged);
+  }
+
+  void _onTitleChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _applyParentDefaults(String parentPath) {
@@ -147,6 +154,7 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
         folderName: title,
         info: info,
         croppedImage: cropped,
+        importedPaths: _importedPaths,
       );
 
       if (mounted) {
@@ -187,9 +195,11 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
               children: [
                 _buildFolderSelector(context, c, cs),
                 const SizedBox(height: 8),
-                _buildField(Strings.t('title'), _titleCtrl),
+                _buildField(Strings.t('title'), _titleCtrl, isError: _titleCtrl.text.trim().isEmpty),
                 const SizedBox(height: 8),
                 _buildPreviewArea(context, c, cs),
+                const SizedBox(height: 8),
+                _buildImportSection(context, c, cs),
                 const SizedBox(height: 8),
                 _buildField(Strings.t('description'), _descCtrl, maxLines: 3),
                 const SizedBox(height: 8),
@@ -311,6 +321,109 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     );
   }
 
+  void _pickImportFiles() async {
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    if (result != null) {
+      for (final f in result.files) {
+        if (f.path != null && !_importedPaths.contains(f.path)) {
+          setState(() => _importedPaths.add(f.path!));
+        }
+      }
+    }
+  }
+
+  void _pickImportFolder() async {
+    final dir = await FilePicker.platform.getDirectoryPath();
+    if (dir != null && !_importedPaths.contains(dir)) {
+      setState(() => _importedPaths.add(dir));
+    }
+  }
+
+  Widget _buildImportSection(BuildContext context, double c, ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 4 * c),
+          child: Text(Strings.t('importFiles'), style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
+        ),
+        DropTarget(
+          onDragDone: (detail) {
+            for (final f in detail.files) {
+              if (!_importedPaths.contains(f.path)) {
+                setState(() => _importedPaths.add(f.path));
+              }
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(8 * c),
+            decoration: BoxDecoration(
+              border: Border.all(color: cs.outlineVariant, style: BorderStyle.solid),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickImportFiles,
+                        icon: Icon(Icons.file_open, size: 14 * c),
+                        label: Text(Strings.t('selectFiles'), style: TextStyle(fontSize: 11 * c)),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 6 * c),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8 * c),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickImportFolder,
+                        icon: Icon(Icons.create_new_folder, size: 14 * c),
+                        label: Text(Strings.t('selectFolder'), style: TextStyle(fontSize: 11 * c)),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 6 * c),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 4 * c),
+                Text(Strings.t('dragHint'), style: TextStyle(fontSize: 10 * c, color: cs.onSurfaceVariant)),
+                if (_importedPaths.isNotEmpty) ...[
+                  SizedBox(height: 4 * c),
+                  ..._importedPaths.map((p) {
+                    final name = p.replaceAll("\\", "/").split("/").last;
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: 2 * c),
+                      child: Row(
+                        children: [
+                          Icon(Icons.insert_drive_file, size: 12 * c, color: cs.onSurfaceVariant),
+                          SizedBox(width: 4 * c),
+                          Expanded(
+                            child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10 * c, color: cs.onSurface)),
+                          ),
+                          InkWell(
+                            onTap: () => setState(() => _importedPaths.remove(p)),
+                            child: Icon(Icons.close, size: 12 * c, color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPreviewArea(BuildContext context, double c, ColorScheme cs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,11 +435,13 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
         if (_previewImagePath != null)
           Column(
             children: [
-              ImageCropper(
+              Center(
+                child: ImageCropper(
                 key: _cropperKey,
                 imagePath: _previewImagePath!,
                 width: 400,
                 height: 250,
+                ),
               ),
               SizedBox(height: 4 * c),
               TextButton.icon(
@@ -380,7 +495,7 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
   }
 
-  Widget _buildField(String label, TextEditingController ctrl, {int maxLines = 1}) {
+  Widget _buildField(String label, TextEditingController ctrl, {int maxLines = 1, bool isError = false}) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,6 +512,10 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: isError ? cs.error : cs.outlineVariant),
+            ),
           ),
         ),
       ],
@@ -419,18 +538,53 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
             if (text.isEmpty) return options;
             return options.where((o) => o.toLowerCase().contains(text));
           },
-          onSelected: (selection) => controller.text = selection,
+          onSelected: (selection) {
+            controller.text = selection;
+            controller.selection = TextSelection.collapsed(offset: selection.length);
+          },
           fieldViewBuilder: (context, acController, focusNode, onSubmitted) {
             return TextField(
               controller: acController,
               focusNode: focusNode,
               style: const TextStyle(fontSize: 11),
+              onChanged: (v) => controller.text = v,
               decoration: InputDecoration(
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
               ),
               onSubmitted: (_) => onSubmitted(),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, opts) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                color: cs.surface,
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: (opts.length * 32).clamp(0, 160).toDouble(),
+                  child: SmoothScroll(
+                    builder: (context, scrollController, physics) => ListView.builder(
+                      controller: scrollController,
+                      physics: physics,
+                      padding: EdgeInsets.zero,
+                      itemCount: opts.length,
+                      itemBuilder: (context, index) {
+                        final option = opts.elementAt(index);
+                        return InkWell(
+                          onTap: () => onSelected(option),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: Text(option, style: TextStyle(fontSize: 11, color: cs.onSurface)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             );
           },
         ),
@@ -580,6 +734,33 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
               final text = value.trim();
               if (text.isNotEmpty) onAdd(text);
             },
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, opts) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: cs.surface,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: (opts.length * 28).clamp(0, 140).toDouble(),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: opts.length,
+                itemBuilder: (context, index) {
+                  final option = opts.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Text(option, style: TextStyle(fontSize: 11, color: cs.onSurface)),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },

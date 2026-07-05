@@ -174,6 +174,35 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     builder: (context, _) => _buildBody(),
                   ),
                 ),
+                ListenableBuilder(
+                  listenable: _state,
+                  builder: (context, _) {
+                    if (_state.copyProgress < 0) return const SizedBox.shrink();
+                    final cs = Theme.of(context).colorScheme;
+                    return Container(
+                      height: 24,
+                      color: cs.surfaceContainerHigh,
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 160,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: LinearProgressIndicator(value: _state.copyProgress >= 1.0 ? null : _state.copyProgress),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              _state.copyStatus,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: _state.copyProgress >= 1.0 ? Colors.green : cs.onSurfaceVariant),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ],

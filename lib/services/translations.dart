@@ -1289,6 +1289,12 @@ class Strings {
 
 
     // ======== create_item_dialog / image_cropper ========
+    'create': {
+      AppLocale.zhHans: '创建',
+      AppLocale.zhHant: '創建',
+      AppLocale.en: 'Create',
+      AppLocale.ja: '作成',
+    },
     'createItem': {
       AppLocale.zhHans: '创建项目',
       AppLocale.zhHant: '創建項目',
@@ -1342,6 +1348,31 @@ class Strings {
       AppLocale.zhHant: '圖片加載失敗',
       AppLocale.en: 'Failed to load image',
       AppLocale.ja: '画像の読み込みに失敗しました',
+    },
+
+    'importFiles': {
+      AppLocale.zhHans: '导入文件',
+      AppLocale.zhHant: '導入文件',
+      AppLocale.en: 'Import Files',
+      AppLocale.ja: 'ファイルをインポート',
+    },
+    'selectFiles': {
+      AppLocale.zhHans: '选择文件',
+      AppLocale.zhHant: '選擇文件',
+      AppLocale.en: 'Select Files',
+      AppLocale.ja: 'ファイルを選択',
+    },
+    'selectFolder': {
+      AppLocale.zhHans: '选择文件夹',
+      AppLocale.zhHant: '選擇文件夾',
+      AppLocale.en: 'Select Folder',
+      AppLocale.ja: 'フォルダを選択',
+    },
+    'dragHint': {
+      AppLocale.zhHans: '也可拖入文件或文件夹到此处',
+      AppLocale.zhHant: '也可拖入文件或文件夾到此處',
+      AppLocale.en: 'Or drag files/folders here',
+      AppLocale.ja: 'ファイルやフォルダをここにドロップ',
     },
   };
 }

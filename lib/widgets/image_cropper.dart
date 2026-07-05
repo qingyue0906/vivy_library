@@ -59,9 +59,16 @@ class ImageCropperState extends State<ImageCropper> {
     final dh = imgH * scale;
     final dx = (widget.width - dw) / 2;
     final dy = (widget.height - dh) / 2;
-    final pad = 20.0;
-    _cropRect = Rect.fromLTWH(
-      dx + pad, dy + pad, dw - pad * 2, dh - pad * 2,
+    _cropRect = Rect.fromLTWH(dx, dy, dw, dh);
+  }
+
+  void _clampCropToImage() {
+    final imgRect = _imageDisplayRect();
+    _cropRect = Rect.fromLTRB(
+      _cropRect.left.clamp(imgRect.left, imgRect.right - _minCrop),
+      _cropRect.top.clamp(imgRect.top, imgRect.bottom - _minCrop),
+      _cropRect.right.clamp(imgRect.left + _minCrop, imgRect.right),
+      _cropRect.bottom.clamp(imgRect.top + _minCrop, imgRect.bottom),
     );
   }
 
@@ -184,9 +191,15 @@ class ImageCropperState extends State<ImageCropper> {
           onPanStart: (d) => _dragHandle = _hitTest(d.localPosition),
           onPanUpdate: (d) {
             if (_dragHandle == 'body') {
-              setState(() => _cropRect = _cropRect.shift(d.delta));
+              setState(() {
+                _cropRect = _cropRect.shift(d.delta);
+                _clampCropToImage();
+              });
             } else if (_dragHandle != null) {
-              setState(() => _cropRect = _dragCrop(d.delta, _dragHandle!, _cropRect));
+              setState(() {
+                _cropRect = _dragCrop(d.delta, _dragHandle!, _cropRect);
+                _clampCropToImage();
+              });
             }
           },
           onPanEnd: (_) => _dragHandle = null,
