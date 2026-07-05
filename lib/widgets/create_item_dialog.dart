@@ -42,7 +42,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   Uint8List? _croppedImageBytes;
   List<GotoEntry> _goto = [];
   bool _isSaving = false;
-  bool _showFolderPicker = true;
   bool _showAdvanced = false;
   bool _showClassInput = false;
   bool _showTagInput = false;
@@ -253,8 +252,29 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     );
   }
 
-  Widget _buildFolderSelector(BuildContext context, double c, ColorScheme cs) {
+  Future<void> _pickFolder() async {
+    final path = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(Strings.t('selectParentFolder'), style: const TextStyle(fontSize: 14)),
+        content: SizedBox(
+          width: 300,
+          height: 400,
+          child: FolderTreePicker(
+            root: widget.state.categoryRoot,
+            selectedPath: _parentPath,
+            onSelected: (p) => Navigator.pop(ctx, p),
+          ),
+        ),
+      ),
+    );
+    if (path != null) {
+      setState(() => _parentPath = path);
+      _applyParentDefaults(path);
+    }
+  }
 
+  Widget _buildFolderSelector(BuildContext context, double c, ColorScheme cs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -263,7 +283,7 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
           child: Text(Strings.t('parentFolder'), style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
         ),
         InkWell(
-          onTap: () => setState(() => _showFolderPicker = !_showFolderPicker),
+          onTap: _pickFolder,
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(horizontal: 10 * c, vertical: 8 * c),
@@ -282,25 +302,11 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
                     style: TextStyle(fontSize: 11 * c, color: _parentPath != null ? cs.onSurface : cs.onSurfaceVariant),
                   ),
                 ),
-                Icon(_showFolderPicker ? Icons.expand_less : Icons.expand_more, size: 14 * c, color: cs.onSurfaceVariant),
+                Icon(Icons.chevron_right, size: 14 * c, color: cs.onSurfaceVariant),
               ],
             ),
           ),
         ),
-        if (_showFolderPicker) ...[
-          SizedBox(height: 4 * c),
-          FolderTreePicker(
-            root: widget.state.categoryRoot,
-            selectedPath: _parentPath,
-            onSelected: (path) {
-              setState(() {
-                _parentPath = path;
-                _showFolderPicker = false;
-              });
-              _applyParentDefaults(path);
-            },
-          ),
-        ],
       ],
     );
   }

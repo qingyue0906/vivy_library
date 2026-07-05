@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/category_node.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
+import 'smooth_scroll.dart';
 
 class FolderTreePicker extends StatefulWidget {
   final CategoryNode root;
@@ -41,13 +42,15 @@ class _FolderTreePickerState extends State<FolderTreePicker> {
         border: Border.all(color: cs.outlineVariant),
         borderRadius: BorderRadius.circular(6),
       ),
-      constraints: const BoxConstraints(maxHeight: 240),
-      child: ListView(
-        padding: EdgeInsets.zero,
-        shrinkWrap: true,
-        children: [
-          _buildNode(context, c, widget.root, 0, label: Strings.t('rootDir')),
-        ],
+      child: SmoothScroll(
+        builder: (context, controller, physics) => ListView(
+          controller: controller,
+          physics: physics,
+          padding: EdgeInsets.zero,
+          children: [
+            _buildNode(context, c, widget.root, 0, label: Strings.t('rootDir')),
+          ],
+        ),
       ),
     );
   }
