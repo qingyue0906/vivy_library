@@ -675,14 +675,14 @@ class Strings {
       AppLocale.ja: '評価',
     },
     'classLabel': {
-      AppLocale.zhHans: '分类标签 (class)',
-      AppLocale.zhHant: '分類標籤 (class)',
+      AppLocale.zhHans: '分类',
+      AppLocale.zhHant: '分類',
       AppLocale.en: 'Class',
       AppLocale.ja: 'クラス',
     },
     'tags': {
-      AppLocale.zhHans: '标签 (tags)',
-      AppLocale.zhHant: '標籤 (tags)',
+      AppLocale.zhHans: '标签',
+      AppLocale.zhHant: '標籤',
       AppLocale.en: 'Tags',
       AppLocale.ja: 'タグ',
     },
