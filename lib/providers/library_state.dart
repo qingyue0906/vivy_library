@@ -35,17 +35,17 @@ class LibraryState extends ChangeNotifier {
   String _searchQuery = '';
   SearchScope _searchScope = SearchScope.defaults();
   ClassSource _classSource = ClassSource.class_;
-  String? _selectedCategoryPath; // null=全部，否则为文件夹绝对路径
+  String? _selectedCategoryPath; // null=鍏ㄩ儴锛屽惁鍒欎负鏂囦欢澶圭粷瀵硅矾寰?
   String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
   SortOrder _sortOrder = SortOrder.ascending;
   bool _groupingEnabled = false;
 
   LibraryItem? _selectedItem;
-  CategoryNode? _selectedFolder; // 选中的文件夹节点（用于右侧显示文件夹 info）
+  CategoryNode? _selectedFolder; // 閫変腑鐨勬枃浠跺す鑺傜偣锛堢敤浜庡彸渚ф樉绀烘枃浠跺す info锛?
   DirectFile? _selectedFile;
 
-  // 左侧文件夹树的展开状态（已从 widget 层上移，便于刷新/编辑后保留）。
+  // 宸︿晶鏂囦欢澶规爲鐨勫睍寮€鐘舵€侊紙宸蹭粠 widget 灞備笂绉伙紝渚夸簬鍒锋柊/缂栬緫鍚庝繚鐣欙級銆?
   final Set<String> _expandedPaths = {};
 
   bool _initialized = false;
@@ -56,7 +56,7 @@ class LibraryState extends ChangeNotifier {
   final Set<String> _selectedPaths = {};
   String? _selectionAnchorPath;
 
-  // 文件夹多选状态（与项目多选分开，二者互斥）
+  // 鏂囦欢澶瑰閫夌姸鎬侊紙涓庨」鐩閫夊垎寮€锛屼簩鑰呬簰鏂ワ級
   final Set<String> _selectedFolderPaths = {};
   String? _folderSelectionAnchorPath;
 
@@ -93,21 +93,21 @@ class LibraryState extends ChangeNotifier {
       .whereType<CategoryNode>()
       .toList();
 
-  /// 当前选中文件夹是否在中间区显示"直接子文件夹 + 直接项目"。
-  /// - null（全部项目）：不显示子文件夹。
-  /// - 根目录：无展开概念，恒显示直接内容。
-  /// - 普通文件夹：折叠时不显示子文件夹（中间区递归显示其全部项目），
-  ///   展开时显示直接子文件夹 + 直接项目。
+  /// 褰撳墠閫変腑鏂囦欢澶规槸鍚﹀湪涓棿鍖烘樉绀?鐩存帴瀛愭枃浠跺す + 鐩存帴椤圭洰"銆?
+  /// - null锛堝叏閮ㄩ」鐩級锛氫笉鏄剧ず瀛愭枃浠跺す銆?
+  /// - 鏍圭洰褰曪細鏃犲睍寮€姒傚康锛屾亽鏄剧ず鐩存帴鍐呭銆?
+  /// - 鏅€氭枃浠跺す锛氭姌鍙犳椂涓嶆樉绀哄瓙鏂囦欢澶癸紙涓棿鍖洪€掑綊鏄剧ず鍏跺叏閮ㄩ」鐩級锛?
+  ///   灞曞紑鏃舵樉绀虹洿鎺ュ瓙鏂囦欢澶?+ 鐩存帴椤圭洰銆?
   bool get _selectedShowsSubDirs {
     if (_selectedCategoryPath == null) return false;
     if (_selectedCategoryPath == _categoryRoot.path) return true;
     return _expandedPaths.contains(_selectedCategoryPath!);
   }
 
-  /// 当前选中分类下的项目集合（供网格与 class 导航统一取数）。
-  /// - null（全部项目）：全库。
-  /// - 文件夹展开 / 根目录：仅直接项目。
-  /// - 文件夹折叠：该文件夹下所有递归项目。
+  /// 褰撳墠閫変腑鍒嗙被涓嬬殑椤圭洰闆嗗悎锛堜緵缃戞牸涓?class 瀵艰埅缁熶竴鍙栨暟锛夈€?
+  /// - null锛堝叏閮ㄩ」鐩級锛氬叏搴撱€?
+  /// - 鏂囦欢澶瑰睍寮€ / 鏍圭洰褰曪細浠呯洿鎺ラ」鐩€?
+  /// - 鏂囦欢澶规姌鍙狅細璇ユ枃浠跺す涓嬫墍鏈夐€掑綊椤圭洰銆?
   List<LibraryItem> get _itemsInSelectedCategory {
     if (_selectedCategoryPath == null) return _allItems;
     if (_selectedShowsSubDirs) {
@@ -117,7 +117,7 @@ class LibraryState extends ChangeNotifier {
     }
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
     if (node == null) {
-      // 节点已不存在（如刚被删/改名），回退到精确匹配。
+      // 鑺傜偣宸蹭笉瀛樺湪锛堝鍒氳鍒?鏀瑰悕锛夛紝鍥為€€鍒扮簿纭尮閰嶃€?
       return _allItems
           .where((e) => e.categoryPath == _selectedCategoryPath)
           .toList();
@@ -126,8 +126,8 @@ class LibraryState extends ChangeNotifier {
     return _allItems.where((e) => paths.contains(e.path)).toList();
   }
 
-  /// 当前选中文件夹的直接子文件夹。
-  /// 仅当展开态下（或选中根目录）才返回；折叠/"全部"时返回空。
+  /// 褰撳墠閫変腑鏂囦欢澶圭殑鐩存帴瀛愭枃浠跺す銆?
+  /// 浠呭綋灞曞紑鎬佷笅锛堟垨閫変腑鏍圭洰褰曪級鎵嶈繑鍥烇紱鎶樺彔/"鍏ㄩ儴"鏃惰繑鍥炵┖銆?
   List<CategoryNode> get currentSubDirs {
     if (!_selectedShowsSubDirs) return [];
     final node = _categoryRoot.findByPath(_selectedCategoryPath!);
@@ -138,10 +138,10 @@ class LibraryState extends ChangeNotifier {
     });
   }
 
-  /// 当前选中分类下的直接文件（逻辑与 _itemsInSelectedCategory 对等）。
-  /// - null（全部项目）：全库。
-  /// - 文件夹展开 / 根目录：仅直接文件。
-  /// - 文件夹折叠：该文件夹下所有递归文件。
+  /// 褰撳墠閫変腑鍒嗙被涓嬬殑鐩存帴鏂囦欢锛堥€昏緫涓?_itemsInSelectedCategory 瀵圭瓑锛夈€?
+  /// - null锛堝叏閮ㄩ」鐩級锛氬叏搴撱€?
+  /// - 鏂囦欢澶瑰睍寮€ / 鏍圭洰褰曪細浠呯洿鎺ユ枃浠躲€?
+  /// - 鏂囦欢澶规姌鍙狅細璇ユ枃浠跺す涓嬫墍鏈夐€掑綊鏂囦欢銆?
   List<DirectFile> get currentDirectFiles {
     List<DirectFile> result;
     if (_selectedCategoryPath == null) {
@@ -248,7 +248,7 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 顶部 class 导航的选项列表，统计当前左侧分类下的项目和文件夹。
+  /// 椤堕儴 class 瀵艰埅鐨勯€夐」鍒楄〃锛岀粺璁″綋鍓嶅乏渚у垎绫讳笅鐨勯」鐩拰鏂囦欢澶广€?
   List<MapEntry<String, int>> get classNavOptions {
     final inCategory = _itemsInSelectedCategory;
     final inFolders = currentSubDirs;
@@ -350,10 +350,10 @@ class LibraryState extends ChangeNotifier {
   List<LibraryItem> get filteredAndSortedItems {
     var result = _itemsInSelectedCategory;
 
-    // 1.5 顶部 class 导航筛选（用有效 info 以命中继承值）
+    // 1.5 椤堕儴 class 瀵艰埅绛涢€夛紙鐢ㄦ湁鏁?info 浠ュ懡涓户鎵垮€硷級
     result = result.where((e) => _matchesClassFilter(effectiveInfo(e))).toList();
 
-    // 2 搜索过滤
+    // 2 鎼滅储杩囨护
     if (_searchQuery.isNotEmpty) {
       final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
       if (!parsed.isEmpty) {
@@ -406,7 +406,7 @@ class LibraryState extends ChangeNotifier {
     if (info == null) return parsed.freeTokens.isEmpty && parsed.qualified.isEmpty;
     final i = info;
 
-    // 精准限定 (不依赖搜索范围开关)
+    // 绮惧噯闄愬畾 (涓嶄緷璧栨悳绱㈣寖鍥村紑鍏?
     for (final e in parsed.qualified.entries) {
       final field = e.key;
       final value = e.value;
@@ -426,7 +426,7 @@ class LibraryState extends ChangeNotifier {
       }
     }
 
-    // 宽松 token (需命中至少一个开启的范围字段)
+    // 瀹芥澗 token (闇€鍛戒腑鑷冲皯涓€涓紑鍚殑鑼冨洿瀛楁)
     for (final token in parsed.freeTokens) {
       bool tokenMatched = false;
       final lt = token.toLowerCase();
@@ -455,7 +455,7 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 判断 item 是否有自己的 info.json（5 个可继承字段任一非哨兵值）。
+  /// 鍒ゆ柇 item 鏄惁鏈夎嚜宸辩殑 info.json锛? 涓彲缁ф壙瀛楁浠讳竴闈炲摠鍏靛€硷級銆?
   static bool _hasOwnInfo(LibraryItem item) {
     final i = item.info;
     return i.type.isNotEmpty ||
@@ -465,14 +465,14 @@ class LibraryState extends ChangeNotifier {
         i.tags.isNotEmpty;
   }
 
-  /// 获取父文件夹的 ItemInfo。
+  /// 鑾峰彇鐖舵枃浠跺す鐨?ItemInfo銆?
   ItemInfo? parentInfoOf(String categoryPath) {
     return _categoryRoot.findByPath(categoryPath)?.info;
   }
 
-  /// 获取 item 的有效 info：三链回退（自身 → 父文件夹 → 硬编码保底）。
-  /// - 有自身 info.json → 不继承父文件夹，仅空字段走硬编码保底。
-  /// - 无自身 info.json → 从父文件夹继承 5 个字段，再走硬编码保底。
+  /// 鑾峰彇 item 鐨勬湁鏁?info锛氫笁閾惧洖閫€锛堣嚜韬?鈫?鐖舵枃浠跺す 鈫?纭紪鐮佷繚搴曪級銆?
+  /// - 鏈夎嚜韬?info.json 鈫?涓嶇户鎵跨埗鏂囦欢澶癸紝浠呯┖瀛楁璧扮‖缂栫爜淇濆簳銆?
+  /// - 鏃犺嚜韬?info.json 鈫?浠庣埗鏂囦欢澶圭户鎵?5 涓瓧娈碉紝鍐嶈蛋纭紪鐮佷繚搴曘€?
   ItemInfo effectiveInfo(LibraryItem item) {
     if (_hasOwnInfo(item)) {
       return item.info.inheritedFrom(ItemInfo.hardcodedDefaults);
@@ -524,7 +524,7 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 选中左侧文件夹（null=全部）。
+  /// 閫変腑宸︿晶鏂囦欢澶癸紙null=鍏ㄩ儴锛夈€?
   void setSelectedCategory(String? path) {
     _selectedCategoryPath = path;
     _selectedClass = kAllClass;
@@ -539,8 +539,8 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 在左侧目录树中定位并选中 [folderPath]，同时自动展开所有祖先节点，
-  /// 并清空项目和文件夹的选中状态。
+  /// 鍦ㄥ乏渚х洰褰曟爲涓畾浣嶅苟閫変腑 [folderPath]锛屽悓鏃惰嚜鍔ㄥ睍寮€鎵€鏈夌鍏堣妭鐐癸紝
+  /// 骞舵竻绌洪」鐩拰鏂囦欢澶圭殑閫変腑鐘舵€併€?
   void locateInTree(String folderPath) {
     final ancestors = _categoryRoot.ancestorPaths(folderPath);
     _expandedPaths.addAll(ancestors);
@@ -554,7 +554,7 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 切换左侧文件夹节点的展开/收起状态。
+  /// 鍒囨崲宸︿晶鏂囦欢澶硅妭鐐圭殑灞曞紑/鏀惰捣鐘舵€併€?
   void toggleExpand(String path) {
     if (_expandedPaths.contains(path)) {
       _expandedPaths.remove(path);
@@ -612,7 +612,7 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 选中一个文件夹节点（用于单击文件夹卡片：显示文件夹 info，不进底部）。
+  /// 閫変腑涓€涓枃浠跺す鑺傜偣锛堢敤浜庡崟鍑绘枃浠跺す鍗＄墖锛氭樉绀烘枃浠跺す info锛屼笉杩涘簳閮級銆?
   void setSelectedFolder(CategoryNode node) {
     _selectedFolder = node;
     _selectedItem = null;
@@ -701,7 +701,7 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 通过 uuid 选中项目（goto 点击）。找不到返回 false，调用方提示。
+  /// 閫氳繃 uuid 閫変腑椤圭洰锛坓oto 鐐瑰嚮锛夈€傛壘涓嶅埌杩斿洖 false锛岃皟鐢ㄦ柟鎻愮ず銆?
   bool selectByUuid(String uuid) {
     final item = _itemByUuid[uuid];
     if (item == null) return false;
@@ -709,9 +709,9 @@ class LibraryState extends ChangeNotifier {
     return true;
   }
 
-  /// 通过相对路径选中嵌套 item（goto 点击 path 型）。
-  /// [currentItemPath] 是当前选中项目的绝对路径，[relativePath] 是相对它的路径。
-  /// 即时扫描构建临时 LibraryItem 显示。找不到返回 false。
+  /// 閫氳繃鐩稿璺緞閫変腑宓屽 item锛坓oto 鐐瑰嚮 path 鍨嬶級銆?
+  /// [currentItemPath] 鏄綋鍓嶉€変腑椤圭洰鐨勭粷瀵硅矾寰勶紝[relativePath] 鏄浉瀵瑰畠鐨勮矾寰勩€?
+  /// 鍗虫椂鎵弿鏋勫缓涓存椂 LibraryItem 鏄剧ず銆傛壘涓嶅埌杩斿洖 false銆?
   Future<bool> selectByGotoPath(String currentItemPath, String relativePath) async {
     final sep = Platform.pathSeparator;
     final target = '$currentItemPath$sep$relativePath';
@@ -798,13 +798,13 @@ class LibraryState extends ChangeNotifier {
 
   bool isItemSelected(String path) => _selectedPaths.contains(path);
 
-  /// 保存单项编辑结果：用新的 ItemInfo 替换对应项目的 info,并写回 info.json。
-  /// uuid 为空时自动生成。
+  /// 淇濆瓨鍗曢」缂栬緫缁撴灉锛氱敤鏂扮殑 ItemInfo 鏇挎崲瀵瑰簲椤圭洰鐨?info,骞跺啓鍥?info.json銆?
+  /// uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴愩€?
   Future<bool> saveItemInfo(String itemPath, ItemInfo newInfo) async {
     final index = _allItems.indexWhere((e) => e.path == itemPath);
     if (index == -1) return false;
 
-    // uuid 为空时自动生成
+    // uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴?
     ItemInfo finalInfo = newInfo;
     if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
       finalInfo = newInfo.copyWith(uuid: const Uuid().v4());
@@ -836,13 +836,45 @@ class LibraryState extends ChangeNotifier {
 
     notifyListeners();
 
-    // define 变化（item/dir/hide 之间任意切换）需要重扫以更新树结构
+    // define 鍙樺寲锛坕tem/dir/hide 涔嬮棿浠绘剰鍒囨崲锛夐渶瑕侀噸鎵互鏇存柊鏍戠粨鏋?
     return defineChanged;
   }
 
-  /// 保存文件夹（CategoryNode）的 info.json。返回 define 是否变化（需重扫）。
+  /// Create a new item: creates folder, writes info.json, saves preview, rescans.
+  Future<String?> createItem({
+    required String parentPath,
+    required String folderName,
+    required ItemInfo info,
+    Uint8List? croppedImage,
+  }) async {
+    final safeName = folderName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final itemPath = '$parentPath${Platform.pathSeparator}$safeName';
+    try {
+      await Directory(itemPath).create(recursive: true);
+      ItemInfo finalInfo = info;
+      if (info.uuid == null || info.uuid!.isEmpty) {
+        finalInfo = info.copyWith(uuid: const Uuid().v4());
+      }
+      if (croppedImage != null) {
+        final previewFile = File('$itemPath${Platform.pathSeparator}preview.png');
+        await previewFile.writeAsBytes(croppedImage);
+        finalInfo = finalInfo.copyWith(preview: 'preview.png');
+      }
+      final jsonFile = File('$itemPath${Platform.pathSeparator}info.json');
+      await jsonFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(finalInfo.toJson()),
+      );
+      await rescan();
+      return itemPath;
+    } catch (e) {
+      debugPrint('createItem error: $e');
+      return null;
+    }
+  }
+
+  /// 淇濆瓨鏂囦欢澶癸紙CategoryNode锛夌殑 info.json銆傝繑鍥?define 鏄惁鍙樺寲锛堥渶閲嶆壂锛夈€?
   Future<bool> saveFolderInfo(String folderPath, ItemInfo newInfo) async {
-    // uuid 为空时自动生成
+    // uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴?
     ItemInfo finalInfo = newInfo;
     if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
       finalInfo = newInfo.copyWith(uuid: const Uuid().v4());
@@ -853,7 +885,7 @@ class LibraryState extends ChangeNotifier {
       const JsonEncoder.withIndent('  ').convert(finalInfo.toJson()),
     );
 
-    // 更新树中的节点 info
+    // 鏇存柊鏍戜腑鐨勮妭鐐?info
     final node = _categoryRoot.findByPath(folderPath);
     final defineChanged = node?.info?.define != finalInfo.define;
     if (node != null) {
@@ -866,7 +898,7 @@ class LibraryState extends ChangeNotifier {
     return defineChanged;
   }
 
-  /// 递归更新树中某节点 info（不可变树需重建根）。
+  /// 閫掑綊鏇存柊鏍戜腑鏌愯妭鐐?info锛堜笉鍙彉鏍戦渶閲嶅缓鏍癸級銆?
   CategoryNode _updateFolderInfoInTree(CategoryNode node, String targetPath, ItemInfo newInfo) {
     if (node.path == targetPath) {
       return node.copyWith(info: newInfo);
@@ -876,9 +908,9 @@ class LibraryState extends ChangeNotifier {
     return node.copyWith(subDirs: newSubDirs);
   }
 
-  /// 批量编辑:对所有选中项应用同一批字段变更。
-  /// 列表字段（tags/classes/goto）支持 overwrite/append/remove 模式。
-  /// 返回是否有 define 变化（需要重扫）。
+  /// 鎵归噺缂栬緫:瀵规墍鏈夐€変腑椤瑰簲鐢ㄥ悓涓€鎵瑰瓧娈靛彉鏇淬€?
+  /// 鍒楄〃瀛楁锛坱ags/classes/goto锛夋敮鎸?overwrite/append/remove 妯″紡銆?
+  /// 杩斿洖鏄惁鏈?define 鍙樺寲锛堥渶瑕侀噸鎵級銆?
   Future<bool> batchEditItems({
     required List<String> itemPaths,
     String? description,
@@ -919,7 +951,7 @@ class LibraryState extends ChangeNotifier {
         star: star,
       );
 
-      // uuid 为空时自动生成
+      // uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴?
       if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
         newInfo = newInfo.copyWith(uuid: const Uuid().v4());
       }
@@ -950,7 +982,7 @@ class LibraryState extends ChangeNotifier {
     return anyDefineChanged;
   }
 
-  /// 批量编辑文件夹：与 batchEditItems 字段对齐，用于多选文件夹卡片后的批量编辑。
+  /// 鎵归噺缂栬緫鏂囦欢澶癸細涓?batchEditItems 瀛楁瀵归綈锛岀敤浜庡閫夋枃浠跺す鍗＄墖鍚庣殑鎵归噺缂栬緫銆?
   Future<bool> batchEditFolders({
     required List<String> folderPaths,
     String? description,
@@ -990,7 +1022,7 @@ class LibraryState extends ChangeNotifier {
         star: star,
       );
 
-      // uuid 为空时自动生成
+      // uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴?
       if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
         newInfo = newInfo.copyWith(uuid: const Uuid().v4());
       }
@@ -1057,7 +1089,7 @@ class LibraryState extends ChangeNotifier {
     };
   }
 
-  /// 重命名项目文件夹内的某个文件或子文件夹,重命名后刷新文件面板
+  /// 閲嶅懡鍚嶉」鐩枃浠跺す鍐呯殑鏌愪釜鏂囦欢鎴栧瓙鏂囦欢澶?閲嶅懡鍚嶅悗鍒锋柊鏂囦欢闈㈡澘
   Future<String?> renameFile(String oldPath, String newName) async {
     try {
       final sep = oldPath.contains('\\') ? '\\' : '/';
@@ -1070,7 +1102,7 @@ class LibraryState extends ChangeNotifier {
       } else {
         await File(oldPath).rename(newPath);
       }
-      // 更新缓存中的文件条目（直接文件）
+      // 鏇存柊缂撳瓨涓殑鏂囦欢鏉＄洰锛堢洿鎺ユ枃浠讹級
       if (type != FileSystemEntityType.directory) {
         final node = _categoryRoot.findByPath(parentDir);
         if (node != null) {
@@ -1119,8 +1151,8 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  /// 重扫当前资源库，保留当前选中的分类路径和搜索（不跳回开头）。
-  /// 用于 define 变化后刷新树结构。
+  /// 閲嶆壂褰撳墠璧勬簮搴擄紝淇濈暀褰撳墠閫変腑鐨勫垎绫昏矾寰勫拰鎼滅储锛堜笉璺冲洖寮€澶达級銆?
+  /// 鐢ㄤ簬 define 鍙樺寲鍚庡埛鏂版爲缁撴瀯銆?
   Future<void> rescan() async {
     if (_currentRootPath.isEmpty) return;
     final keepCategoryPath = _selectedCategoryPath;
@@ -1132,9 +1164,9 @@ class LibraryState extends ChangeNotifier {
       _categoryRoot = await LibraryScanner().scanAll(_currentRootPath);
       _allItems = _categoryRoot.allItems;
       _rebuildUuidIndex();
-      // 保留展开态，仅清理已不存在的路径（文件夹可能被删/改名）。
+      // 淇濈暀灞曞紑鎬侊紝浠呮竻鐞嗗凡涓嶅瓨鍦ㄧ殑璺緞锛堟枃浠跺す鍙兘琚垹/鏀瑰悕锛夈€?
       _expandedPaths.removeWhere((p) => _categoryRoot.findByPath(p) == null);
-      // 恢复分类路径（若新树里不存在则置 null）
+      // 鎭㈠鍒嗙被璺緞锛堣嫢鏂版爲閲屼笉瀛樺湪鍒欑疆 null锛?
       if (keepCategoryPath != null &&
           _categoryRoot.findByPath(keepCategoryPath) == null) {
         _selectedCategoryPath = null;
@@ -1160,5 +1192,4 @@ class LibraryState extends ChangeNotifier {
   void markNoLibrarySelected() {
     _isLoading = false;
     notifyListeners();
-  }
-}
+  }}

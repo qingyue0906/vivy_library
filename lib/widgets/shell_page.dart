@@ -6,6 +6,7 @@ import 'detail_panel.dart';
 import 'grid_area.dart';
 import 'top_bar.dart';
 import 'edit_dialog.dart';
+import 'create_item_dialog.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
@@ -378,6 +379,15 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 },
                 gridSettings: widget.gridSettings,
                 middleOpacity: middleAlpha,
+                onCreateItem: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => CreateItemDialog(
+                      state: _state,
+                      defaultParentPath: _state.selectedCategoryPath,
+                    ),
+                  );
+                },
               );
             },
           ),

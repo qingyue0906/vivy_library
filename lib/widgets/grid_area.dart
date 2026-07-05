@@ -32,6 +32,7 @@ class GridArea extends StatelessWidget {
   final void Function(List<LibraryItem> targets, bool isBatch) onEditRequest;
   final void Function(CategoryNode folder) onFolderEditRequest;
   final void Function(List<CategoryNode> folders) onFolderBatchEditRequest;
+  final VoidCallback? onCreateItem;
   final GridSettings gridSettings;
   final double middleOpacity;
 
@@ -50,6 +51,7 @@ class GridArea extends StatelessWidget {
     required this.onFolderBatchEditRequest,
     required this.gridSettings,
     this.middleOpacity = 1.0,
+    this.onCreateItem,
   });
 
   @override
@@ -66,39 +68,52 @@ class GridArea extends StatelessWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: Column(
+      child: Stack(
         children: [
-          ClassNavBar(state: state),
-          Expanded(
-            child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
-                ? Center(child: Text(Strings.t('noItems'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
-                : Padding(
-                    padding: EdgeInsets.all(8 * c),
-                    child: _buildGrid(context, c),
-                  ),
-          ),
-          if (state.fileBrowserVisible && state.selectedItem != null) ...[
-            MouseRegion(
-              cursor: SystemMouseCursors.resizeUpDown,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
-                onPanEnd: (_) => onFilePanelResizeEnd?.call(),
-                child: Container(
-                  height: 4,
-                  color: Colors.transparent,
-                ),
+          Column(
+            children: [
+              ClassNavBar(state: state),
+              Expanded(
+                child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
+                    ? Center(child: Text(Strings.t('noItems'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
+                    : Padding(
+                        padding: EdgeInsets.all(8 * c),
+                        child: _buildGrid(context, c),
+                      ),
               ),
+              if (state.fileBrowserVisible && state.selectedItem != null) ...[
+                MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpDown,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
+                    onPanEnd: (_) => onFilePanelResizeEnd?.call(),
+                    child: Container(
+                      height: 4,
+                      color: Colors.transparent,
+                    ),
+                  ),
+                ),
+                FileBrowserPanel(
+                  item: state.selectedItem!,
+                  state: state,
+                  scriptService: scriptService,
+                  height: filePanelHeight,
+                  backgroundOpacity: middleOpacity,
+                  gifMode: gridSettings.fileGifMode,
+                ),
+              ],
+            ],
+          ),
+          Positioned(
+            right: 16 * c,
+            bottom: (state.fileBrowserVisible && state.selectedItem != null ? filePanelHeight : 0) + 16 * c,
+            child: FloatingActionButton.small(
+              heroTag: 'createItem',
+              onPressed: onCreateItem,
+              child: const Icon(Icons.add),
             ),
-            FileBrowserPanel(
-              item: state.selectedItem!,
-              state: state,
-              scriptService: scriptService,
-              height: filePanelHeight,
-              backgroundOpacity: middleOpacity,
-              gifMode: gridSettings.fileGifMode,
-            ),
-          ],
+          ),
         ],
       ),
     );

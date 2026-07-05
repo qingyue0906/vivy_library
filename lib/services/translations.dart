@@ -1286,5 +1286,62 @@ class Strings {
       AppLocale.en: 'No description',
       AppLocale.ja: '説明なし',
     },
+
+
+    // ======== create_item_dialog / image_cropper ========
+    'createItem': {
+      AppLocale.zhHans: '创建项目',
+      AppLocale.zhHant: '創建項目',
+      AppLocale.en: 'Create Item',
+      AppLocale.ja: '項目を作成',
+    },
+    'createFailed': {
+      AppLocale.zhHans: '创建失败',
+      AppLocale.zhHant: '創建失敗',
+      AppLocale.en: 'Create failed',
+      AppLocale.ja: '作成失敗',
+    },
+    'parentFolder': {
+      AppLocale.zhHans: '父文件夹',
+      AppLocale.zhHant: '父文件夾',
+      AppLocale.en: 'Parent Folder',
+      AppLocale.ja: '親フォルダ',
+    },
+    'tapToSelectFolder': {
+      AppLocale.zhHans: '点击选择文件夹',
+      AppLocale.zhHant: '點擊選擇文件夾',
+      AppLocale.en: 'Tap to select folder',
+      AppLocale.ja: 'タップしてフォルダを選択',
+    },
+    'selectParentFolder': {
+      AppLocale.zhHans: '请选择父文件夹',
+      AppLocale.zhHant: '請選擇父文件夾',
+      AppLocale.en: 'Please select a parent folder',
+      AppLocale.ja: '親フォルダを選択してください',
+    },
+    'titleRequired': {
+      AppLocale.zhHans: '请输入项目名称',
+      AppLocale.zhHant: '請輸入項目名稱',
+      AppLocale.en: 'Please enter item name',
+      AppLocale.ja: '項目名を入力してください',
+    },
+    'previewImage': {
+      AppLocale.zhHans: '预览图',
+      AppLocale.zhHant: '預覽圖',
+      AppLocale.en: 'Preview Image',
+      AppLocale.ja: 'プレビュー画像',
+    },
+    'tapToSelectImage': {
+      AppLocale.zhHans: '点击或拖入图片',
+      AppLocale.zhHant: '點擊或拖入圖片',
+      AppLocale.en: 'Tap or drag an image here',
+      AppLocale.ja: 'タップまたは画像をドロップ',
+    },
+    'imageLoadFailed': {
+      AppLocale.zhHans: '图片加载失败',
+      AppLocale.zhHant: '圖片加載失敗',
+      AppLocale.en: 'Failed to load image',
+      AppLocale.ja: '画像の読み込みに失敗しました',
+    },
   };
 }
