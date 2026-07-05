@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/direct_file.dart';
@@ -33,6 +34,7 @@ class GridArea extends StatelessWidget {
   final void Function(CategoryNode folder) onFolderEditRequest;
   final void Function(List<CategoryNode> folders) onFolderBatchEditRequest;
   final VoidCallback? onCreateItem;
+  final void Function(List<String> paths)? onFileDrop;
   final GridSettings gridSettings;
   final double middleOpacity;
 
@@ -52,6 +54,7 @@ class GridArea extends StatelessWidget {
     required this.gridSettings,
     this.middleOpacity = 1.0,
     this.onCreateItem,
+    this.onFileDrop,
   });
 
   @override
@@ -68,7 +71,13 @@ class GridArea extends StatelessWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: Stack(
+      child: DropTarget(
+        onDragDone: (detail) {
+          if (detail.files.isNotEmpty) {
+            onFileDrop?.call(detail.files.map((f) => f.path).toList());
+          }
+        },
+        child: Stack(
         children: [
           Column(
             children: [
@@ -115,6 +124,7 @@ class GridArea extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -15,11 +15,15 @@ import 'smooth_scroll.dart';
 class CreateItemDialog extends StatefulWidget {
   final LibraryState state;
   final String? defaultParentPath;
+  final String? prefilledTitle;
+  final List<String>? prefilledImportPaths;
 
   const CreateItemDialog({
     super.key,
     required this.state,
     this.defaultParentPath,
+    this.prefilledTitle,
+    this.prefilledImportPaths,
   });
 
   @override
@@ -56,6 +60,12 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
     _parentPath = widget.defaultParentPath;
     if (_parentPath != null) _applyParentDefaults(_parentPath!);
     _titleCtrl.addListener(_onTitleChanged);
+    if (widget.prefilledTitle != null) {
+      _titleCtrl.text = widget.prefilledTitle!;
+    }
+    if (widget.prefilledImportPaths != null) {
+      _importedPaths.addAll(widget.prefilledImportPaths!);
+    }
   }
 
   void _onTitleChanged() {

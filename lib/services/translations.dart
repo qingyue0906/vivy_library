@@ -193,10 +193,10 @@ class Strings {
       AppLocale.ja: 'サイレント',
     },
     'appVersion': {
-      AppLocale.zhHans: '版本 0.1.0 Build260701',
-      AppLocale.zhHant: '版本 0.1.0 Build260701',
-      AppLocale.en: 'Version 0.1.0 Build260701',
-      AppLocale.ja: 'バージョン 0.1.0 Build260701',
+      AppLocale.zhHans: '版本 0.1.0 Build260706',
+      AppLocale.zhHant: '版本 0.1.0 Build260706',
+      AppLocale.en: 'Version 0.1.0 Build260706',
+      AppLocale.ja: 'バージョン 0.1.0 Build260706',
     },
     'projectUrl': {
       AppLocale.zhHans: '项目地址',

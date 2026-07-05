@@ -144,6 +144,7 @@ class DetailPanel extends StatelessWidget {
           SizedBox(height: 6 * c),
         ],
         _buildRow(context, c, Strings.t('path'), folder.path),
+        _buildRow(context, c, Strings.t('size'), _formatSize(folder.sizeInBytes)),
         _buildRow(context, c, Strings.t('subfolderCount'), '${folder.subDirs.length}'),
         _buildRow(context, c, Strings.t('directItemCount'), '${folder.items.length}'),
       ],

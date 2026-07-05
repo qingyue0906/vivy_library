@@ -30,7 +30,19 @@ class CategoryNode {
   DateTime get modifiedTime {
     try { return File(path).lastModifiedSync(); } catch (_) { return DateTime.now(); }
   }
-  int get sizeInBytes => 0;
+  int get sizeInBytes {
+    int total = 0;
+    for (final item in items) {
+      total += item.sizeInBytes;
+    }
+    for (final file in files) {
+      total += file.sizeInBytes;
+    }
+    for (final sub in subDirs) {
+      total += sub.sizeInBytes;
+    }
+    return total;
+  }
 
   /// 递归展平：返回该节点及其所有子文件夹下的全部项目。
   List<LibraryItem> get allItems {

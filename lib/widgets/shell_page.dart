@@ -417,6 +417,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     ),
                   );
                 },
+                onFileDrop: (paths) {
+                  final first = paths.first.replaceAll('\\', '/').split('/').last;
+                  final title = first.contains('.') ? first.substring(0, first.lastIndexOf('.')) : first;
+                  showDialog(
+                    context: context,
+                    builder: (_) => CreateItemDialog(
+                      state: _state,
+                      defaultParentPath: _state.selectedCategoryPath,
+                      prefilledTitle: title,
+                      prefilledImportPaths: paths,
+                    ),
+                  );
+                },
               );
             },
           ),
