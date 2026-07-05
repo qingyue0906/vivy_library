@@ -18,6 +18,7 @@ class DetailPanel extends StatelessWidget {
   final DirectFile? file;
   final double backgroundOpacity;
   final void Function(GotoEntry entry)? onGotoTap;
+  final void Function(String query)? onSearchByQuery;
 
   const DetailPanel({
     super.key,
@@ -27,6 +28,7 @@ class DetailPanel extends StatelessWidget {
     this.file,
     this.backgroundOpacity = 1.0,
     this.onGotoTap,
+    this.onSearchByQuery,
   });
 
   @override
@@ -89,8 +91,8 @@ class DetailPanel extends StatelessWidget {
         _buildRow(context, c, Strings.t('type'), info.type),
         _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
         _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
-        _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、')),
-        _buildRow(context, c, Strings.t('tags'), info.tags.join('、')),
+        _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
+        _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
         _buildRow(context, c, Strings.t('folderLabel'), item.category),
         SizedBox(height: 6 * c),
         Divider(height: 1 * c),
@@ -135,8 +137,8 @@ class DetailPanel extends StatelessWidget {
           _buildRow(context, c, Strings.t('type'), info.type),
           _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
           _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
-          _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、')),
-          _buildRow(context, c, Strings.t('tags'), info.tags.join('、')),
+          _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
+          _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
           SizedBox(height: 6 * c),
           Divider(height: 1 * c),
           SizedBox(height: 6 * c),
@@ -306,7 +308,7 @@ class DetailPanel extends StatelessWidget {
     Process.run('cmd', ['/c', 'start', url]);
   }
 
-  Widget _buildRow(BuildContext context, double c, String label, String value) {
+  Widget _buildRow(BuildContext context, double c, String label, String value, {Widget? valueWidget}) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: EdgeInsets.only(bottom: 5 * c),
@@ -318,10 +320,31 @@ class DetailPanel extends StatelessWidget {
             child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
           ),
           Expanded(
-            child: SelectableText(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
+            child: valueWidget ?? SelectableText(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _chipText(BuildContext context, double c, List<String> values, String field) {
+    final cs = Theme.of(context).colorScheme;
+    if (onSearchByQuery == null || values.isEmpty) {
+      return SelectableText(values.join(', '), style: TextStyle(fontSize: 11 * c, color: cs.onSurface));
+    }
+    final spans = <InlineSpan>[];
+    for (int i = 0; i < values.length; i++) {
+      if (i > 0) {
+        spans.add(TextSpan(text: ', ', style: TextStyle(fontSize: 11 * c, color: cs.onSurface)));
+      }
+      spans.add(TextSpan(
+        text: values[i],
+        style: TextStyle(fontSize: 11 * c, color: cs.primary),
+        recognizer: TapGestureRecognizer()..onTap = () => onSearchByQuery!('$field:${values[i]}'),
+      ));
+    }
+    return SelectableText.rich(
+      TextSpan(style: TextStyle(fontSize: 11 * c, color: cs.onSurface), children: spans),
     );
   }
 

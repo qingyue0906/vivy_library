@@ -414,6 +414,11 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     );
                   }
                 },
+                onSearchByQuery: (query) {
+                  _state.setSearchQuery(query);
+                  _searchController.text = query;
+                  _searchController.selection = TextSelection.collapsed(offset: query.length);
+                },
               ),
             );
           },

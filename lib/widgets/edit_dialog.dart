@@ -449,9 +449,16 @@ class _EditDialogState extends State<EditDialog> {
                 suggestions: suggestions,
                 currentValues: values,
                 onAdd: (v) {
-                  if (!values.contains(v)) {
-                    onChanged([...values, v]);
+                  final parts = v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                  final newValues = List<String>.from(values);
+                  var added = false;
+                  for (final part in parts) {
+                    if (!newValues.contains(part)) {
+                      newValues.add(part);
+                      added = true;
+                    }
                   }
+                  if (added) onChanged(newValues);
                   inputCtrl.clear();
                   onShowInputChanged(false);
                 },
