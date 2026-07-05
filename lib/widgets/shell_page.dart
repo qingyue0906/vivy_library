@@ -58,6 +58,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   final LibraryRootService _rootService = LibraryRootService();
 
   bool _isMaximized = false;
+  bool _createDialogShowing = false;
 
   @override
   void initState() {
@@ -409,15 +410,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 gridSettings: widget.gridSettings,
                 middleOpacity: middleAlpha,
                 onCreateItem: () {
+                  if (_createDialogShowing) return;
+                  _createDialogShowing = true;
                   showDialog(
                     context: context,
                     builder: (_) => CreateItemDialog(
                       state: _state,
                       defaultParentPath: _state.selectedCategoryPath,
                     ),
-                  );
+                  ).whenComplete(() => _createDialogShowing = false);
                 },
                 onFileDrop: (paths) {
+                  if (_createDialogShowing) return;
+                  _createDialogShowing = true;
                   final first = paths.first.replaceAll('\\', '/').split('/').last;
                   final title = first.contains('.') ? first.substring(0, first.lastIndexOf('.')) : first;
                   showDialog(
@@ -428,7 +433,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       prefilledTitle: title,
                       prefilledImportPaths: paths,
                     ),
-                  );
+                  ).whenComplete(() => _createDialogShowing = false);
                 },
               );
             },
