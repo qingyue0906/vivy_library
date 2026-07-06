@@ -107,7 +107,7 @@ class ItemCard extends StatelessWidget {
       );
     }
     final cacheW = ((displayWidth * 2) ~/ 100 * 100).clamp(100, 800).toInt();
-    final isGif = item.previewPath!.toLowerCase().endsWith('.gif');
+    final isGif = GifImage.isAnimatedFile(item.previewPath!);
     final errorWidget = Center(
       child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
     );

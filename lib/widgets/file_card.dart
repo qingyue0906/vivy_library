@@ -55,7 +55,7 @@ class _FileCardState extends State<FileCard> {
     final cs = Theme.of(context).colorScheme;
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
-    final isGif = ext == 'gif';
+    final isGif = GifImage.isAnimatedFile(widget.file.path);
 
     return MouseRegion(
       child: GestureDetector(

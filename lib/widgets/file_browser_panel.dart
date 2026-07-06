@@ -402,7 +402,7 @@ class _FileGridItemState extends State<_FileGridItem> {
     final isDir = widget.file is Directory;
     final isImage = !isDir &&
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
-    final isGif = !isDir && name.toLowerCase().endsWith('.gif');
+    final isGif = !isDir && GifImage.isAnimatedFile(widget.file.path);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),

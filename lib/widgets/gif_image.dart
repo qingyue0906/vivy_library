@@ -22,6 +22,19 @@ class GifImage extends StatefulWidget {
     this.placeholderColor,
   });
 
+  static bool isAnimatedFile(String path) {
+    final ext = path.toLowerCase();
+    if (ext.endsWith('.gif') || ext.endsWith('.webp')) return true;
+    try {
+      final bytes = File(path).readAsBytesSync();
+      if (bytes.length < 12) return false;
+      if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) return true;
+      if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
+          bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50) return true;
+    } catch (_) {}
+    return false;
+  }
+
   @override
   State<GifImage> createState() => _GifImageState();
 }
