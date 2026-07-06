@@ -173,6 +173,9 @@ class GridArea extends StatelessWidget {
           builder: (context, controller, physics) => CustomScrollView(
             controller: controller,
             physics: physics,
+            // 显式限制预构建/保活范围，避免分组导致内容更稀疏时，
+            // 同样的缓存窗口跨越了更多分组、挂载了更多屏幕外的动图卡片。
+            cacheExtent: 200,
             slivers: [
               if (gSubDirs.any((g) => g.entries.isNotEmpty)) ...[
                 _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
