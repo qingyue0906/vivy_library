@@ -158,12 +158,12 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       waitDuration: const Duration(milliseconds: 300),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6 * c),
+        borderRadius: BorderRadius.circular(8 * c),
         child: Padding(
-          padding: EdgeInsets.all(4 * c),
+          padding: EdgeInsets.all(6 * c),
           child: Icon(
             icon,
-            size: 14 * c,
+            size: 16 * c,
             color: iconColor ?? cs.onSurfaceVariant,
           ),
         ),

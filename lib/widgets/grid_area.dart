@@ -72,23 +72,12 @@ class GridArea extends StatelessWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: DropRegion(
-        formats: const [Formats.fileUri],
-        hitTestBehavior: HitTestBehavior.translucent,
-        onDropOver: (event) {
-          final allowed = event.session.allowedOperations;
-          if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
-          return allowed.isNotEmpty ? allowed.first : DropOperation.none;
-        },
-        onPerformDrop: (event) async {
-          final paths = <String>[];
-          for (final di in event.session.items) {
-            paths.addAll(await _readFilePaths(di));
-          }
-          if (paths.isNotEmpty) {
-            onFileDrop?.call(paths);
-          }
-        },
+      child: _DropHighlight(
+        onFilesDropped: (paths) => onFileDrop?.call(paths),
+        bottomInset:
+            (state.fileBrowserVisible && state.selectedItem != null)
+                ? filePanelHeight + 4
+                : 0,
         child: Stack(
           children: [
             Column(
@@ -587,24 +576,6 @@ class GridArea extends StatelessWidget {
     Process.run('cmd', ['/c', 'start', '', path]);
   }
 
-  Future<List<String>> _readFilePaths(DropItem dropItem) async {
-    final reader = dropItem.dataReader;
-    if (reader == null) return [];
-    if (!reader.canProvide(Formats.fileUri)) return [];
-    final completer = Completer<List<String>>();
-    reader.getValue<Uri>(
-      Formats.fileUri,
-      (uri) {
-        completer.complete(uri != null ? [uri.toFilePath()] : []);
-      },
-      onError: (e) => completer.complete([]),
-    );
-    return completer.future.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => [],
-    );
-  }
-
   void _showFileContextMenu(
     BuildContext context,
     DirectFile file,
@@ -835,5 +806,93 @@ class GridArea extends StatelessWidget {
         ),
       );
     }
+  }
+}
+
+/// 为中间网格区域提供拖入高亮圆角边框与文件路径读取。
+/// 嵌套时内层 DropRegion（如底部文件面板）优先拦截命中区域，
+/// 拖入底部面板时本层不会高亮。
+class _DropHighlight extends StatefulWidget {
+  final Widget child;
+  final void Function(List<String> paths)? onFilesDropped;
+  /// 高亮边框底部需排除的高度（如底部文件面板占据的区域）。
+  final double bottomInset;
+
+  const _DropHighlight({
+    required this.child,
+    this.onFilesDropped,
+    this.bottomInset = 0,
+  });
+
+  @override
+  State<_DropHighlight> createState() => _DropHighlightState();
+}
+
+class _DropHighlightState extends State<_DropHighlight> {
+  bool _isDragOver = false;
+
+  Future<List<String>> _readFilePaths(DropItem dropItem) async {
+    final reader = dropItem.dataReader;
+    if (reader == null) return [];
+    if (!reader.canProvide(Formats.fileUri)) return [];
+    final completer = Completer<List<String>>();
+    reader.getValue<Uri>(
+      Formats.fileUri,
+      (uri) {
+        completer.complete(uri != null ? [uri.toFilePath()] : []);
+      },
+      onError: (e) => completer.complete([]),
+    );
+    return completer.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => [],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(8);
+    return DropRegion(
+      formats: const [Formats.fileUri],
+      hitTestBehavior: HitTestBehavior.translucent,
+      onDropOver: (event) {
+        setState(() => _isDragOver = true);
+        final allowed = event.session.allowedOperations;
+        if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
+        return allowed.isNotEmpty ? allowed.first : DropOperation.none;
+      },
+      onDropLeave: (event) => setState(() => _isDragOver = false),
+      onPerformDrop: (event) async {
+        setState(() => _isDragOver = false);
+        final paths = <String>[];
+        for (final di in event.session.items) {
+          paths.addAll(await _readFilePaths(di));
+        }
+        if (paths.isNotEmpty) {
+          widget.onFilesDropped?.call(paths);
+        }
+      },
+      child: Stack(
+        children: [
+          widget.child,
+          if (_isDragOver)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: widget.bottomInset,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: cs.primary, width: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
