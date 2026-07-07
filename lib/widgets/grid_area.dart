@@ -78,53 +78,65 @@ class GridArea extends StatelessWidget {
           }
         },
         child: Stack(
-        children: [
-          Column(
-            children: [
-              ClassNavBar(state: state),
-              Expanded(
-                child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
-                    ? Center(child: Text(Strings.t('noItems'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12 * c)))
-                    : Padding(
-                        padding: EdgeInsets.all(8 * c),
-                        child: _buildGrid(context, c),
-                      ),
-              ),
-              if (state.fileBrowserVisible && state.selectedItem != null) ...[
-                MouseRegion(
-                  cursor: SystemMouseCursors.resizeUpDown,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onPanUpdate: (details) => onFilePanelResize(details.delta.dy),
-                    onPanEnd: (_) => onFilePanelResizeEnd?.call(),
-                    child: Container(
-                      height: 4,
-                      color: Colors.transparent,
+          children: [
+            Column(
+              children: [
+                ClassNavBar(state: state),
+                Expanded(
+                  child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
+                      ? Center(
+                          child: Text(
+                            Strings.t('noItems'),
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontSize: 12 * c,
+                            ),
+                          ),
+                        )
+                      : Padding(
+                          padding: EdgeInsets.all(8 * c),
+                          child: _buildGrid(context, c),
+                        ),
+                ),
+                if (state.fileBrowserVisible && state.selectedItem != null) ...[
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeUpDown,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onPanUpdate: (details) =>
+                          onFilePanelResize(details.delta.dy),
+                      onPanEnd: (_) => onFilePanelResizeEnd?.call(),
+                      child: Container(height: 4, color: Colors.transparent),
                     ),
                   ),
-                ),
-                FileBrowserPanel(
-                  item: state.selectedItem!,
-                  state: state,
-                  scriptService: scriptService,
-                  height: filePanelHeight,
-                  backgroundOpacity: middleOpacity,
-                  gifMode: gridSettings.fileGifMode,
-                ),
+                  FileBrowserPanel(
+                    item: state.selectedItem!,
+                    state: state,
+                    scriptService: scriptService,
+                    height: filePanelHeight,
+                    backgroundOpacity: middleOpacity,
+                    gifMode: gridSettings.fileGifMode,
+                  ),
+                ],
               ],
-            ],
-          ),
-          Positioned(
-            right: 16 * c,
-            bottom: (state.fileBrowserVisible && state.selectedItem != null ? filePanelHeight : 0) + 16 * c,
-            child: FloatingActionButton.small(
-              heroTag: 'createItem',
-              onPressed: onCreateItem,
-              child: const Icon(Icons.add),
             ),
-          ),
-        ],
-      ),
+            Positioned(
+              right: 16 * c,
+              bottom:
+                  (state.fileBrowserVisible && state.selectedItem != null
+                      ? filePanelHeight
+                      : 0) +
+                  16 * c,
+              child: FloatingActionButton.small(
+                heroTag: 'createItem',
+                onPressed: onCreateItem,
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -144,7 +156,8 @@ class GridArea extends StatelessWidget {
 
         if (fixedPerRow > 0) {
           crossAxisCount = fixedPerRow;
-          cardWidth = (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+          cardWidth =
+              (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
               crossAxisCount;
         } else {
           crossAxisCount = (constraints.maxWidth / (maxCardWidth + spacing))
@@ -152,10 +165,11 @@ class GridArea extends StatelessWidget {
               .clamp(1, 999);
           cardWidth =
               (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
-                  crossAxisCount;
+              crossAxisCount;
           if (cardWidth < minCardWidth && crossAxisCount > 1) {
             crossAxisCount--;
-            cardWidth = (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+            cardWidth =
+                (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
                 crossAxisCount;
           }
         }
@@ -169,120 +183,180 @@ class GridArea extends StatelessWidget {
         final gItems = state.groupedItems;
         final gFiles = state.groupedFiles;
 
-        return SmoothScroll(
-          builder: (context, controller, physics) => CustomScrollView(
-            controller: controller,
-            physics: physics,
-            // 显式限制预构建/保活范围，避免分组导致内容更稀疏时，
-            // 同样的缓存窗口跨越了更多分组、挂载了更多屏幕外的动图卡片。
-            cacheExtent: 200,
-            slivers: [
-              if (gSubDirs.any((g) => g.entries.isNotEmpty)) ...[
-                _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
-                ..._buildGroupedSlivers(
-                  gSubDirs, crossAxisCount, folderMainAxisExtent, spacing, c, cs,
-                  (node) => FolderCard(
-                    key: GlobalObjectKey(node.path),
-                    node: node,
-                    displayWidth: cardWidth,
-                    isSelected: state.isFolderSelected(node.path),
-                    onTap: () => state.setSelectedFolder(node),
-                    onDoubleTap: () => state.setSelectedCategory(node.path),
-                    onCtrlTap: () => state.toggleFolderSelection(node),
-                    onShiftTap: () => state.selectFolderRange(node, subDirs),
-                    onRightClick: (globalPos) => _showFolderContextMenu(context, node, globalPos),
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => state.clearSelection(),
+          child: SmoothScroll(
+            builder: (context, controller, physics) => CustomScrollView(
+              controller: controller,
+              physics: physics,
+              // 显式限制预构建/保活范围，避免分组导致内容更稀疏时，
+              // 同样的缓存窗口跨越了更多分组、挂载了更多屏幕外的动图卡片。
+              cacheExtent: 200,
+              slivers: [
+                if (gSubDirs.any((g) => g.entries.isNotEmpty)) ...[
+                  _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
+                  ..._buildGroupedSlivers(
+                    gSubDirs,
+                    crossAxisCount,
+                    folderMainAxisExtent,
+                    spacing,
+                    c,
+                    cs,
+                    (node) => FolderCard(
+                      key: GlobalObjectKey(node.path),
+                      node: node,
+                      displayWidth: cardWidth,
+                      isSelected: state.isFolderSelected(node.path),
+                      onTap: () => state.setSelectedFolder(node),
+                      onDoubleTap: () => state.setSelectedCategory(node.path),
+                      onCtrlTap: () => state.toggleFolderSelection(node),
+                      onShiftTap: () => state.selectFolderRange(node, subDirs),
+                      onRightClick: (globalPos) =>
+                          _showFolderContextMenu(context, node, globalPos),
+                    ),
                   ),
-                ),
-              ],
-              if (gItems.any((g) => g.entries.isNotEmpty)) ...[
-                _sectionHeader(Strings.t('itemSection'), c, cs),
-                ..._buildGroupedSlivers(
-                  gItems, crossAxisCount, mainAxisExtent, spacing, c, cs,
-                  (item) => ItemCard(
-                    key: GlobalObjectKey(item.path),
-                    item: item,
-                    aspectRatio: aspectRatio,
-                    displayWidth: cardWidth,
-                    displayHeight: imgHeight,
-                    isSelected: state.isItemSelected(item.path),
-                    onTap: () => state.setSelectedItem(item),
-                    onCtrlTap: () => state.toggleItemSelection(item),
-                    onShiftTap: () => state.selectRange(item, items),
-                    onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),
-                    gifMode: gridSettings.cardGifMode,
+                ],
+                if (gItems.any((g) => g.entries.isNotEmpty)) ...[
+                  _sectionHeader(Strings.t('itemSection'), c, cs),
+                  ..._buildGroupedSlivers(
+                    gItems,
+                    crossAxisCount,
+                    mainAxisExtent,
+                    spacing,
+                    c,
+                    cs,
+                    (item) => ItemCard(
+                      key: GlobalObjectKey(item.path),
+                      item: item,
+                      aspectRatio: aspectRatio,
+                      displayWidth: cardWidth,
+                      displayHeight: imgHeight,
+                      isSelected: state.isItemSelected(item.path),
+                      onTap: () => state.setSelectedItem(item),
+                      onCtrlTap: () => state.toggleItemSelection(item),
+                      onShiftTap: () => state.selectRange(item, items),
+                      onRightClick: (globalPos) =>
+                          _showContextMenu(context, item, globalPos),
+                      gifMode: gridSettings.cardGifMode,
+                    ),
                   ),
-                ),
-              ],
-              if (gFiles.any((g) => g.entries.isNotEmpty)) ...[
-                _sectionHeader(Strings.t('fileSection'), c, cs),
-                ..._buildGroupedSlivers(
-                  gFiles, crossAxisCount, fileMainAxisExtent, spacing, c, cs,
-                  (file) => FileCard(
-                    key: GlobalObjectKey(file.path),
-                    file: file,
-                    displayWidth: cardWidth,
-                    isSelected: state.selectedFile?.path == file.path,
-                    onTap: () => state.setSelectedFile(file),
-                    onDoubleTap: () => _openFile(file.path),
-                    onRightClick: (globalPos) => _showFileContextMenu(context, file, globalPos),
+                ],
+                if (gFiles.any((g) => g.entries.isNotEmpty)) ...[
+                  _sectionHeader(Strings.t('fileSection'), c, cs),
+                  ..._buildGroupedSlivers(
+                    gFiles,
+                    crossAxisCount,
+                    fileMainAxisExtent,
+                    spacing,
+                    c,
+                    cs,
+                    (file) => FileCard(
+                      key: GlobalObjectKey(file.path),
+                      file: file,
+                      displayWidth: cardWidth,
+                      isSelected: state.selectedFile?.path == file.path,
+                      onTap: () => state.setSelectedFile(file),
+                      onDoubleTap: () => _openFile(file.path),
+                      onRightClick: (globalPos) =>
+                          _showFileContextMenu(context, file, globalPos),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _sectionHeader(String title, double c, ColorScheme cs, {bool top = true}) {
+  Widget _sectionHeader(
+    String title,
+    double c,
+    ColorScheme cs, {
+    bool top = true,
+  }) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: EdgeInsets.only(top: top ? 8 * c : 0, bottom: 4 * c, left: 2 * c),
-        child: Text(title, style: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+        padding: EdgeInsets.only(
+          top: top ? 8 * c : 0,
+          bottom: 4 * c,
+          left: 2 * c,
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 11 * c,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
 
-  List<Widget> _buildGroupedSlivers<T>(List<GroupedEntries<T>> groups, int crossAxisCount,
-      double mainAxisExtent, double spacing, double c, ColorScheme cs,
-      Widget Function(T) cardBuilder) {
+  List<Widget> _buildGroupedSlivers<T>(
+    List<GroupedEntries<T>> groups,
+    int crossAxisCount,
+    double mainAxisExtent,
+    double spacing,
+    double c,
+    ColorScheme cs,
+    Widget Function(T) cardBuilder,
+  ) {
     final slivers = <Widget>[];
     for (final group in groups) {
       if (group.entries.isEmpty) continue;
       if (group.groupLabel.isNotEmpty) {
-        slivers.add(SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(2 * c, 4 * c, 0, 2 * c),
-            child: Text(group.groupLabel, style: TextStyle(fontSize: 10 * c, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
+        slivers.add(
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(2 * c, 4 * c, 0, 2 * c),
+              child: Text(
+                group.groupLabel,
+                style: TextStyle(
+                  fontSize: 10 * c,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
           ),
-        ));
+        );
       }
-      slivers.add(SliverGrid(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          mainAxisExtent: mainAxisExtent,
-          crossAxisSpacing: spacing,
-          mainAxisSpacing: spacing,
+      slivers.add(
+        SliverGrid(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisExtent: mainAxisExtent,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => cardBuilder(group.entries[index]),
+            childCount: group.entries.length,
+          ),
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => cardBuilder(group.entries[index]),
-          childCount: group.entries.length,
-        ),
-      ));
+      );
     }
     return slivers;
   }
 
   void _showFolderContextMenu(
-      BuildContext context, CategoryNode node, Offset globalPos) {
+    BuildContext context,
+    CategoryNode node,
+    Offset globalPos,
+  ) {
     final c = CompactLevel.of(context);
     state.selectFolderForContextMenu(node);
     final selectedFolders = state.selectedFolders;
     final isBatch = selectedFolders.length > 1;
 
     final position = RelativeRect.fromLTRB(
-      globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1,
+      globalPos.dx,
+      globalPos.dy,
+      globalPos.dx + 1,
+      globalPos.dy + 1,
     );
     showMenu<String>(
       context: context,
@@ -292,41 +366,59 @@ class GridArea extends StatelessWidget {
         PopupMenuItem(
           value: 'edit',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.edit, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(
-              isBatch ? Strings.tn('batchEditN', {'n': '${selectedFolders.length}'}) : Strings.t('edit'),
-              style: TextStyle(fontSize: 11 * c),
-            ),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(
+                isBatch
+                    ? Strings.tn('batchEditN', {
+                        'n': '${selectedFolders.length}',
+                      })
+                    : Strings.t('edit'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'locate',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.location_searching, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('locateHere'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.location_searching, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(Strings.t('locateHere'), style: TextStyle(fontSize: 11 * c)),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'enter',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.folder_open, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('enterFolder'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.folder_open, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(
+                Strings.t('enterFolder'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'open_folder',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.open_in_new, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(
+                Strings.t('openInExplorer'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
+            ],
+          ),
         ),
         ..._buildScriptMenuItems(context),
       ],
@@ -334,9 +426,15 @@ class GridArea extends StatelessWidget {
       if (value == null) return;
       if (value.startsWith('script:')) {
         final scriptId = value.substring(7);
-        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        final script = scriptService.scripts
+            .where((s) => s.id == scriptId)
+            .firstOrNull;
         if (script != null) {
-          _runScript(context, script, selectedFolders.map((f) => f.path).toList());
+          _runScript(
+            context,
+            script,
+            selectedFolders.map((f) => f.path).toList(),
+          );
         }
         return;
       }
@@ -358,7 +456,10 @@ class GridArea extends StatelessWidget {
   }
 
   void _showContextMenu(
-      BuildContext context, LibraryItem tappedItem, Offset globalPos) {
+    BuildContext context,
+    LibraryItem tappedItem,
+    Offset globalPos,
+  ) {
     final c = CompactLevel.of(context);
     state.selectItemForContextMenu(tappedItem);
     final selectedItems = state.selectedItems;
@@ -384,7 +485,9 @@ class GridArea extends StatelessWidget {
               Icon(Icons.edit, size: 13 * c),
               SizedBox(width: 6 * c),
               Text(
-                isBatch ? Strings.tn('batchEditN', {'n': '${selectedItems.length}'}) : Strings.t('edit'),
+                isBatch
+                    ? Strings.tn('batchEditN', {'n': '${selectedItems.length}'})
+                    : Strings.t('edit'),
                 style: TextStyle(fontSize: 11 * c),
               ),
             ],
@@ -408,7 +511,10 @@ class GridArea extends StatelessWidget {
             children: [
               Icon(Icons.folder_open, size: 13 * c),
               SizedBox(width: 6 * c),
-              Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
+              Text(
+                Strings.t('openInExplorer'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
             ],
           ),
         ),
@@ -418,9 +524,15 @@ class GridArea extends StatelessWidget {
       if (value == null) return;
       if (value.startsWith('script:')) {
         final scriptId = value.substring(7);
-        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        final script = scriptService.scripts
+            .where((s) => s.id == scriptId)
+            .firstOrNull;
         if (script != null) {
-          _runScript(context, script, selectedItems.map((i) => i.path).toList());
+          _runScript(
+            context,
+            script,
+            selectedItems.map((i) => i.path).toList(),
+          );
         }
         return;
       }
@@ -464,10 +576,16 @@ class GridArea extends StatelessWidget {
   }
 
   void _showFileContextMenu(
-      BuildContext context, DirectFile file, Offset globalPos) {
+    BuildContext context,
+    DirectFile file,
+    Offset globalPos,
+  ) {
     final c = CompactLevel.of(context);
     final position = RelativeRect.fromLTRB(
-      globalPos.dx, globalPos.dy, globalPos.dx + 1, globalPos.dy + 1,
+      globalPos.dx,
+      globalPos.dy,
+      globalPos.dx + 1,
+      globalPos.dy + 1,
     );
     showMenu<String>(
       context: context,
@@ -477,49 +595,65 @@ class GridArea extends StatelessWidget {
         PopupMenuItem(
           value: 'open',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.open_in_new, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('openWithDefault'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(
+                Strings.t('openWithDefault'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'open_as',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.apps, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('openAs'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.apps, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(Strings.t('openAs'), style: TextStyle(fontSize: 11 * c)),
+            ],
+          ),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'rename',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.drive_file_rename_outline, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('rename'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.drive_file_rename_outline, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(Strings.t('rename'), style: TextStyle(fontSize: 11 * c)),
+            ],
+          ),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'locate',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.folder_open, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('openInExplorer'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.folder_open, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(
+                Strings.t('openInExplorer'),
+                style: TextStyle(fontSize: 11 * c),
+              ),
+            ],
+          ),
         ),
         PopupMenuItem(
           value: 'properties',
           height: 28 * c,
-          child: Row(children: [
-            Icon(Icons.info_outline, size: 13 * c),
-            SizedBox(width: 6 * c),
-            Text(Strings.t('properties'), style: TextStyle(fontSize: 11 * c)),
-          ]),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 13 * c),
+              SizedBox(width: 6 * c),
+              Text(Strings.t('properties'), style: TextStyle(fontSize: 11 * c)),
+            ],
+          ),
         ),
         ..._buildScriptMenuItems(context),
       ],
@@ -527,7 +661,9 @@ class GridArea extends StatelessWidget {
       if (value == null) return;
       if (value.startsWith('script:')) {
         final scriptId = value.substring(7);
-        final script = scriptService.scripts.where((s) => s.id == scriptId).firstOrNull;
+        final script = scriptService.scripts
+            .where((s) => s.id == scriptId)
+            .firstOrNull;
         if (script != null) {
           _runScript(context, script, [file.path]);
         }
@@ -570,17 +706,29 @@ class GridArea extends StatelessWidget {
           child: Tooltip(
             waitDuration: Duration.zero,
             message: scriptService.readDescriptionSync(script),
-            child: Row(children: [
-              Icon(Icons.code, size: 13 * c),
-              SizedBox(width: 6 * c),
-              Expanded(child: Text(script.name, style: TextStyle(fontSize: 11 * c), overflow: TextOverflow.ellipsis)),
-            ]),
+            child: Row(
+              children: [
+                Icon(Icons.code, size: 13 * c),
+                SizedBox(width: 6 * c),
+                Expanded(
+                  child: Text(
+                    script.name,
+                    style: TextStyle(fontSize: 11 * c),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
     ];
   }
 
-  void _runScript(BuildContext context, ScriptEntry script, List<String> paths) {
+  void _runScript(
+    BuildContext context,
+    ScriptEntry script,
+    List<String> paths,
+  ) {
     if (script.execMode == ScriptExecMode.terminal) {
       scriptService.executeScriptTerminal(script, paths);
     } else {
@@ -601,12 +749,15 @@ class GridArea extends StatelessWidget {
   void _showRenameDialog(BuildContext context, DirectFile file) {
     final currentName = file.name;
     final dotIndex = currentName.lastIndexOf('.');
-    final nameWithoutExt =
-        dotIndex > 0 ? currentName.substring(0, dotIndex) : currentName;
+    final nameWithoutExt = dotIndex > 0
+        ? currentName.substring(0, dotIndex)
+        : currentName;
 
     final ctrl = TextEditingController(text: currentName);
-    ctrl.selection =
-        TextSelection(baseOffset: 0, extentOffset: nameWithoutExt.length);
+    ctrl.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: nameWithoutExt.length,
+    );
 
     showDialog(
       context: context,
@@ -636,14 +787,22 @@ class GridArea extends StatelessWidget {
   }
 
   Future<void> _doRename(
-      BuildContext dialogContext, DirectFile file, String newName) async {
+    BuildContext dialogContext,
+    DirectFile file,
+    String newName,
+  ) async {
     if (newName.isEmpty) return;
     Navigator.pop(dialogContext);
 
     final error = await state.renameFile(file.path, newName);
     if (error != null && dialogContext.mounted) {
       ScaffoldMessenger.of(dialogContext).showSnackBar(
-        SnackBar(content: Text(Strings.tn('renameFailed', {'error': error.toString()})), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(
+            Strings.tn('renameFailed', {'error': error.toString()}),
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

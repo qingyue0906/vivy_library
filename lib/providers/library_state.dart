@@ -19,6 +19,7 @@ class GroupedEntries<T> {
 }
 
 enum SortField { name, size, date }
+
 enum SortOrder { ascending, descending }
 
 class LibraryState extends ChangeNotifier {
@@ -76,6 +77,7 @@ class LibraryState extends ChangeNotifier {
     if (_selectedCategoryPath == null) return null;
     return _categoryRoot.findByPath(_selectedCategoryPath!)?.name;
   }
+
   String get selectedClass => _selectedClass;
   SortField get sortField => _sortField;
   SortOrder get sortOrder => _sortOrder;
@@ -84,8 +86,7 @@ class LibraryState extends ChangeNotifier {
   DirectFile? get selectedFile => _selectedFile;
   Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
-  Set<String> get selectedFolderPaths =>
-      Set.unmodifiable(_selectedFolderPaths);
+  Set<String> get selectedFolderPaths => Set.unmodifiable(_selectedFolderPaths);
 
   CategoryNode get categoryRoot => _categoryRoot;
 
@@ -160,9 +161,12 @@ class LibraryState extends ChangeNotifier {
     return result..sort((a, b) {
       int cmp;
       switch (_sortField) {
-        case SortField.name: cmp = a.name.compareTo(b.name);
-        case SortField.size: cmp = a.sizeInBytes.compareTo(b.sizeInBytes);
-        case SortField.date: cmp = a.modifiedTime.compareTo(b.modifiedTime);
+        case SortField.name:
+          cmp = a.name.compareTo(b.name);
+        case SortField.size:
+          cmp = a.sizeInBytes.compareTo(b.sizeInBytes);
+        case SortField.date:
+          cmp = a.modifiedTime.compareTo(b.modifiedTime);
       }
       return _sortOrder == SortOrder.ascending ? cmp : -cmp;
     });
@@ -172,9 +176,14 @@ class LibraryState extends ChangeNotifier {
     var result = currentSubDirs;
     result = result.where((n) => _matchesClassFilter(n.info)).toList();
     if (_searchQuery.isNotEmpty) {
-      final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
+      final parsed = SearchQuery.parse(
+        _searchQuery,
+        knownFields: SearchScope.allFields,
+      );
       if (!parsed.isEmpty) {
-        result = result.where((n) => _matchesSearchForInfo(n.info, parsed)).toList();
+        result = result
+            .where((n) => _matchesSearchForInfo(n.info, parsed))
+            .toList();
       }
     }
     return result;
@@ -182,24 +191,34 @@ class LibraryState extends ChangeNotifier {
 
   List<DirectFile> get filteredDirectFiles {
     if (_searchQuery.isNotEmpty) return const [];
-    if (_selectedClass == kAllClass || _selectedClass == kUnclassified) return currentDirectFiles;
+    if (_selectedClass == kAllClass || _selectedClass == kUnclassified)
+      return currentDirectFiles;
     if (_classSource == ClassSource.rating) return const [];
     return const [];
   }
 
   List<GroupedEntries<CategoryNode>> get groupedSubDirs {
     if (!_groupingEnabled) return [GroupedEntries('', filteredSubDirs)];
-    return _groupBy(filteredSubDirs, (n) => _groupKey(n.name, n.modifiedTime, n.sizeInBytes));
+    return _groupBy(
+      filteredSubDirs,
+      (n) => _groupKey(n.name, n.modifiedTime, n.sizeInBytes),
+    );
   }
 
   List<GroupedEntries<LibraryItem>> get groupedItems {
     if (!_groupingEnabled) return [GroupedEntries('', filteredAndSortedItems)];
-    return _groupBy(filteredAndSortedItems, (i) => _groupKey(i.info.title, i.modifiedTime, i.sizeInBytes));
+    return _groupBy(
+      filteredAndSortedItems,
+      (i) => _groupKey(i.info.title, i.modifiedTime, i.sizeInBytes),
+    );
   }
 
   List<GroupedEntries<DirectFile>> get groupedFiles {
     if (!_groupingEnabled) return [GroupedEntries('', filteredDirectFiles)];
-    return _groupBy(filteredDirectFiles, (f) => _groupKey(f.name, f.modifiedTime, f.sizeInBytes));
+    return _groupBy(
+      filteredDirectFiles,
+      (f) => _groupKey(f.name, f.modifiedTime, f.sizeInBytes),
+    );
   }
 
   List<GroupedEntries<T>> _groupBy<T>(List<T> items, String Function(T) keyFn) {
@@ -210,14 +229,16 @@ class LibraryState extends ChangeNotifier {
     for (final item in items) {
       final key = keyFn(item);
       if (key != lastKey) {
-        if (currentGroup != null) result.add(GroupedEntries(lastKey!, currentGroup));
+        if (currentGroup != null)
+          result.add(GroupedEntries(lastKey!, currentGroup));
         lastKey = key;
         currentGroup = [item];
       } else {
         currentGroup!.add(item);
       }
     }
-    if (currentGroup != null) result.add(GroupedEntries(lastKey!, currentGroup));
+    if (currentGroup != null)
+      result.add(GroupedEntries(lastKey!, currentGroup));
     return result;
   }
 
@@ -261,28 +282,57 @@ class LibraryState extends ChangeNotifier {
     int uncategorizedCount = 0;
     final counts = <String, int>{};
 
-    void add(String key) { counts[key] = (counts[key] ?? 0) + 1; }
-    void addUncategorized() { uncategorizedCount++; }
+    void add(String key) {
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    void addUncategorized() {
+      uncategorizedCount++;
+    }
 
     void processInfo(ItemInfo? info) {
       switch (_classSource) {
         case ClassSource.creator:
           final v = info?.creator;
-          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+          if (v == null || v.isEmpty) {
+            addUncategorized();
+          } else {
+            add(v);
+          }
         case ClassSource.type:
           final v = info?.type;
-          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+          if (v == null || v.isEmpty) {
+            addUncategorized();
+          } else {
+            add(v);
+          }
         case ClassSource.contentrating:
           final v = info?.contentRating;
-          if (v == null || v.isEmpty) { addUncategorized(); } else { add(v); }
+          if (v == null || v.isEmpty) {
+            addUncategorized();
+          } else {
+            add(v);
+          }
         case ClassSource.rating:
           add((info?.rating ?? 0).toString());
         case ClassSource.class_:
           final vals = info?.classes ?? [];
-          if (vals.isEmpty) { addUncategorized(); } else { for (final v in vals) { add(v); } }
+          if (vals.isEmpty) {
+            addUncategorized();
+          } else {
+            for (final v in vals) {
+              add(v);
+            }
+          }
         case ClassSource.tags:
           final vals = info?.tags ?? [];
-          if (vals.isEmpty) { addUncategorized(); } else { for (final v in vals) { add(v); } }
+          if (vals.isEmpty) {
+            addUncategorized();
+          } else {
+            for (final v in vals) {
+              add(v);
+            }
+          }
       }
     }
 
@@ -295,9 +345,7 @@ class LibraryState extends ChangeNotifier {
 
     final sortedKeys = counts.keys.toList()..sort();
 
-    final entries = <MapEntry<String, int>>[
-      MapEntry(kAllClass, totalCount),
-    ];
+    final entries = <MapEntry<String, int>>[MapEntry(kAllClass, totalCount)];
     if (_classSource != ClassSource.rating) {
       entries.add(MapEntry(kUnclassified, uncategorizedCount));
     }
@@ -344,10 +392,7 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<String> get uniqueTags {
-    return _itemsInSelectedCategory
-        .expand((e) => e.info.tags)
-        .toSet()
-        .toList()
+    return _itemsInSelectedCategory.expand((e) => e.info.tags).toSet().toList()
       ..sort();
   }
 
@@ -355,11 +400,16 @@ class LibraryState extends ChangeNotifier {
     var result = _itemsInSelectedCategory;
 
     // 1.5 椤堕儴 class 瀵艰埅绛涢€夛紙鐢ㄦ湁鏁?info 浠ュ懡涓户鎵垮€硷級
-    result = result.where((e) => _matchesClassFilter(effectiveInfo(e))).toList();
+    result = result
+        .where((e) => _matchesClassFilter(effectiveInfo(e)))
+        .toList();
 
     // 2 鎼滅储杩囨护
     if (_searchQuery.isNotEmpty) {
-      final parsed = SearchQuery.parse(_searchQuery, knownFields: SearchScope.allFields);
+      final parsed = SearchQuery.parse(
+        _searchQuery,
+        knownFields: SearchScope.allFields,
+      );
       if (!parsed.isEmpty) {
         result = result.where((item) => _matchesSearch(item, parsed)).toList();
       }
@@ -383,18 +433,21 @@ class LibraryState extends ChangeNotifier {
     if (_selectedClass == kAllClass) return true;
     switch (_classSource) {
       case ClassSource.creator:
-        if (_selectedClass == kUnclassified) return info?.creator == null || (info?.creator ?? '').isEmpty;
+        if (_selectedClass == kUnclassified)
+          return info?.creator == null || (info?.creator ?? '').isEmpty;
         return info?.creator == _selectedClass;
       case ClassSource.type:
         if (_selectedClass == kUnclassified) return (info?.type ?? '').isEmpty;
         return info?.type == _selectedClass;
       case ClassSource.contentrating:
-        if (_selectedClass == kUnclassified) return (info?.contentRating ?? '').isEmpty;
+        if (_selectedClass == kUnclassified)
+          return (info?.contentRating ?? '').isEmpty;
         return info?.contentRating == _selectedClass;
       case ClassSource.rating:
         return info?.rating.toString() == _selectedClass;
       case ClassSource.class_:
-        if (_selectedClass == kUnclassified) return (info?.classes ?? []).isEmpty;
+        if (_selectedClass == kUnclassified)
+          return (info?.classes ?? []).isEmpty;
         return info?.classes.contains(_selectedClass) ?? false;
       case ClassSource.tags:
         if (_selectedClass == kUnclassified) return (info?.tags ?? []).isEmpty;
@@ -407,7 +460,8 @@ class LibraryState extends ChangeNotifier {
   }
 
   bool _matchesSearchForInfo(ItemInfo? info, SearchQuery parsed) {
-    if (info == null) return parsed.freeTokens.isEmpty && parsed.qualified.isEmpty;
+    if (info == null)
+      return parsed.freeTokens.isEmpty && parsed.qualified.isEmpty;
     final i = info;
 
     // 绮惧噯闄愬畾 (涓嶄緷璧栨悳绱㈣寖鍥村紑鍏?
@@ -416,17 +470,34 @@ class LibraryState extends ChangeNotifier {
       final value = e.value;
       final lv = value.toLowerCase();
       switch (field) {
-        case 'uuid':     if ((i.uuid ?? '').toLowerCase() != lv) return false;
-        case 'define':   if (i.define.toLowerCase() != lv) return false;
-        case 'title':    if (!i.title.toLowerCase().contains(lv)) return false;
-        case 'description': if (!i.description.toLowerCase().contains(lv)) return false;
-        case 'creator':  if (!(i.creator ?? '').toLowerCase().contains(lv)) return false;
-        case 'type':     if (!i.type.toLowerCase().contains(lv)) return false;
-        case 'contentrating': if (!i.contentRating.toLowerCase().contains(lv)) return false;
-        case 'rating':   { final r = int.tryParse(value); if (r == null || i.rating != r) return false; }
-        case 'class':    if (!i.classes.any((c) => c.toLowerCase().contains(lv))) return false;
-        case 'tags':     if (!i.tags.any((t) => t.toLowerCase().contains(lv))) return false;
-        case 'star':     { final b = _parseBool(value); if (b == null || i.star != b) return false; }
+        case 'uuid':
+          if ((i.uuid ?? '').toLowerCase() != lv) return false;
+        case 'define':
+          if (i.define.toLowerCase() != lv) return false;
+        case 'title':
+          if (!i.title.toLowerCase().contains(lv)) return false;
+        case 'description':
+          if (!i.description.toLowerCase().contains(lv)) return false;
+        case 'creator':
+          if (!(i.creator ?? '').toLowerCase().contains(lv)) return false;
+        case 'type':
+          if (!i.type.toLowerCase().contains(lv)) return false;
+        case 'contentrating':
+          if (!i.contentRating.toLowerCase().contains(lv)) return false;
+        case 'rating':
+          {
+            final r = int.tryParse(value);
+            if (r == null || i.rating != r) return false;
+          }
+        case 'class':
+          if (!i.classes.any((c) => c.toLowerCase().contains(lv))) return false;
+        case 'tags':
+          if (!i.tags.any((t) => t.toLowerCase().contains(lv))) return false;
+        case 'star':
+          {
+            final b = _parseBool(value);
+            if (b == null || i.star != b) return false;
+          }
       }
     }
 
@@ -434,17 +505,49 @@ class LibraryState extends ChangeNotifier {
     for (final token in parsed.freeTokens) {
       bool tokenMatched = false;
       final lt = token.toLowerCase();
-      if (_searchScope.isEnabled('uuid') && (i.uuid ?? '').toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('define') && i.define.toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('title') && i.title.toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('description') && i.description.toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('creator') && (i.creator ?? '').toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('type') && i.type.toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('contentrating') && i.contentRating.toLowerCase().contains(lt)) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('rating')) { final r = int.tryParse(token); if (r != null && i.rating == r) tokenMatched = true; }
-      if (!tokenMatched && _searchScope.isEnabled('class') && i.classes.any((c) => c.toLowerCase().contains(lt))) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('tags') && i.tags.any((t) => t.toLowerCase().contains(lt))) tokenMatched = true;
-      if (!tokenMatched && _searchScope.isEnabled('star')) { final b = _parseBool(token); if (b != null && i.star == b) tokenMatched = true; }
+      if (_searchScope.isEnabled('uuid') &&
+          (i.uuid ?? '').toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('define') &&
+          i.define.toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('title') &&
+          i.title.toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('description') &&
+          i.description.toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('creator') &&
+          (i.creator ?? '').toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('type') &&
+          i.type.toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('contentrating') &&
+          i.contentRating.toLowerCase().contains(lt))
+        tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('rating')) {
+        final r = int.tryParse(token);
+        if (r != null && i.rating == r) tokenMatched = true;
+      }
+      if (!tokenMatched &&
+          _searchScope.isEnabled('class') &&
+          i.classes.any((c) => c.toLowerCase().contains(lt)))
+        tokenMatched = true;
+      if (!tokenMatched &&
+          _searchScope.isEnabled('tags') &&
+          i.tags.any((t) => t.toLowerCase().contains(lt)))
+        tokenMatched = true;
+      if (!tokenMatched && _searchScope.isEnabled('star')) {
+        final b = _parseBool(token);
+        if (b != null && i.star == b) tokenMatched = true;
+      }
       if (!tokenMatched) return false;
     }
 
@@ -453,9 +556,16 @@ class LibraryState extends ChangeNotifier {
 
   static bool? _parseBool(String value) {
     switch (value.toLowerCase()) {
-      case 'true': case 'yes': case '1': return true;
-      case 'false': case 'no': case '0': return false;
-      default: return null;
+      case 'true':
+      case 'yes':
+      case '1':
+        return true;
+      case 'false':
+      case 'no':
+      case '0':
+        return false;
+      default:
+        return null;
     }
   }
 
@@ -640,6 +750,25 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 清除所有卡片选中状态（点击网格空白处调用），对齐 Windows 资源管理器行为。
+  ///
+  /// 右侧面板回退到显示当前所在文件夹的 info（与点击左侧文件夹树一致）：
+  /// [_selectedFolder] 重新指向当前 [_selectedCategoryPath] 对应的节点；
+  /// 若当前为"全部"视图（[_selectedCategoryPath] == null）则为 null，显示空状态。
+  void clearSelection() {
+    _selectedItem = null;
+    _selectedFile = null;
+    _selectedPaths.clear();
+    _selectedFolderPaths.clear();
+    _selectionAnchorPath = null;
+    _folderSelectionAnchorPath = null;
+    _fileBrowserVisible = false;
+    _selectedFolder = _selectedCategoryPath == null
+        ? null
+        : _categoryRoot.findByPath(_selectedCategoryPath!);
+    notifyListeners();
+  }
+
   bool isFolderSelected(String path) => _selectedFolderPaths.contains(path);
 
   void toggleFolderSelection(CategoryNode node) {
@@ -662,8 +791,9 @@ class LibraryState extends ChangeNotifier {
       setSelectedFolder(node);
       return;
     }
-    final anchorIndex = currentList
-        .indexWhere((e) => e.path == _folderSelectionAnchorPath);
+    final anchorIndex = currentList.indexWhere(
+      (e) => e.path == _folderSelectionAnchorPath,
+    );
     final targetIndex = currentList.indexWhere((e) => e.path == node.path);
     if (anchorIndex == -1 || targetIndex == -1) {
       setSelectedFolder(node);
@@ -716,7 +846,10 @@ class LibraryState extends ChangeNotifier {
   /// 閫氳繃鐩稿璺緞閫変腑宓屽 item锛坓oto 鐐瑰嚮 path 鍨嬶級銆?
   /// [currentItemPath] 鏄綋鍓嶉€変腑椤圭洰鐨勭粷瀵硅矾寰勶紝[relativePath] 鏄浉瀵瑰畠鐨勮矾寰勩€?
   /// 鍗虫椂鎵弿鏋勫缓涓存椂 LibraryItem 鏄剧ず銆傛壘涓嶅埌杩斿洖 false銆?
-  Future<bool> selectByGotoPath(String currentItemPath, String relativePath) async {
+  Future<bool> selectByGotoPath(
+    String currentItemPath,
+    String relativePath,
+  ) async {
     final sep = Platform.pathSeparator;
     final target = '$currentItemPath$sep$relativePath';
     final dir = Directory(target);
@@ -735,8 +868,7 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
-  String _baseName(String p) =>
-      p.replaceAll('\\', '/').split('/').last;
+  String _baseName(String p) => p.replaceAll('\\', '/').split('/').last;
 
   void toggleItemSelection(LibraryItem item) {
     if (_selectedPaths.contains(item.path)) {
@@ -758,8 +890,9 @@ class LibraryState extends ChangeNotifier {
       return;
     }
 
-    final anchorIndex =
-        currentList.indexWhere((e) => e.path == _selectionAnchorPath);
+    final anchorIndex = currentList.indexWhere(
+      (e) => e.path == _selectionAnchorPath,
+    );
     final targetIndex = currentList.indexWhere((e) => e.path == item.path);
     if (anchorIndex == -1 || targetIndex == -1) {
       setSelectedItem(item);
@@ -885,7 +1018,10 @@ class LibraryState extends ChangeNotifier {
         await entity.copy("${dest.path}${Platform.pathSeparator}$relative");
       } else if (entity is Directory) {
         final relative = entity.path.substring(src.path.length + 1);
-        await _copyDirectory(entity, Directory("${dest.path}${Platform.pathSeparator}$relative"));
+        await _copyDirectory(
+          entity,
+          Directory("${dest.path}${Platform.pathSeparator}$relative"),
+        );
       }
     }
   }
@@ -924,7 +1060,9 @@ class LibraryState extends ChangeNotifier {
         finalInfo = info.copyWith(uuid: const Uuid().v4());
       }
       if (croppedImage != null) {
-        final previewFile = File('$itemPath${Platform.pathSeparator}preview.png');
+        final previewFile = File(
+          '$itemPath${Platform.pathSeparator}preview.png',
+        );
         await previewFile.writeAsBytes(croppedImage);
         finalInfo = finalInfo.copyWith(preview: 'preview.png');
       }
@@ -937,7 +1075,10 @@ class LibraryState extends ChangeNotifier {
         for (int i = 0; i < importedPaths.length; i++) {
           final src = importedPaths[i];
           final srcName = src.replaceAll("\\", "/").split("/").last;
-          updateCopyProgress(i / importedPaths.length, "Copying $srcName (${i + 1}/${importedPaths.length})");
+          updateCopyProgress(
+            i / importedPaths.length,
+            "Copying $srcName (${i + 1}/${importedPaths.length})",
+          );
           final dest = _uniqueName(itemPath, srcName);
           try {
             await _copySingle(src, dest);
@@ -972,7 +1113,11 @@ class LibraryState extends ChangeNotifier {
     final node = _categoryRoot.findByPath(folderPath);
     final defineChanged = node?.info?.define != finalInfo.define;
     if (node != null) {
-      _categoryRoot = _updateFolderInfoInTree(_categoryRoot, folderPath, finalInfo);
+      _categoryRoot = _updateFolderInfoInTree(
+        _categoryRoot,
+        folderPath,
+        finalInfo,
+      );
     }
     if (_selectedFolder?.path == folderPath) {
       _selectedFolder = _categoryRoot.findByPath(folderPath);
@@ -982,12 +1127,17 @@ class LibraryState extends ChangeNotifier {
   }
 
   /// 閫掑綊鏇存柊鏍戜腑鏌愯妭鐐?info锛堜笉鍙彉鏍戦渶閲嶅缓鏍癸級銆?
-  CategoryNode _updateFolderInfoInTree(CategoryNode node, String targetPath, ItemInfo newInfo) {
+  CategoryNode _updateFolderInfoInTree(
+    CategoryNode node,
+    String targetPath,
+    ItemInfo newInfo,
+  ) {
     if (node.path == targetPath) {
       return node.copyWith(info: newInfo);
     }
-    final newSubDirs = node.subDirs.map((sub) =>
-        _updateFolderInfoInTree(sub, targetPath, newInfo)).toList();
+    final newSubDirs = node.subDirs
+        .map((sub) => _updateFolderInfoInTree(sub, targetPath, newInfo))
+        .toList();
     return node.copyWith(subDirs: newSubDirs);
   }
 
@@ -1126,7 +1276,10 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<String> _mergeList(
-      List<String> oldList, List<String>? newList, String mode) {
+    List<String> oldList,
+    List<String>? newList,
+    String mode,
+  ) {
     if (newList == null || newList.isEmpty) return oldList;
     switch (mode) {
       case 'overwrite':
@@ -1141,7 +1294,10 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<GotoEntry> _mergeGoto(
-      List<GotoEntry> oldList, List<GotoEntry>? newList, String mode) {
+    List<GotoEntry> oldList,
+    List<GotoEntry>? newList,
+    String mode,
+  ) {
     if (newList == null || newList.isEmpty) return oldList;
     switch (mode) {
       case 'overwrite':
@@ -1275,4 +1431,5 @@ class LibraryState extends ChangeNotifier {
   void markNoLibrarySelected() {
     _isLoading = false;
     notifyListeners();
-  }}
+  }
+}
