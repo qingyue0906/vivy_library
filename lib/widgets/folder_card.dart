@@ -36,6 +36,7 @@ class FolderCard extends StatefulWidget {
 
 class _FolderCardState extends State<FolderCard> {
   DateTime? _lastTapTime;
+  bool _isHovered = false;
 
   void _handleTap() {
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
@@ -67,10 +68,19 @@ class _FolderCardState extends State<FolderCard> {
     final selectedColor = cs.brightness == Brightness.light
         ? const Color(0xFF7B49E0)
         : cs.primary;
+    final hoverColor = cs.brightness == Brightness.light
+        ? const Color(0xFFB89AFF)
+        : const Color(0xFF7E8FA3);
+    final borderColor = widget.isSelected
+        ? selectedColor
+        : (_isHovered ? hoverColor : Colors.transparent);
+    final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 1.5);
     return GestureDetector(
-      onSecondaryTapUp: (details) => widget.onRightClick(details.globalPosition),
+      onSecondaryTapUp: (details) =>
+          widget.onRightClick(details.globalPosition),
       child: InkWell(
         onTap: _handleTap,
+        onHover: (v) => setState(() => _isHovered = v),
         borderRadius: BorderRadius.circular(4 * c),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
@@ -82,10 +92,7 @@ class _FolderCardState extends State<FolderCard> {
                 ? cs.primaryContainer.withValues(alpha: 0.4)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(4 * c),
-            border: Border.all(
-              color: widget.isSelected ? selectedColor : Colors.transparent,
-              width: 1.5,
-            ),
+            border: Border.all(color: borderColor, width: borderWidth),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

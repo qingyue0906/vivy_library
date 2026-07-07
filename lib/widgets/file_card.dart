@@ -36,6 +36,7 @@ class FileCard extends StatefulWidget {
 
 class _FileCardState extends State<FileCard> {
   DateTime? _lastTapTime;
+  bool _isHovered = false;
 
   void _handleTap() {
     final now = DateTime.now();
@@ -55,8 +56,13 @@ class _FileCardState extends State<FileCard> {
     final cs = Theme.of(context).colorScheme;
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
+    final hoverColor = cs.brightness == Brightness.light
+        ? const Color(0xFFB89AFF)
+        : const Color(0xFF7E8FA3);
 
     return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: _handleTap,
         onSecondaryTapUp: widget.onRightClick != null
@@ -67,7 +73,9 @@ class _FileCardState extends State<FileCard> {
             borderRadius: BorderRadius.circular(6 * c),
             border: widget.isSelected
                 ? Border.all(color: cs.primary, width: 1.5 * c)
-                : null,
+                : (_isHovered
+                      ? Border.all(color: hoverColor, width: 1.0 * c)
+                      : null),
             color: widget.isSelected
                 ? cs.primaryContainer.withValues(alpha: 0.25)
                 : Colors.transparent,

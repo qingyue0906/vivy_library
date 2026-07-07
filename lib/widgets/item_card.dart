@@ -6,7 +6,7 @@ import '../services/settings_service.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
 
-class ItemCard extends StatelessWidget {
+class ItemCard extends StatefulWidget {
   final LibraryItem item;
   final double aspectRatio;
   final double displayWidth;
@@ -33,27 +33,43 @@ class ItemCard extends StatelessWidget {
   });
 
   @override
+  State<ItemCard> createState() => _ItemCardState();
+}
+
+class _ItemCardState extends State<ItemCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     final selectedColor = cs.brightness == Brightness.light
         ? const Color(0xFF7B49E0)
         : cs.primary;
+    final hoverColor = cs.brightness == Brightness.light
+        ? const Color(0xFFB89AFF)
+        : const Color(0xFF7E8FA3);
     final radius = BorderRadius.circular(4 * c);
+    final borderColor = widget.isSelected
+        ? selectedColor
+        : (_isHovered ? hoverColor : cs.outlineVariant);
+    final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 0.5);
     return GestureDetector(
-      onSecondaryTapUp: (details) => onRightClick(details.globalPosition),
+      onSecondaryTapUp: (details) =>
+          widget.onRightClick(details.globalPosition),
       child: InkWell(
         onTap: () {
           final isCtrl = HardwareKeyboard.instance.isControlPressed;
           final isShift = HardwareKeyboard.instance.isShiftPressed;
           if (isShift) {
-            onShiftTap();
+            widget.onShiftTap();
           } else if (isCtrl) {
-            onCtrlTap();
+            widget.onCtrlTap();
           } else {
-            onTap();
+            widget.onTap();
           }
         },
+        onHover: (v) => setState(() => _isHovered = v),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         hoverColor: Colors.transparent,
@@ -62,24 +78,18 @@ class ItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              height: displayHeight,
+              height: widget.displayHeight,
               clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                image: null,
-              ),
+              decoration: BoxDecoration(borderRadius: radius, image: null),
               foregroundDecoration: BoxDecoration(
                 borderRadius: radius,
-                border: Border.all(
-                  color: isSelected ? selectedColor : cs.outlineVariant,
-                  width: isSelected ? 1.5 : 0.5,
-                ),
+                border: Border.all(color: borderColor, width: borderWidth),
               ),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _buildPreviewImage(context, c),
-                  if (item.info.star)
+                  if (widget.item.info.star)
                     Positioned(
                       top: 2 * c,
                       right: 2 * c,
@@ -89,7 +99,11 @@ class ItemCard extends StatelessWidget {
                           color: Colors.black.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(10 * c),
                         ),
-                        child: Icon(Icons.star, size: 12 * c, color: Colors.amber),
+                        child: Icon(
+                          Icons.star,
+                          size: 12 * c,
+                          color: Colors.amber,
+                        ),
                       ),
                     ),
                 ],
@@ -104,18 +118,24 @@ class ItemCard extends StatelessWidget {
 
   Widget _buildPreviewImage(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
-    if (item.previewPath == null) {
+    if (widget.item.previewPath == null) {
       return Center(
-        child: Icon(Icons.image_not_supported, size: 20 * c, color: cs.onSurfaceVariant),
+        child: Icon(
+          Icons.image_not_supported,
+          size: 20 * c,
+          color: cs.onSurfaceVariant,
+        ),
       );
     }
-    final cacheW = ((displayWidth * 2) ~/ 100 * 100).clamp(100, 800).toInt();
+    final cacheW = ((widget.displayWidth * 2) ~/ 100 * 100)
+        .clamp(100, 800)
+        .toInt();
     final errorWidget = Center(
       child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
     );
     return GifImage(
-      file: File(item.previewPath!),
-      gifMode: gifMode,
+      file: File(widget.item.previewPath!),
+      gifMode: widget.gifMode,
       cacheWidth: cacheW,
       fit: BoxFit.cover,
       errorBuilder: (_) => errorWidget,
@@ -126,7 +146,7 @@ class ItemCard extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: 4 * c, left: 2 * c, right: 2 * c),
       child: Text(
-        item.info.title,
+        widget.item.info.title,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
