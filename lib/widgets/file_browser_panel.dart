@@ -402,7 +402,6 @@ class _FileGridItemState extends State<_FileGridItem> {
     final isDir = widget.file is Directory;
     final isImage = !isDir &&
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
-    final isGif = !isDir && name.toLowerCase().endsWith('.gif');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -436,19 +435,13 @@ class _FileGridItemState extends State<_FileGridItem> {
                   child: isDir
                       ? _buildFileIcon(name, c, isDir: true)
                       : (isImage
-                          ? (isGif
-                              ? GifImage(
-                                  file: widget.file as File,
-                                  gifMode: widget.gifMode,
-                                  cacheWidth: 120,
-                                  fit: BoxFit.cover,
-                                  placeholderColor: cs.surfaceContainerHighest,
-                                  errorBuilder: (_) => _buildFileIcon(name, c),
-                                )
-                              : Image.file(widget.file as File,
-                                  cacheWidth: 120,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => _buildFileIcon(name, c)))
+                          ? GifImage(
+                              file: widget.file as File,
+                              gifMode: widget.gifMode,
+                              cacheWidth: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_) => _buildFileIcon(name, c),
+                            )
                           : _buildFileIcon(name, c)),
                 ),
                 SizedBox(height: 4 * c),

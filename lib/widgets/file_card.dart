@@ -55,7 +55,6 @@ class _FileCardState extends State<FileCard> {
     final cs = Theme.of(context).colorScheme;
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
-    final isGif = ext == 'gif';
 
     return MouseRegion(
       child: GestureDetector(
@@ -86,21 +85,13 @@ class _FileCardState extends State<FileCard> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: isImage
-                    ? (isGif
-                        ? GifImage(
-                            file: File(widget.file.path),
-                            gifMode: GifDisplayMode.static,
-                            cacheWidth: 120,
-                            fit: BoxFit.cover,
-                            placeholderColor: cs.surfaceContainerHighest,
-                          )
-                        : Image.file(
-                            File(widget.file.path),
-                            cacheWidth: 120,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _buildFileIcon(context, ext, c),
-                          ))
+                    ? GifImage(
+                        file: File(widget.file.path),
+                        gifMode: GifDisplayMode.static,
+                        cacheWidth: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_) => _buildFileIcon(context, ext, c),
+                      )
                     : _buildFileIcon(context, ext, c),
               ),
               SizedBox(height: 4 * c),

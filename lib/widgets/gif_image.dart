@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 
@@ -10,7 +8,6 @@ class GifImage extends StatefulWidget {
   final int? cacheWidth;
   final BoxFit fit;
   final WidgetBuilder? errorBuilder;
-  final Color? placeholderColor;
 
   const GifImage({
     super.key,
@@ -19,7 +16,6 @@ class GifImage extends StatefulWidget {
     this.cacheWidth,
     this.fit = BoxFit.cover,
     this.errorBuilder,
-    this.placeholderColor,
   });
 
   @override
@@ -27,28 +23,19 @@ class GifImage extends StatefulWidget {
 }
 
 class _GifImageState extends State<GifImage> {
-  static final Map<String, Uint8List> _firstFrameCache = {};
-
   bool _isHovering = false;
-  Uint8List? _firstFrame;
-  bool _loading = true;
-  bool _hasError = false;
 
   // 真实视口可见性：即使卡片因为 cacheExtent 被提前 build/保活，
-  // 只要它没有真正进入可视区域，就不允许播放动图（退化为静态首帧），
-  // 避免分组导致布局更稀疏时，缓存窗口内挂载的动图数量意外增多，
-  // 从而拖高 CPU/GPU 占用。
+  // 只要它没有真正进入可视区域，就不允许播放动图（用 TickerMode 冻结），
+  // 避免屏幕外的动图逐帧解码占用 CPU/GPU。
   ScrollPosition? _scrollPosition;
   // 默认先当作"不在屏幕内"，直到第一次真正测量完位置为止，
-  // 避免因为 cacheExtent 预构建而在还没确认可见性前就先播放一帧动图。
+  // 避免因为 cacheExtent 预构建而在还没确认可见性前就先播放动图。
   bool _onstage = false;
 
   @override
   void initState() {
     super.initState();
-    // 无论哪种模式都提前把首帧准备好，这样一旦判定为"不在屏幕内"，
-    // 可以立刻退化为静态图，而不用等待额外的异步解码。
-    _loadFirstFrame();
     WidgetsBinding.instance.addPostFrameCallback((_) => _attachScrollListener());
   }
 
@@ -81,49 +68,9 @@ class _GifImageState extends State<GifImage> {
   }
 
   @override
-  void didUpdateWidget(GifImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.file.path != widget.file.path) {
-      _firstFrame = null;
-      _loading = true;
-      _hasError = false;
-      _loadFirstFrame();
-    }
-  }
-
-  @override
   void dispose() {
     _scrollPosition?.removeListener(_recheckOnstage);
     super.dispose();
-  }
-
-  Future<void> _loadFirstFrame() async {
-    final path = widget.file.path;
-    final cached = _firstFrameCache[path];
-    if (cached != null) {
-      if (mounted) setState(() { _firstFrame = cached; _loading = false; });
-      return;
-    }
-    try {
-      final bytes = await widget.file.readAsBytes();
-      final codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: widget.cacheWidth,
-      );
-      final frame = await codec.getNextFrame();
-      final byteData = await frame.image.toByteData(format: ui.ImageByteFormat.png);
-      codec.dispose();
-      frame.image.dispose();
-      if (byteData == null) {
-        if (mounted) setState(() { _hasError = true; _loading = false; });
-        return;
-      }
-      final data = byteData.buffer.asUint8List();
-      _firstFrameCache[path] = data;
-      if (mounted) setState(() { _firstFrame = data; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() { _hasError = true; _loading = false; });
-    }
   }
 
   @override
@@ -132,35 +79,27 @@ class _GifImageState extends State<GifImage> {
     // 比如切换分组导致同一路径重新出现在别的位置）。
     WidgetsBinding.instance.addPostFrameCallback((_) => _attachScrollListener());
 
-    if (_hasError && widget.errorBuilder != null) {
-      return widget.errorBuilder!(context);
-    }
-
-    final canAnimate = _onstage; // 不在可视区域内一律不允许播放动图
+    final canAnimate = _onstage; // 不在可视区域内一律冻结动图
 
     if (widget.gifMode == GifDisplayMode.unlimited) {
-      if (!canAnimate) return _buildStaticImage();
-      return _buildAnimatedImage();
-    }
-
-    if (_loading) {
-      return Container(
-        color: widget.placeholderColor ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-      );
+      return canAnimate ? _buildAnimatedImage() : _buildFrozenImage();
     }
 
     if (widget.gifMode == GifDisplayMode.static) {
-      return _buildStaticImage();
+      return _buildFrozenImage();
     }
 
     // hover mode
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
-      child: (_isHovering && canAnimate) ? _buildAnimatedImage() : _buildStaticImage(),
+      child: (_isHovering && canAnimate)
+          ? _buildAnimatedImage()
+          : _buildFrozenImage(),
     );
   }
 
+  /// 正常播放动图。
   Widget _buildAnimatedImage() {
     return Image.file(
       widget.file,
@@ -171,18 +110,22 @@ class _GifImageState extends State<GifImage> {
     );
   }
 
-  Widget _buildStaticImage() {
-    if (_firstFrame == null) {
-      return Container(
-        color: widget.placeholderColor ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-      );
-    }
-    return Image.memory(
-      _firstFrame!,
-      fit: widget.fit,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) =>
-          widget.errorBuilder?.call(context) ?? const SizedBox.shrink(),
+  /// 用 TickerMode(enabled: false) 冻结动图在首帧。
+  ///
+  /// 这是纯渲染层开关：Flutter 动图的逐帧推进依赖底层 Ticker，
+  /// TickerMode 关闭后子树所有 Ticker 暂停，动图停在首帧。
+  /// 零文件 I/O、零解码、零内存开销，对所有格式（gif/webp/后缀不符动图）
+  /// 统一生效。静态图本就无动画，TickerMode 无影响，正常渲染。
+  Widget _buildFrozenImage() {
+    return TickerMode(
+      enabled: false,
+      child: Image.file(
+        widget.file,
+        cacheWidth: widget.cacheWidth,
+        fit: widget.fit,
+        errorBuilder: (_, __, ___) =>
+            widget.errorBuilder?.call(context) ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

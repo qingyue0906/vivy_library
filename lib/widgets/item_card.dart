@@ -107,25 +107,15 @@ class ItemCard extends StatelessWidget {
       );
     }
     final cacheW = ((displayWidth * 2) ~/ 100 * 100).clamp(100, 800).toInt();
-    final isGif = item.previewPath!.toLowerCase().endsWith('.gif');
     final errorWidget = Center(
       child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
     );
-    if (isGif) {
-      return GifImage(
-        file: File(item.previewPath!),
-        gifMode: gifMode,
-        cacheWidth: cacheW,
-        fit: BoxFit.cover,
-        placeholderColor: Colors.transparent,
-        errorBuilder: (_) => errorWidget,
-      );
-    }
-    return Image.file(
-      File(item.previewPath!),
+    return GifImage(
+      file: File(item.previewPath!),
+      gifMode: gifMode,
       cacheWidth: cacheW,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => errorWidget,
+      errorBuilder: (_) => errorWidget,
     );
   }
 
