@@ -72,6 +72,9 @@ class _FolderCardState extends State<FolderCard> {
       child: InkWell(
         onTap: _handleTap,
         borderRadius: BorderRadius.circular(4 * c),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
         child: Container(
           padding: EdgeInsets.symmetric(vertical: 6 * c, horizontal: 4 * c),
           decoration: BoxDecoration(
