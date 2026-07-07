@@ -900,6 +900,30 @@ class Strings {
       AppLocale.en: 'Rename failed: {error}',
       AppLocale.ja: '名前の変更に失敗: {error}',
     },
+    'openN': {
+      AppLocale.zhHans: '打开 {n} 项',
+      AppLocale.zhHant: '開啟 {n} 項',
+      AppLocale.en: 'Open {n} item(s)',
+      AppLocale.ja: '{n} 件を開く',
+    },
+    'locateNInExplorer': {
+      AppLocale.zhHans: '在资源管理器中显示 {n} 项',
+      AppLocale.zhHant: '在檔案總管中顯示 {n} 項',
+      AppLocale.en: 'Show {n} item(s) in Explorer',
+      AppLocale.ja: '{n} 件をエクスプローラで表示',
+    },
+    'deselectAll': {
+      AppLocale.zhHans: '取消选中',
+      AppLocale.zhHant: '取消選取',
+      AppLocale.en: 'Deselect all',
+      AppLocale.ja: '選択を解除',
+    },
+    'copyInHint': {
+      AppLocale.zhHans: '拖入文件以复制到此处',
+      AppLocale.zhHant: '拖入檔案以複製到此處',
+      AppLocale.en: 'Drop files here to copy',
+      AppLocale.ja: 'ファイルをドロップしてコピー',
+    },
 
     // ======== file_properties_dialog ========
     'propTitle': {

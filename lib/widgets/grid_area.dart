@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:desktop_drop/desktop_drop.dart';
+import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/direct_file.dart';
@@ -71,10 +72,21 @@ class GridArea extends StatelessWidget {
         }
         return KeyEventResult.ignored;
       },
-      child: DropTarget(
-        onDragDone: (detail) {
-          if (detail.files.isNotEmpty) {
-            onFileDrop?.call(detail.files.map((f) => f.path).toList());
+      child: DropRegion(
+        formats: const [Formats.fileUri],
+        hitTestBehavior: HitTestBehavior.translucent,
+        onDropOver: (event) {
+          final allowed = event.session.allowedOperations;
+          if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
+          return allowed.isNotEmpty ? allowed.first : DropOperation.none;
+        },
+        onPerformDrop: (event) async {
+          final paths = <String>[];
+          for (final di in event.session.items) {
+            paths.addAll(await _readFilePaths(di));
+          }
+          if (paths.isNotEmpty) {
+            onFileDrop?.call(paths);
           }
         },
         child: Stack(
@@ -573,6 +585,24 @@ class GridArea extends StatelessWidget {
 
   void _openFile(String path) {
     Process.run('cmd', ['/c', 'start', '', path]);
+  }
+
+  Future<List<String>> _readFilePaths(DropItem dropItem) async {
+    final reader = dropItem.dataReader;
+    if (reader == null) return [];
+    if (!reader.canProvide(Formats.fileUri)) return [];
+    final completer = Completer<List<String>>();
+    reader.getValue<Uri>(
+      Formats.fileUri,
+      (uri) {
+        completer.complete(uri != null ? [uri.toFilePath()] : []);
+      },
+      onError: (e) => completer.complete([]),
+    );
+    return completer.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => [],
+    );
   }
 
   void _showFileContextMenu(

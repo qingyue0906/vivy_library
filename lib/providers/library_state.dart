@@ -63,6 +63,10 @@ class LibraryState extends ChangeNotifier {
   final Set<String> _selectedFolderPaths = {};
   String? _folderSelectionAnchorPath;
 
+  // 底部文件面板多选状态（与项目/文件夹多选互斥）
+  final Set<String> _selectedBrowserPaths = {};
+  String? _browserSelectionAnchorPath;
+
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get currentRootPath => _currentRootPath;
@@ -87,6 +91,7 @@ class LibraryState extends ChangeNotifier {
   Set<String> get expandedPaths => Set.unmodifiable(_expandedPaths);
   Set<String> get selectedPaths => Set.unmodifiable(_selectedPaths);
   Set<String> get selectedFolderPaths => Set.unmodifiable(_selectedFolderPaths);
+  Set<String> get selectedBrowserPaths => Set.unmodifiable(_selectedBrowserPaths);
 
   CategoryNode get categoryRoot => _categoryRoot;
 
@@ -607,6 +612,8 @@ class LibraryState extends ChangeNotifier {
 
   void hideFileBrowser() {
     _fileBrowserVisible = false;
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     notifyListeners();
   }
 
@@ -646,6 +653,8 @@ class LibraryState extends ChangeNotifier {
     _selectedFolder = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _fileBrowserVisible = false;
     if (path != null) {
       _selectedFolder = _categoryRoot.findByPath(path);
@@ -663,6 +672,8 @@ class LibraryState extends ChangeNotifier {
     _selectedItem = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _selectedFolder = _categoryRoot.findByPath(folderPath);
     _fileBrowserVisible = false;
     notifyListeners();
@@ -683,6 +694,8 @@ class LibraryState extends ChangeNotifier {
     _selectedItem = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _fileBrowserVisible = false;
     notifyListeners();
   }
@@ -714,6 +727,10 @@ class LibraryState extends ChangeNotifier {
   }
 
   void setSelectedItem(LibraryItem item) {
+    if (_selectedItem?.path != item.path) {
+      _selectedBrowserPaths.clear();
+      _browserSelectionAnchorPath = null;
+    }
     _selectedItem = item;
     _selectedFolder = null;
     _selectedFile = null;
@@ -736,6 +753,8 @@ class LibraryState extends ChangeNotifier {
       ..clear()
       ..add(node.path);
     _folderSelectionAnchorPath = node.path;
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _fileBrowserVisible = false;
     notifyListeners();
   }
@@ -746,6 +765,8 @@ class LibraryState extends ChangeNotifier {
     _selectedFolder = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _fileBrowserVisible = false;
     notifyListeners();
   }
@@ -762,6 +783,8 @@ class LibraryState extends ChangeNotifier {
     _selectedFolderPaths.clear();
     _selectionAnchorPath = null;
     _folderSelectionAnchorPath = null;
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _fileBrowserVisible = false;
     _selectedFolder = _selectedCategoryPath == null
         ? null
@@ -833,6 +856,105 @@ class LibraryState extends ChangeNotifier {
       _selectedPaths.clear();
       notifyListeners();
     }
+  }
+
+  // ====== 底部文件面板多选 ======
+
+  bool isBrowserSelected(String path) => _selectedBrowserPaths.contains(path);
+
+  void setSelectedBrowserFile(String path) {
+    _selectedBrowserPaths
+      ..clear()
+      ..add(path);
+    _browserSelectionAnchorPath = path;
+    notifyListeners();
+  }
+
+  void toggleBrowserSelection(String path) {
+    if (_selectedBrowserPaths.contains(path)) {
+      _selectedBrowserPaths.remove(path);
+    } else {
+      _selectedBrowserPaths.add(path);
+      _browserSelectionAnchorPath = path;
+    }
+    notifyListeners();
+  }
+
+  void selectBrowserRange(String path, List<String> currentList) {
+    if (_browserSelectionAnchorPath == null) {
+      setSelectedBrowserFile(path);
+      return;
+    }
+    final anchorIndex = currentList.indexOf(_browserSelectionAnchorPath!);
+    final targetIndex = currentList.indexOf(path);
+    if (anchorIndex == -1 || targetIndex == -1) {
+      setSelectedBrowserFile(path);
+      return;
+    }
+    final start = anchorIndex < targetIndex ? anchorIndex : targetIndex;
+    final end = anchorIndex < targetIndex ? targetIndex : anchorIndex;
+    _selectedBrowserPaths
+      ..clear()
+      ..addAll(currentList.sublist(start, end + 1));
+    notifyListeners();
+  }
+
+  void selectAllBrowserFiles(List<String> currentList) {
+    _selectedBrowserPaths
+      ..clear()
+      ..addAll(currentList);
+    _browserSelectionAnchorPath =
+        currentList.isNotEmpty ? currentList.last : null;
+    notifyListeners();
+  }
+
+  void selectBrowserForContextMenu(String path) {
+    if (!_selectedBrowserPaths.contains(path)) {
+      _selectedBrowserPaths
+        ..clear()
+        ..add(path);
+      _browserSelectionAnchorPath = path;
+      notifyListeners();
+    }
+  }
+
+  void clearBrowserSelection() {
+    if (_selectedBrowserPaths.isEmpty && _browserSelectionAnchorPath == null) {
+      return;
+    }
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
+    notifyListeners();
+  }
+
+  /// 拖入：将一组文件/文件夹复制到 [destDir]，处理同名冲突，完成后刷新面板。
+  Future<void> copyFilesToDirectory(List<String> srcPaths, String destDir) async {
+    if (srcPaths.isEmpty) return;
+    // 过滤掉已在目标目录内的源路径（防止拖入自身导致重复复制）
+    final destNorm = destDir.replaceAll('\\', '/');
+    final filtered = srcPaths.where((src) {
+      final s = src.replaceAll('\\', '/');
+      if (s == destNorm) return false;
+      return !s.startsWith('$destNorm/');
+    }).toList();
+    if (filtered.isEmpty) return;
+    startCopy('Copying ${filtered.length} item(s)...');
+    for (int i = 0; i < filtered.length; i++) {
+      final src = filtered[i];
+      final srcName = src.replaceAll('\\', '/').split('/').last;
+      updateCopyProgress(
+        i / filtered.length,
+        'Copying $srcName (${i + 1}/${filtered.length})',
+      );
+      final dest = _uniqueName(destDir, srcName);
+      try {
+        await _copySingle(src, dest);
+      } catch (e) {
+        debugPrint('copy error for $src: $e');
+      }
+    }
+    showCopyComplete('Copy complete');
+    notifyListeners();
   }
 
   /// 閫氳繃 uuid 閫変腑椤圭洰锛坓oto 鐐瑰嚮锛夈€傛壘涓嶅埌杩斿洖 false锛岃皟鐢ㄦ柟鎻愮ず銆?
@@ -1029,9 +1151,12 @@ class LibraryState extends ChangeNotifier {
   String _uniqueName(String destDir, String name) {
     final dest = "$destDir${Platform.pathSeparator}$name";
     if (!Directory(dest).existsSync() && !File(dest).existsSync()) return dest;
+    final dotIndex = name.lastIndexOf('.');
+    final base = dotIndex > 0 ? name.substring(0, dotIndex) : name;
+    final ext = dotIndex > 0 ? name.substring(dotIndex) : '';
     int counter = 1;
     while (true) {
-      final alt = "$destDir${Platform.pathSeparator}${name}_$counter";
+      final alt = "$destDir${Platform.pathSeparator}${base}_$counter$ext";
       if (!Directory(alt).existsSync() && !File(alt).existsSync()) return alt;
       counter++;
     }
@@ -1374,6 +1499,8 @@ class LibraryState extends ChangeNotifier {
     _selectedFolder = null;
     _selectedPaths.clear();
     _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
     _expandedPaths.clear();
     _fileBrowserVisible = false;
     notifyListeners();
@@ -1418,6 +1545,8 @@ class LibraryState extends ChangeNotifier {
       _selectedItem = null;
       _selectedPaths.clear();
       _selectedFolderPaths.clear();
+      _selectedBrowserPaths.clear();
+      _browserSelectionAnchorPath = null;
       _fileBrowserVisible = false;
       _searchQuery = keepSearch;
     } catch (e) {
