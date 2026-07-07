@@ -402,6 +402,30 @@ class Strings {
       AppLocale.en: 'Export failed: {error}',
       AppLocale.ja: 'エクスポート失敗: {error}',
     },
+    'export': {
+      AppLocale.zhHans: '导出',
+      AppLocale.zhHant: '導出',
+      AppLocale.en: 'Export',
+      AppLocale.ja: 'エクスポート',
+    },
+    'exportN': {
+      AppLocale.zhHans: '导出 {n} 项',
+      AppLocale.zhHant: '導出 {n} 項',
+      AppLocale.en: 'Export {n} items',
+      AppLocale.ja: '{n} 項をエクスポート',
+    },
+    'exportedToDir': {
+      AppLocale.zhHans: '已导出 {n} 个项到 {dir}',
+      AppLocale.zhHant: '已匯出 {n} 個項目到 {dir}',
+      AppLocale.en: 'Exported {n} item(s) to {dir}',
+      AppLocale.ja: '{n} 項を {dir} にエクスポートしました',
+    },
+    'exportedPartial': {
+      AppLocale.zhHans: '已导出 {ok} 个项（{fail} 个失败）到 {dir}',
+      AppLocale.zhHant: '已匯出 {ok} 個項目（{fail} 個失敗）到 {dir}',
+      AppLocale.en: 'Exported {ok} item(s), {fail} failed, to {dir}',
+      AppLocale.ja: '{ok} 項をエクスポート（{fail} 項失敗）{dir} へ',
+    },
     'importFileTitle': {
       AppLocale.zhHans: '选择导入文件',
       AppLocale.zhHant: '選擇匯入檔案',

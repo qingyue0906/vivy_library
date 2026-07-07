@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:super_drag_and_drop/super_drag_and_drop.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import '../models/library_item.dart';
 import '../models/exe_record.dart';
 import '../providers/library_state.dart';
@@ -253,51 +255,23 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     );
   }
 
-  /// 用 DropRegion 包裹：拖入文件即复制到 item.path。
+  /// 用 DropTarget 包裹：拖入文件即复制到 item.path。
   Widget _buildDropTarget(double c, Widget child, List<String> visiblePaths) {
-    return DropRegion(
-      formats: const [Formats.fileUri],
-      hitTestBehavior: HitTestBehavior.translucent,
-      onDropOver: (event) {
-        setState(() => _isDragOver = true);
-        final allowed = event.session.allowedOperations;
-        if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
-        return allowed.isNotEmpty ? allowed.first : DropOperation.none;
-      },
-      onDropLeave: (event) {
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragExited: (_) => setState(() => _isDragOver = false),
+      onDragDone: (detail) {
         setState(() => _isDragOver = false);
-      },
-      onPerformDrop: (event) async {
-        setState(() => _isDragOver = false);
-        final paths = <String>[];
-        for (final di in event.session.items) {
-          paths.addAll(await _readFilePaths(di));
-        }
+        final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
-          await widget.state.copyFilesToDirectory(paths, widget.item.path);
+          widget.state.copyFilesToDirectory(paths, widget.item.path);
         }
       },
       child: child,
     );
   }
 
-  Future<List<String>> _readFilePaths(DropItem dropItem) async {
-    final reader = dropItem.dataReader;
-    if (reader == null) return [];
-    if (!reader.canProvide(Formats.fileUri)) return [];
-    final completer = Completer<List<String>>();
-    reader.getValue<Uri>(
-      Formats.fileUri,
-      (uri) {
-        completer.complete(uri != null ? [uri.toFilePath()] : []);
-      },
-      onError: (e) => completer.complete([]),
-    );
-    return completer.future.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => [],
-    );
-  }
+
 
   Widget _buildFileItem(BuildContext context, FileSystemEntity file, double c) {
     return _FileGridItem(
@@ -405,6 +379,22 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
             ],
           ),
         ),
+        PopupMenuItem(
+          value: 'export',
+          height: 32,
+          child: Row(
+            children: [
+              const Icon(Icons.file_upload, size: 14),
+              const SizedBox(width: 8),
+              Text(
+                isBatch
+                    ? Strings.tn('exportN', {'n': '${paths.length}'})
+                    : Strings.t('export'),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
         if (!isBatch)
           PopupMenuItem(
             value: 'properties',
@@ -464,6 +454,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
           } else {
             Process.run('explorer', ['/select,', file.path]);
           }
+        case 'export':
+          await _exportPaths(context, paths);
         case 'properties':
           showDialog(
             context: context,
@@ -569,6 +561,55 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     Process.run('cmd', ['/c', 'start', '', path]);
   }
 
+  /// 导出选中项到用户选择的目录（替代原"拖出"能力）。
+  /// 文件直接复制；目录递归复制；遇到同名项跳过以避免覆盖。
+  Future<void> _exportPaths(BuildContext context, List<String> paths) async {
+    final dir = await FilePicker.platform.getDirectoryPath();
+    if (dir == null) return;
+
+    int exported = 0;
+    final errors = <String>[];
+    for (final src in paths) {
+      final dest = p.join(dir, _baseName(src));
+      try {
+        _copyPath(src, dest);
+        exported++;
+      } catch (e) {
+        errors.add('${_baseName(src)}: $e');
+      }
+    }
+
+    if (context.mounted) {
+      final msg = errors.isEmpty
+          ? Strings.tn('exportedToDir', {'n': '$exported', 'dir': dir})
+          : Strings.tn('exportedPartial', {
+              'ok': '$exported',
+              'fail': '${errors.length}',
+              'dir': dir,
+            });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: errors.isEmpty ? null : Colors.orange.shade700,
+        ),
+      );
+    }
+  }
+
+  /// 复制文件或目录到 dest；dest 已存在则跳过。
+  void _copyPath(String src, String dest) {
+    if (FileSystemEntity.typeSync(src) == FileSystemEntityType.directory) {
+      if (Directory(dest).existsSync()) return; // 同名目录跳过
+      Directory(dest).createSync(recursive: true);
+      for (final entity in Directory(src).listSync()) {
+        _copyPath(entity.path, p.join(dest, _baseName(entity.path)));
+      }
+    } else {
+      if (File(dest).existsSync()) return; // 同名文件跳过
+      File(src).copySync(dest);
+    }
+  }
+
   String _baseName(String fullPath) {
     return fullPath.replaceAll('\\', '/').split('/').last;
   }
@@ -605,37 +646,7 @@ class _FileGridItem extends StatefulWidget {
 
 class _FileGridItemState extends State<_FileGridItem> {
   bool _isHovering = false;
-  final _snapshotterKey = GlobalKey<WidgetSnapshotterState>();
-  static final _dragSnapshotKey = Object();
   DateTime? _lastTapTime;
-
-  /// 构建拖拽配置：选中多项时为每个文件创建独立 DragItem，
-  /// Windows 原生端会将各 provider 的路径合并为单个 CF_HDROP（多文件）。
-  Future<DragConfiguration?> _buildDragConfig(
-      Offset location, DragSession session) async {
-    final selected = widget.selectedPaths;
-    final paths = (widget.isSelected && selected.length > 1)
-        ? selected.toList()
-        : [widget.file.path];
-    final snapshotter = _snapshotterKey.currentState;
-    if (snapshotter == null || !snapshotter.mounted) return null;
-    final snapshot =
-        await snapshotter.getSnapshot(location, _dragSnapshotKey, () => null);
-    if (snapshot == null) return null;
-    final items = <DragConfigurationItem>[];
-    for (int i = 0; i < paths.length; i++) {
-      final dragItem = DragItem(localData: paths);
-      dragItem.add(Formats.fileUri(Uri.file(paths[i])));
-      items.add(DragConfigurationItem(
-        item: dragItem,
-        image: i == 0 ? snapshot : snapshot.retain(),
-      ));
-    }
-    return DragConfiguration(
-      items: items,
-      allowedOperations: const [DropOperation.copy],
-    );
-  }
 
   /// 手动双击判定：300ms 内二次点击触发双击，单击立即响应无延迟。
   void _handleTap() {
@@ -672,69 +683,62 @@ class _FileGridItemState extends State<_FileGridItem> {
         ? cs.primary.withValues(alpha: 0.12)
         : (_isHovering ? cs.onSurface.withValues(alpha: 0.08) : Colors.transparent);
 
-    return WidgetSnapshotter(
-      key: _snapshotterKey,
-      child: BaseDraggableWidget(
-        dragConfiguration: _buildDragConfig,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _isHovering = true),
-          onExit: (_) => setState(() => _isHovering = false),
-          child: GestureDetector(
-            onTap: _handleTap,
-            onSecondaryTapUp: (details) =>
-                widget.onRightClick(details.globalPosition),
-            child: Tooltip(
-              message: name,
-              waitDuration: const Duration(milliseconds: 500),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: selectedBg,
-                  border: selectedBorder,
-                  borderRadius: BorderRadius.circular(6 * c),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: _handleTap,
+        onSecondaryTapUp: (details) => widget.onRightClick(details.globalPosition),
+        child: Tooltip(
+          message: name,
+          waitDuration: const Duration(milliseconds: 500),
+          child: Container(
+            decoration: BoxDecoration(
+              color: selectedBg,
+              border: selectedBorder,
+              borderRadius: BorderRadius.circular(6 * c),
+            ),
+            padding: EdgeInsets.symmetric(vertical: 4 * c),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56 * c,
+                  height: 56 * c,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6 * c),
+                    color: cs.surfaceContainerHighest,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: isDir
+                      ? _buildFileIcon(name, c, isDir: true)
+                      : (isImage
+                          ? GifImage(
+                              file: widget.file as File,
+                              gifMode: widget.gifMode,
+                              cacheWidth: 120,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_) => _buildFileIcon(name, c),
+                            )
+                          : _buildFileIcon(name, c)),
                 ),
-                padding: EdgeInsets.symmetric(vertical: 4 * c),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 56 * c,
-                      height: 56 * c,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6 * c),
-                        color: cs.surfaceContainerHighest,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: isDir
-                          ? _buildFileIcon(name, c, isDir: true)
-                          : (isImage
-                              ? GifImage(
-                                  file: widget.file as File,
-                                  gifMode: widget.gifMode,
-                                  cacheWidth: 120,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_) => _buildFileIcon(name, c),
-                                )
-                              : _buildFileIcon(name, c)),
+                SizedBox(height: 4 * c),
+                Flexible(
+                  child: Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9 * c,
+                      color: widget.isSelected ? cs.primary : cs.onSurface,
+                      fontWeight: widget.isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
-                    SizedBox(height: 4 * c),
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 9 * c,
-                          color: widget.isSelected ? cs.primary : cs.onSurface,
-                          fontWeight: widget.isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:super_drag_and_drop/super_drag_and_drop.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import '../models/item_info.dart';
 import '../models/goto_entry.dart';
 import '../providers/library_state.dart';
@@ -358,19 +358,11 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
           padding: EdgeInsets.only(bottom: 4 * c),
           child: Text(Strings.t('importFiles'), style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
         ),
-        DropRegion(
-          formats: const [Formats.fileUri],
-          hitTestBehavior: HitTestBehavior.translucent,
-          onDropOver: (event) {
-            final allowed = event.session.allowedOperations;
-            if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
-            return allowed.isNotEmpty ? allowed.first : DropOperation.none;
-          },
-          onPerformDrop: (event) async {
-            final paths = <String>[];
-            for (final di in event.session.items) {
-              paths.addAll(await _readFilePaths(di));
-            }
+        DropTarget(
+          onDragEntered: (_) {},
+          onDragExited: (_) {},
+          onDragDone: (detail) {
+            final paths = detail.files.map((f) => f.path).toList();
             for (final p in paths) {
               if (!_importedPaths.contains(p)) {
                 setState(() => _importedPaths.add(p));
@@ -477,19 +469,11 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
             ],
           )
         else
-          DropRegion(
-            formats: const [Formats.fileUri],
-            hitTestBehavior: HitTestBehavior.translucent,
-            onDropOver: (event) {
-              final allowed = event.session.allowedOperations;
-              if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
-              return allowed.isNotEmpty ? allowed.first : DropOperation.none;
-            },
-            onPerformDrop: (event) async {
-              final paths = <String>[];
-              for (final di in event.session.items) {
-                paths.addAll(await _readFilePaths(di));
-              }
+          DropTarget(
+            onDragEntered: (_) {},
+            onDragExited: (_) {},
+            onDragDone: (detail) {
+              final paths = detail.files.map((f) => f.path).toList();
               if (paths.isNotEmpty) {
                 final path = paths.first;
                 if (_isImageExtension(path)) {
@@ -526,24 +510,6 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   bool _isImageExtension(String path) {
     final ext = path.split('.').last.toLowerCase();
     return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext);
-  }
-
-  Future<List<String>> _readFilePaths(DropItem dropItem) async {
-    final reader = dropItem.dataReader;
-    if (reader == null) return [];
-    if (!reader.canProvide(Formats.fileUri)) return [];
-    final completer = Completer<List<String>>();
-    reader.getValue<Uri>(
-      Formats.fileUri,
-      (uri) {
-        completer.complete(uri != null ? [uri.toFilePath()] : []);
-      },
-      onError: (e) => completer.complete([]),
-    );
-    return completer.future.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => [],
-    );
   }
 
   Widget _buildField(String label, TextEditingController ctrl, {int maxLines = 1, bool isError = false}) {

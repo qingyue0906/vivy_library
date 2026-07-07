@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:super_drag_and_drop/super_drag_and_drop.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/direct_file.dart';
@@ -84,6 +84,10 @@ class _GridAreaState extends State<GridArea> {
   GridSettings get gridSettings => widget.gridSettings;
   double get middleOpacity => widget.middleOpacity;
 
+  /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
+  /// 避免拖入底部面板时外层网格区也触发一次复制。
+  final GlobalKey _panelKey = GlobalKey();
+
   // ===== Drag performance cache =====
   // Tier 1: full cache — same widget returned, Flutter skips update entirely.
   Widget? _cachedScrollContent;
@@ -114,6 +118,7 @@ class _GridAreaState extends State<GridArea> {
       },
       child: _DropHighlight(
         onFilesDropped: (paths) => onFileDrop?.call(paths),
+        excludeKey: _panelKey,
         bottomInset:
             (state.fileBrowserVisible && state.selectedItem != null)
                 ? filePanelHeight + 4
@@ -153,6 +158,7 @@ class _GridAreaState extends State<GridArea> {
                     ),
                   ),
                   FileBrowserPanel(
+                    key: _panelKey,
                     item: state.selectedItem!,
                     state: state,
                     scriptService: scriptService,
@@ -950,18 +956,22 @@ class _GridAreaState extends State<GridArea> {
 }
 
 /// 为中间网格区域提供拖入高亮圆角边框与文件路径读取。
-/// 嵌套时内层 DropRegion（如底部文件面板）优先拦截命中区域，
-/// 拖入底部面板时本层不会高亮。
+/// 由于 desktop_drop 的 DropTarget 为全局监听，嵌套时内外层都会在命中区域触发，
+/// 因此通过 [excludeKey] 排除内层（如底部文件面板）的命中矩形，
+/// 拖入底部面板时本层不再重复触发复制。
 class _DropHighlight extends StatefulWidget {
   final Widget child;
   final void Function(List<String> paths)? onFilesDropped;
   /// 高亮边框底部需排除的高度（如底部文件面板占据的区域）。
   final double bottomInset;
+  /// 需排除其命中区域的内层 widget key（拖入该区域时本层不触发）。
+  final GlobalKey? excludeKey;
 
   const _DropHighlight({
     required this.child,
     this.onFilesDropped,
     this.bottomInset = 0,
+    this.excludeKey,
   });
 
   @override
@@ -971,44 +981,28 @@ class _DropHighlight extends StatefulWidget {
 class _DropHighlightState extends State<_DropHighlight> {
   bool _isDragOver = false;
 
-  Future<List<String>> _readFilePaths(DropItem dropItem) async {
-    final reader = dropItem.dataReader;
-    if (reader == null) return [];
-    if (!reader.canProvide(Formats.fileUri)) return [];
-    final completer = Completer<List<String>>();
-    reader.getValue<Uri>(
-      Formats.fileUri,
-      (uri) {
-        completer.complete(uri != null ? [uri.toFilePath()] : []);
-      },
-      onError: (e) => completer.complete([]),
-    );
-    return completer.future.timeout(
-      const Duration(seconds: 2),
-      onTimeout: () => [],
-    );
+  /// 若拖入点落在 [excludeKey] 对应的矩形内，说明由内层 DropTarget 处理，
+  /// 本层应跳过，避免重复复制。
+  bool _isExcluded(Offset globalPosition) {
+    final key = widget.excludeKey;
+    final renderBox =
+        key?.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return false;
+    final rect = renderBox.localToGlobal(Offset.zero) & renderBox.size;
+    return rect.contains(globalPosition);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(8);
-    return DropRegion(
-      formats: const [Formats.fileUri],
-      hitTestBehavior: HitTestBehavior.translucent,
-      onDropOver: (event) {
-        setState(() => _isDragOver = true);
-        final allowed = event.session.allowedOperations;
-        if (allowed.contains(DropOperation.copy)) return DropOperation.copy;
-        return allowed.isNotEmpty ? allowed.first : DropOperation.none;
-      },
-      onDropLeave: (event) => setState(() => _isDragOver = false),
-      onPerformDrop: (event) async {
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragExited: (_) => setState(() => _isDragOver = false),
+      onDragDone: (detail) {
         setState(() => _isDragOver = false);
-        final paths = <String>[];
-        for (final di in event.session.items) {
-          paths.addAll(await _readFilePaths(di));
-        }
+        if (_isExcluded(detail.globalPosition)) return;
+        final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
           widget.onFilesDropped?.call(paths);
         }
