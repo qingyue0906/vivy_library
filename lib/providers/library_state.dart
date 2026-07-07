@@ -67,6 +67,38 @@ class LibraryState extends ChangeNotifier {
   final Set<String> _selectedBrowserPaths = {};
   String? _browserSelectionAnchorPath;
 
+  // ===== Fingerprint-based cache for computed lists =====
+  // Avoids re-running where/sort/groupBy on every frame during drag.
+  int _dataVersion = 0;
+  void _bumpDataVersion() => _dataVersion++;
+
+  String get _dataFingerprint {
+    return '$_dataVersion|'
+        '${identityHashCode(_allItems)}|'
+        '${identityHashCode(_categoryRoot)}|'
+        '${_selectedCategoryPath ?? ''}|'
+        '${_expandedPaths.hashCode}|'
+        '${_selectedClass}|'
+        '${_classSource}|'
+        '${_searchQuery}|'
+        '${identityHashCode(_searchScope)}|'
+        '${_sortField}|${_sortOrder}|'
+        '${_groupingEnabled}';
+  }
+
+  List<LibraryItem>? _cachedFilteredItems;
+  String? _cachedFilteredItemsKey;
+  List<CategoryNode>? _cachedFilteredSubDirs;
+  String? _cachedFilteredSubDirsKey;
+  List<DirectFile>? _cachedFilteredFiles;
+  String? _cachedFilteredFilesKey;
+  List<GroupedEntries<CategoryNode>>? _cachedGroupedSubDirs;
+  String? _cachedGroupedSubDirsKey;
+  List<GroupedEntries<LibraryItem>>? _cachedGroupedItems;
+  String? _cachedGroupedItemsKey;
+  List<GroupedEntries<DirectFile>>? _cachedGroupedFiles;
+  String? _cachedGroupedFilesKey;
+
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get currentRootPath => _currentRootPath;
@@ -178,6 +210,10 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<CategoryNode> get filteredSubDirs {
+    final key = _dataFingerprint;
+    if (key == _cachedFilteredSubDirsKey && _cachedFilteredSubDirs != null) {
+      return _cachedFilteredSubDirs!;
+    }
     var result = currentSubDirs;
     result = result.where((n) => _matchesClassFilter(n.info)).toList();
     if (_searchQuery.isNotEmpty) {
@@ -191,39 +227,76 @@ class LibraryState extends ChangeNotifier {
             .toList();
       }
     }
+    _cachedFilteredSubDirs = result;
+    _cachedFilteredSubDirsKey = key;
     return result;
   }
 
   List<DirectFile> get filteredDirectFiles {
-    if (_searchQuery.isNotEmpty) return const [];
-    if (_selectedClass == kAllClass || _selectedClass == kUnclassified)
-      return currentDirectFiles;
-    if (_classSource == ClassSource.rating) return const [];
-    return const [];
+    final key = _dataFingerprint;
+    if (key == _cachedFilteredFilesKey && _cachedFilteredFiles != null) {
+      return _cachedFilteredFiles!;
+    }
+    List<DirectFile> result;
+    if (_searchQuery.isNotEmpty) {
+      result = const [];
+    } else if (_selectedClass == kAllClass ||
+        _selectedClass == kUnclassified) {
+      result = currentDirectFiles;
+    } else {
+      result = const [];
+    }
+    _cachedFilteredFiles = result;
+    _cachedFilteredFilesKey = key;
+    return result;
   }
 
   List<GroupedEntries<CategoryNode>> get groupedSubDirs {
-    if (!_groupingEnabled) return [GroupedEntries('', filteredSubDirs)];
-    return _groupBy(
-      filteredSubDirs,
-      (n) => _groupKey(n.name, n.modifiedTime, n.sizeInBytes),
-    );
+    final key = _dataFingerprint;
+    if (key == _cachedGroupedSubDirsKey && _cachedGroupedSubDirs != null) {
+      return _cachedGroupedSubDirs!;
+    }
+    final result = !_groupingEnabled
+        ? [GroupedEntries('', filteredSubDirs)]
+        : _groupBy(
+            filteredSubDirs,
+            (n) => _groupKey(n.name, n.modifiedTime, n.sizeInBytes),
+          );
+    _cachedGroupedSubDirs = result;
+    _cachedGroupedSubDirsKey = key;
+    return result;
   }
 
   List<GroupedEntries<LibraryItem>> get groupedItems {
-    if (!_groupingEnabled) return [GroupedEntries('', filteredAndSortedItems)];
-    return _groupBy(
-      filteredAndSortedItems,
-      (i) => _groupKey(i.info.title, i.modifiedTime, i.sizeInBytes),
-    );
+    final key = _dataFingerprint;
+    if (key == _cachedGroupedItemsKey && _cachedGroupedItems != null) {
+      return _cachedGroupedItems!;
+    }
+    final result = !_groupingEnabled
+        ? [GroupedEntries('', filteredAndSortedItems)]
+        : _groupBy(
+            filteredAndSortedItems,
+            (i) => _groupKey(i.info.title, i.modifiedTime, i.sizeInBytes),
+          );
+    _cachedGroupedItems = result;
+    _cachedGroupedItemsKey = key;
+    return result;
   }
 
   List<GroupedEntries<DirectFile>> get groupedFiles {
-    if (!_groupingEnabled) return [GroupedEntries('', filteredDirectFiles)];
-    return _groupBy(
-      filteredDirectFiles,
-      (f) => _groupKey(f.name, f.modifiedTime, f.sizeInBytes),
-    );
+    final key = _dataFingerprint;
+    if (key == _cachedGroupedFilesKey && _cachedGroupedFiles != null) {
+      return _cachedGroupedFiles!;
+    }
+    final result = !_groupingEnabled
+        ? [GroupedEntries('', filteredDirectFiles)]
+        : _groupBy(
+            filteredDirectFiles,
+            (f) => _groupKey(f.name, f.modifiedTime, f.sizeInBytes),
+          );
+    _cachedGroupedFiles = result;
+    _cachedGroupedFilesKey = key;
+    return result;
   }
 
   List<GroupedEntries<T>> _groupBy<T>(List<T> items, String Function(T) keyFn) {
@@ -402,6 +475,10 @@ class LibraryState extends ChangeNotifier {
   }
 
   List<LibraryItem> get filteredAndSortedItems {
+    final key = _dataFingerprint;
+    if (key == _cachedFilteredItemsKey && _cachedFilteredItems != null) {
+      return _cachedFilteredItems!;
+    }
     var result = _itemsInSelectedCategory;
 
     // 1.5 椤堕儴 class 瀵艰埅绛涢€夛紙鐢ㄦ湁鏁?info 浠ュ懡涓户鎵垮€硷級
@@ -431,6 +508,8 @@ class LibraryState extends ChangeNotifier {
       }
       return _sortOrder == SortOrder.ascending ? cmp : -cmp;
     });
+    _cachedFilteredItems = result;
+    _cachedFilteredItemsKey = key;
     return result;
   }
 
@@ -1088,6 +1167,7 @@ class LibraryState extends ChangeNotifier {
       modifiedTime: oldItem.modifiedTime,
     );
     _rebuildUuidIndex();
+    _bumpDataVersion();
 
     if (_selectedItem?.path == itemPath) {
       _selectedItem = _allItems[index];
@@ -1095,7 +1175,7 @@ class LibraryState extends ChangeNotifier {
 
     notifyListeners();
 
-    // define 鍙樺寲锛坕tem/dir/hide 涔嬮棿浠绘剰鍒囨崲锛夐渶瑕侀噸鎵互鏇存柊鏍戠粨鏋?
+    // define changed (item/dir/hide switch) -- rescan to update tree
     return defineChanged;
   }
 
@@ -1247,6 +1327,7 @@ class LibraryState extends ChangeNotifier {
     if (_selectedFolder?.path == folderPath) {
       _selectedFolder = _categoryRoot.findByPath(folderPath);
     }
+    _bumpDataVersion();
     notifyListeners();
     return defineChanged;
   }
@@ -1336,6 +1417,7 @@ class LibraryState extends ChangeNotifier {
       }
     }
     _rebuildUuidIndex();
+    _bumpDataVersion();
     notifyListeners();
     return anyDefineChanged;
   }
@@ -1396,6 +1478,7 @@ class LibraryState extends ChangeNotifier {
         _selectedFolder = _categoryRoot.findByPath(path);
       }
     }
+    _bumpDataVersion();
     notifyListeners();
     return anyDefineChanged;
   }
@@ -1482,6 +1565,7 @@ class LibraryState extends ChangeNotifier {
           }
         }
       }
+      _bumpDataVersion();
       notifyListeners();
       return null;
     } catch (e) {
@@ -1509,6 +1593,7 @@ class LibraryState extends ChangeNotifier {
       _categoryRoot = await LibraryScanner().scanAll(rootDir);
       _allItems = _categoryRoot.allItems;
       _rebuildUuidIndex();
+      _bumpDataVersion();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -1530,6 +1615,7 @@ class LibraryState extends ChangeNotifier {
       _categoryRoot = await LibraryScanner().scanAll(_currentRootPath);
       _allItems = _categoryRoot.allItems;
       _rebuildUuidIndex();
+      _bumpDataVersion();
       // 淇濈暀灞曞紑鎬侊紝浠呮竻鐞嗗凡涓嶅瓨鍦ㄧ殑璺緞锛堟枃浠跺す鍙兘琚垹/鏀瑰悕锛夈€?
       _expandedPaths.removeWhere((p) => _categoryRoot.findByPath(p) == null);
       // 鎭㈠鍒嗙被璺緞锛堣嫢鏂版爲閲屼笉瀛樺湪鍒欑疆 null锛?

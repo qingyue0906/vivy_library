@@ -77,36 +77,38 @@ class _ItemCardState extends State<ItemCard> {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              height: widget.displayHeight,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(borderRadius: radius, image: null),
-              foregroundDecoration: BoxDecoration(
-                borderRadius: radius,
-                border: Border.all(color: borderColor, width: borderWidth),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildPreviewImage(context, c),
-                  if (widget.item.info.star)
-                    Positioned(
-                      top: 2 * c,
-                      right: 2 * c,
-                      child: Container(
-                        padding: EdgeInsets.all(2 * c),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(10 * c),
-                        ),
-                        child: Icon(
-                          Icons.star,
-                          size: 12 * c,
-                          color: Colors.amber,
+            AspectRatio(
+              aspectRatio: widget.aspectRatio,
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(borderRadius: radius, image: null),
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: borderColor, width: borderWidth),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildPreviewImage(context, c),
+                    if (widget.item.info.star)
+                      Positioned(
+                        top: 2 * c,
+                        right: 2 * c,
+                        child: Container(
+                          padding: EdgeInsets.all(2 * c),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10 * c),
+                          ),
+                          child: Icon(
+                            Icons.star,
+                            size: 12 * c,
+                            color: Colors.amber,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
             Expanded(child: _buildInfo(c)),

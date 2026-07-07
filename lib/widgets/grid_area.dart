@@ -22,7 +22,7 @@ import 'compact_level.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
 
-class GridArea extends StatelessWidget {
+class GridArea extends StatefulWidget {
   final List<LibraryItem> items;
   final List<CategoryNode> subDirs;
   final List<DirectFile> files;
@@ -57,6 +57,46 @@ class GridArea extends StatelessWidget {
     this.onCreateItem,
     this.onFileDrop,
   });
+
+  @override
+  State<GridArea> createState() => _GridAreaState();
+}
+
+class _GridAreaState extends State<GridArea> {
+  // Bridge getters — allow method bodies to reference fields by name
+  // without changing every `this.xxx` to `widget.xxx`.
+  List<LibraryItem> get items => widget.items;
+  List<CategoryNode> get subDirs => widget.subDirs;
+  List<DirectFile> get files => widget.files;
+  LibraryState get state => widget.state;
+  ScriptService get scriptService => widget.scriptService;
+  double get filePanelHeight => widget.filePanelHeight;
+  void Function(double delta) get onFilePanelResize => widget.onFilePanelResize;
+  VoidCallback? get onFilePanelResizeEnd => widget.onFilePanelResizeEnd;
+  void Function(List<LibraryItem> targets, bool isBatch) get onEditRequest =>
+      widget.onEditRequest;
+  void Function(CategoryNode folder) get onFolderEditRequest =>
+      widget.onFolderEditRequest;
+  void Function(List<CategoryNode> folders) get onFolderBatchEditRequest =>
+      widget.onFolderBatchEditRequest;
+  VoidCallback? get onCreateItem => widget.onCreateItem;
+  void Function(List<String> paths)? get onFileDrop => widget.onFileDrop;
+  GridSettings get gridSettings => widget.gridSettings;
+  double get middleOpacity => widget.middleOpacity;
+
+  // ===== Drag performance cache =====
+  // Tier 1: full cache — same widget returned, Flutter skips update entirely.
+  Widget? _cachedScrollContent;
+  String? _cachedFullKey;
+  // Tier 2: delegate cache — same SliverChildBuilderDelegate instances reused
+  // with new gridDelegate, Flutter skips performRebuild, only relayouts.
+  String? _cachedDelegateKey;
+  List<SliverChildBuilderDelegate>? _cachedFolderDelegates;
+  List<SliverChildBuilderDelegate>? _cachedItemDelegates;
+  List<SliverChildBuilderDelegate>? _cachedFileDelegates;
+  List<GroupedEntries<CategoryNode>>? _cachedGSubDirs;
+  List<GroupedEntries<LibraryItem>>? _cachedGItems;
+  List<GroupedEntries<DirectFile>>? _cachedGFiles;
 
   @override
   Widget build(BuildContext context) {
@@ -175,16 +215,163 @@ class GridArea extends StatelessWidget {
           }
         }
 
+        // Use childAspectRatio instead of mainAxisExtent so cards scale
+        // proportionally during relayout (no widget rebuild needed).
         final imgHeight = cardWidth / aspectRatio;
-        final mainAxisExtent = imgHeight + 38 * c;
-        final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c;
-        final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c;
+        final itemChildAspectRatio = cardWidth / (imgHeight + 38 * c);
+        final folderChildAspectRatio =
+            cardWidth / (cardWidth / aspectRatio * 0.5 + 50 * c);
+        final fileChildAspectRatio =
+            cardWidth / (cardWidth / aspectRatio * 0.5 + 46 * c);
 
         final gSubDirs = state.groupedSubDirs;
         final gItems = state.groupedItems;
         final gFiles = state.groupedFiles;
 
-        return GestureDetector(
+        // --- Three-tier cache ---
+        // delegateKey: captures everything affecting cardBuilder closures
+        //   (data refs, selection, settings, aspectRatio, c, gifMode).
+        //   Excludes layout params (crossAxisCount, spacing, cardWidth).
+        // fullKey: delegateKey + crossAxisCount — determines if we can
+        //   return the exact same widget (zero work).
+        final delegateKey =
+            '${identityHashCode(gSubDirs)}|${identityHashCode(gItems)}|'
+            '${identityHashCode(gFiles)}|${identityHashCode(items)}|'
+            '${identityHashCode(subDirs)}|'
+            '${state.selectedPaths.hashCode}|'
+            '${state.selectedFolderPaths.hashCode}|'
+            '${state.selectedFile?.path ?? ''}|'
+            '${identityHashCode(gridSettings)}|'
+            '${gridSettings.aspectRatioValue}|'
+            '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|$c';
+        final fullKey = '$delegateKey|$crossAxisCount';
+
+        // Tier 1: full cache hit — return same widget, zero work.
+        if (fullKey == _cachedFullKey && _cachedScrollContent != null) {
+          return _cachedScrollContent!;
+        }
+
+        // Determine whether to reuse cached delegates.
+        final delegateHit = delegateKey == _cachedDelegateKey &&
+            _cachedFolderDelegates != null;
+
+        List<SliverChildBuilderDelegate> folderDelegates;
+        List<SliverChildBuilderDelegate> itemDelegates;
+        List<SliverChildBuilderDelegate> fileDelegates;
+        List<GroupedEntries<CategoryNode>> gSubDirsUsed;
+        List<GroupedEntries<LibraryItem>> gItemsUsed;
+        List<GroupedEntries<DirectFile>> gFilesUsed;
+
+        if (delegateHit) {
+          // Tier 2: delegate cache hit — reuse delegates, only relayout.
+          folderDelegates = _cachedFolderDelegates!;
+          itemDelegates = _cachedItemDelegates!;
+          fileDelegates = _cachedFileDelegates!;
+          gSubDirsUsed = _cachedGSubDirs!;
+          gItemsUsed = _cachedGItems!;
+          gFilesUsed = _cachedGFiles!;
+        } else {
+          // Tier 3: full miss — build new delegates.
+          gSubDirsUsed = gSubDirs;
+          gItemsUsed = gItems;
+          gFilesUsed = gFiles;
+
+          folderDelegates = _buildDelegates(
+            gSubDirsUsed,
+            (node) => FolderCard(
+              key: GlobalObjectKey(node.path),
+              node: node,
+              displayWidth: cardWidth,
+              isSelected: state.isFolderSelected(node.path),
+              onTap: () => state.setSelectedFolder(node),
+              onDoubleTap: () => state.setSelectedCategory(node.path),
+              onCtrlTap: () => state.toggleFolderSelection(node),
+              onShiftTap: () => state.selectFolderRange(node, subDirs),
+              onRightClick: (globalPos) =>
+                  _showFolderContextMenu(context, node, globalPos),
+            ),
+          );
+          itemDelegates = _buildDelegates(
+            gItemsUsed,
+            (item) => ItemCard(
+              key: GlobalObjectKey(item.path),
+              item: item,
+              aspectRatio: aspectRatio,
+              displayWidth: cardWidth,
+              displayHeight: imgHeight,
+              isSelected: state.isItemSelected(item.path),
+              onTap: () => state.setSelectedItem(item),
+              onCtrlTap: () => state.toggleItemSelection(item),
+              onShiftTap: () => state.selectRange(item, items),
+              onRightClick: (globalPos) =>
+                  _showContextMenu(context, item, globalPos),
+              gifMode: gridSettings.cardGifMode,
+            ),
+          );
+          fileDelegates = _buildDelegates(
+            gFilesUsed,
+            (file) => FileCard(
+              key: GlobalObjectKey(file.path),
+              file: file,
+              displayWidth: cardWidth,
+              isSelected: state.selectedFile?.path == file.path,
+              onTap: () => state.setSelectedFile(file),
+              onDoubleTap: () => _openFile(file.path),
+              onRightClick: (globalPos) =>
+                  _showFileContextMenu(context, file, globalPos),
+            ),
+          );
+
+          _cachedFolderDelegates = folderDelegates;
+          _cachedItemDelegates = itemDelegates;
+          _cachedFileDelegates = fileDelegates;
+          _cachedGSubDirs = gSubDirsUsed;
+          _cachedGItems = gItemsUsed;
+          _cachedGFiles = gFilesUsed;
+          _cachedDelegateKey = delegateKey;
+        }
+
+        // Build slivers list using delegates + current gridDelegate.
+        final slivers = <Widget>[
+          if (gSubDirsUsed.any((g) => g.entries.isNotEmpty)) ...[
+            _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
+            ..._wrapDelegatesWithGrid(
+              gSubDirsUsed,
+              folderDelegates,
+              crossAxisCount,
+              folderChildAspectRatio,
+              spacing,
+              c,
+              cs,
+            ),
+          ],
+          if (gItemsUsed.any((g) => g.entries.isNotEmpty)) ...[
+            _sectionHeader(Strings.t('itemSection'), c, cs),
+            ..._wrapDelegatesWithGrid(
+              gItemsUsed,
+              itemDelegates,
+              crossAxisCount,
+              itemChildAspectRatio,
+              spacing,
+              c,
+              cs,
+            ),
+          ],
+          if (gFilesUsed.any((g) => g.entries.isNotEmpty)) ...[
+            _sectionHeader(Strings.t('fileSection'), c, cs),
+            ..._wrapDelegatesWithGrid(
+              gFilesUsed,
+              fileDelegates,
+              crossAxisCount,
+              fileChildAspectRatio,
+              spacing,
+              c,
+              cs,
+            ),
+          ],
+        ];
+
+        _cachedScrollContent = GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => state.clearSelection(),
           child: SmoothScroll(
@@ -194,80 +381,13 @@ class GridArea extends StatelessWidget {
               // 显式限制预构建/保活范围，避免分组导致内容更稀疏时，
               // 同样的缓存窗口跨越了更多分组、挂载了更多屏幕外的动图卡片。
               cacheExtent: 200,
-              slivers: [
-                if (gSubDirs.any((g) => g.entries.isNotEmpty)) ...[
-                  _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
-                  ..._buildGroupedSlivers(
-                    gSubDirs,
-                    crossAxisCount,
-                    folderMainAxisExtent,
-                    spacing,
-                    c,
-                    cs,
-                    (node) => FolderCard(
-                      key: GlobalObjectKey(node.path),
-                      node: node,
-                      displayWidth: cardWidth,
-                      isSelected: state.isFolderSelected(node.path),
-                      onTap: () => state.setSelectedFolder(node),
-                      onDoubleTap: () => state.setSelectedCategory(node.path),
-                      onCtrlTap: () => state.toggleFolderSelection(node),
-                      onShiftTap: () => state.selectFolderRange(node, subDirs),
-                      onRightClick: (globalPos) =>
-                          _showFolderContextMenu(context, node, globalPos),
-                    ),
-                  ),
-                ],
-                if (gItems.any((g) => g.entries.isNotEmpty)) ...[
-                  _sectionHeader(Strings.t('itemSection'), c, cs),
-                  ..._buildGroupedSlivers(
-                    gItems,
-                    crossAxisCount,
-                    mainAxisExtent,
-                    spacing,
-                    c,
-                    cs,
-                    (item) => ItemCard(
-                      key: GlobalObjectKey(item.path),
-                      item: item,
-                      aspectRatio: aspectRatio,
-                      displayWidth: cardWidth,
-                      displayHeight: imgHeight,
-                      isSelected: state.isItemSelected(item.path),
-                      onTap: () => state.setSelectedItem(item),
-                      onCtrlTap: () => state.toggleItemSelection(item),
-                      onShiftTap: () => state.selectRange(item, items),
-                      onRightClick: (globalPos) =>
-                          _showContextMenu(context, item, globalPos),
-                      gifMode: gridSettings.cardGifMode,
-                    ),
-                  ),
-                ],
-                if (gFiles.any((g) => g.entries.isNotEmpty)) ...[
-                  _sectionHeader(Strings.t('fileSection'), c, cs),
-                  ..._buildGroupedSlivers(
-                    gFiles,
-                    crossAxisCount,
-                    fileMainAxisExtent,
-                    spacing,
-                    c,
-                    cs,
-                    (file) => FileCard(
-                      key: GlobalObjectKey(file.path),
-                      file: file,
-                      displayWidth: cardWidth,
-                      isSelected: state.selectedFile?.path == file.path,
-                      onTap: () => state.setSelectedFile(file),
-                      onDoubleTap: () => _openFile(file.path),
-                      onRightClick: (globalPos) =>
-                          _showFileContextMenu(context, file, globalPos),
-                    ),
-                  ),
-                ],
-              ],
+              slivers: slivers,
             ),
           ),
         );
+        _cachedFullKey = fullKey;
+
+        return _cachedScrollContent!;
       },
     );
   }
@@ -297,16 +417,38 @@ class GridArea extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildGroupedSlivers<T>(
+  /// Creates one SliverChildBuilderDelegate per non-empty group.
+  List<SliverChildBuilderDelegate> _buildDelegates<T>(
     List<GroupedEntries<T>> groups,
+    Widget Function(T) cardBuilder,
+  ) {
+    final delegates = <SliverChildBuilderDelegate>[];
+    for (final group in groups) {
+      if (group.entries.isEmpty) continue;
+      delegates.add(
+        SliverChildBuilderDelegate(
+          (context, index) => cardBuilder(group.entries[index]),
+          childCount: group.entries.length,
+        ),
+      );
+    }
+    return delegates;
+  }
+
+  /// Wraps cached delegates in SliverGrid widgets with the current
+  /// gridDelegate (layout params). Reusing the same delegate instance
+  /// means Flutter skips performRebuild — only performLayout runs.
+  List<Widget> _wrapDelegatesWithGrid<T>(
+    List<GroupedEntries<T>> groups,
+    List<SliverChildBuilderDelegate> delegates,
     int crossAxisCount,
-    double mainAxisExtent,
+    double childAspectRatio,
     double spacing,
     double c,
     ColorScheme cs,
-    Widget Function(T) cardBuilder,
   ) {
     final slivers = <Widget>[];
+    int delegateIndex = 0;
     for (final group in groups) {
       if (group.entries.isEmpty) continue;
       if (group.groupLabel.isNotEmpty) {
@@ -329,16 +471,14 @@ class GridArea extends StatelessWidget {
         SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            mainAxisExtent: mainAxisExtent,
+            childAspectRatio: childAspectRatio,
             crossAxisSpacing: spacing,
             mainAxisSpacing: spacing,
           ),
-          delegate: SliverChildBuilderDelegate(
-            (context, index) => cardBuilder(group.entries[index]),
-            childCount: group.entries.length,
-          ),
+          delegate: delegates[delegateIndex],
         ),
       );
+      delegateIndex++;
     }
     return slivers;
   }
