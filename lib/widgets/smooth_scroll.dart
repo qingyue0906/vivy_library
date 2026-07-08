@@ -47,27 +47,45 @@ class SmoothScroll extends StatefulWidget {
   State<SmoothScroll> createState() => _SmoothScrollState();
 }
 
-class _SmoothScrollState extends State<SmoothScroll> {
+class _SmoothScrollState extends State<SmoothScroll>
+    with SingleTickerProviderStateMixin {
   late final ScrollController _controller;
+  late final AnimationController _animController;
 
   /// Running target position accumulated from consecutive wheel events.
   double? _futurePosition;
 
-  /// The most recently started animation, used to know when we can clear the
-  /// accumulated target.
-  Future<void>? _animation;
-
   /// Direction of the last wheel event (`true` = scrolling down).
   bool _lastDeltaDown = false;
+
+  /// Manual scroll animation endpoints, in scroll pixels.
+  ///
+  /// We intentionally avoid [ScrollController.animateTo]: it creates a
+  /// [DrivenScrollActivity] whose [ScrollActivity.shouldIgnorePointer] is
+  /// `true`, which wraps the scrollable content in an [IgnorePointer] and
+  /// swallows every tap on items (cards, buttons, fields) for the whole
+  /// animation duration — i.e. "clicks fail while scrolling".
+  ///
+  /// Instead we drive the scroll with an [AnimationController] + per-frame
+  /// [ScrollController.jumpTo]. `jumpTo` leaves the position idle (no
+  /// [DrivenScrollActivity]), so the content stays fully tappable even
+  /// mid-scroll, while [widget.curve] preserves the original smoothing.
+  double _animFrom = 0;
+  double _animTo = 0;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller ?? ScrollController();
+    _animController = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    )..addListener(_onAnimTick);
   }
 
   @override
   void dispose() {
+    _animController.dispose();
     if (widget.controller == null) {
       _controller.dispose();
     }
@@ -104,7 +122,7 @@ class _SmoothScrollState extends State<SmoothScroll> {
       _handlePointerScroll,
     );
 
-    _animateTo(_futurePosition!);
+    _startAnimation(_futurePosition!);
   }
 
   /// Callback invoked by the [PointerSignalResolver] when our overlay wins.
@@ -114,23 +132,29 @@ class _SmoothScrollState extends State<SmoothScroll> {
     }
   }
 
-  Future<void> _animateTo(double target) async {
+  void _startAnimation(double target) {
     if (!_controller.hasClients) return;
+    _animFrom = _controller.position.pixels;
+    _animTo = target;
+    // Restart the timeline from 0 so consecutive wheel events stack smoothly
+    // (each starts a fresh ease from the current pixels to the new target).
+    _animController.forward(from: 0);
+  }
 
-    final animation = _controller.animateTo(
-      target,
-      duration: widget.duration,
-      curve: widget.curve,
-    );
-    _animation = animation;
-
-    try {
-      await animation;
-    } catch (_) {
-      // Animation was interrupted by a newer wheel event - that's fine.
+  void _onAnimTick() {
+    if (!_controller.hasClients) {
+      _animController.stop();
+      return;
     }
-
-    if (_animation == animation && mounted) {
+    final position = _controller.position;
+    final t = _animController.value.clamp(0.0, 1.0);
+    final eased = widget.curve.transform(t);
+    final value = _animFrom + (_animTo - _animFrom) * eased;
+    // jumpTo (not animateTo) keeps the position idle so content stays tappable.
+    _controller.jumpTo(
+      value.clamp(position.minScrollExtent, position.maxScrollExtent),
+    );
+    if (t >= 1) {
       _futurePosition = null;
     }
   }
