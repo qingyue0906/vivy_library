@@ -37,6 +37,18 @@ class ItemCard extends StatefulWidget {
 class _ItemCardState extends State<ItemCard> {
   bool _isHovered = false;
 
+  void _handleTap() {
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    if (isShift) {
+      widget.onShiftTap();
+    } else if (isCtrl) {
+      widget.onCtrlTap();
+    } else {
+      widget.onTap();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
@@ -52,68 +64,63 @@ class _ItemCardState extends State<ItemCard> {
         ? selectedColor
         : (_isHovered ? hoverColor : cs.outlineVariant);
     final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 0.5);
-    return GestureDetector(
-      onSecondaryTapUp: (details) =>
-          widget.onRightClick(details.globalPosition),
-      child: InkWell(
-        onTap: () {
-          final isCtrl = HardwareKeyboard.instance.isControlPressed;
-          final isShift = HardwareKeyboard.instance.isShiftPressed;
-          if (isShift) {
-            widget.onShiftTap();
-          } else if (isCtrl) {
-            widget.onCtrlTap();
-          } else {
-            widget.onTap();
-          }
-        },
-        onHover: (v) => setState(() => _isHovered = v),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              height: widget.displayHeight,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                image: null,
-              ),
-              foregroundDecoration: BoxDecoration(
-                borderRadius: radius,
-                border: Border.all(color: borderColor, width: borderWidth),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildPreviewImage(context, c),
-                  if (widget.item.info.star)
-                    Positioned(
-                      top: 2 * c,
-                      right: 2 * c,
-                      child: Container(
-                        padding: EdgeInsets.all(2 * c),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(10 * c),
-                        ),
-                        child: Icon(
-                          Icons.star,
-                          size: 12 * c,
-                          color: Colors.amber,
+    return Column(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 仅图片圆角边框内可点击，ClipRRect 将命中检测裁剪到圆角矩形
+        ClipRRect(
+          borderRadius: radius,
+          child: GestureDetector(
+            onSecondaryTapUp: (details) =>
+                widget.onRightClick(details.globalPosition),
+            child: InkWell(
+              onTap: _handleTap,
+              onHover: (v) => setState(() => _isHovered = v),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              customBorder: RoundedRectangleBorder(borderRadius: radius),
+              child: Container(
+                height: widget.displayHeight,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  image: null,
+                ),
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: borderColor, width: borderWidth),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildPreviewImage(context, c),
+                    if (widget.item.info.star)
+                      Positioned(
+                        top: 2 * c,
+                        right: 2 * c,
+                        child: Container(
+                          padding: EdgeInsets.all(2 * c),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10 * c),
+                          ),
+                          child: Icon(
+                            Icons.star,
+                            size: 12 * c,
+                            color: Colors.amber,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-            Expanded(child: _buildInfo(c)),
-          ],
+          ),
         ),
-      ),
+        Expanded(child: _buildInfo(c)),
+      ],
     );
   }
 
@@ -151,7 +158,7 @@ class _ItemCardState extends State<ItemCard> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 11 * c),
       ),
     );
   }

@@ -631,7 +631,7 @@ class _GridAreaState extends State<GridArea> {
           title,
           style: TextStyle(
             fontSize: 11 * c,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.normal,
             color: cs.onSurfaceVariant,
           ),
         ),
@@ -717,7 +717,7 @@ class _GridAreaState extends State<GridArea> {
             label,
             style: TextStyle(
               fontSize: 10 * c,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.normal,
               color: cs.onSurfaceVariant.withValues(alpha: 0.85),
             ),
           ),
