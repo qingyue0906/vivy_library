@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
@@ -25,39 +26,66 @@ class GifImage extends StatefulWidget {
 class _GifImageState extends State<GifImage> {
   bool _isHovering = false;
 
-  // 真实视口可见性：即使卡片因为 cacheExtent 被提前 build/保活，
-  // 只要它没有真正进入可视区域，就不允许播放动图（用 TickerMode 冻结），
-  // 避免屏幕外的动图逐帧解码占用 CPU/GPU。
   ScrollPosition? _scrollPosition;
-  // 默认先当作"不在屏幕内"，直到第一次真正测量完位置为止，
-  // 避免因为 cacheExtent 预构建而在还没确认可见性前就先播放动图。
-  bool _onstage = false;
+  Timer? _recheckTimer;
+  // 默认在屏内立即播放（等同 fe71ad2），避免首帧冻结闪烁；屏幕外动图
+  // 由停靠后防抖的 _recheckOnstage 统一冻结，保留 CPU 优化（1d024d7 收益）。
+  bool _onstage = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attachScrollListener());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachScrollListener();
+      _scheduleRecheck();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachScrollListener();
+      _scheduleRecheck();
+    });
   }
 
   void _attachScrollListener() {
     if (!mounted) return;
     final position = Scrollable.maybeOf(context)?.position;
     if (position != _scrollPosition) {
-      _scrollPosition?.removeListener(_recheckOnstage);
+      _scrollPosition?.removeListener(_onScroll);
       _scrollPosition = position;
-      _scrollPosition?.addListener(_recheckOnstage);
+      _scrollPosition?.addListener(_onScroll);
     }
-    _recheckOnstage();
+  }
+
+  // 滚动 / 面板拖动时 ScrollPosition 每帧发通知，这里只重置防抖定时器，
+  // 不在帧内做任何几何查询——连续拖动期间零重检，等同 fe71ad2 的流畅度。
+  // 持续拖动时定时器被反复重置，_recheckOnstage 不会在拖动中执行，故全部动图照常播放。
+  void _onScroll() => _scheduleRecheck();
+
+  void _scheduleRecheck() {
+    if (!mounted) return;
+    _recheckTimer?.cancel();
+    _recheckTimer = Timer(const Duration(milliseconds: 150), _recheckOnstage);
   }
 
   void _recheckOnstage() {
     if (!mounted) return;
+    _recheckTimer?.cancel(); // 防重入
     final renderBox = context.findRenderObject() as RenderBox?;
     final scrollable = Scrollable.maybeOf(context);
-    final viewportBox = scrollable?.context.findRenderObject() as RenderBox?;
-    if (renderBox == null || viewportBox == null || !renderBox.attached) return;
+    final viewportBox =
+        scrollable?.context.findRenderObject() as RenderBox?;
+    if (renderBox == null ||
+        viewportBox == null ||
+        !renderBox.attached) {
+      return;
+    }
 
-    final origin = renderBox.localToGlobal(Offset.zero, ancestor: viewportBox);
+    final origin =
+        renderBox.localToGlobal(Offset.zero, ancestor: viewportBox);
     final selfRect = origin & renderBox.size;
     final viewportRect = Offset.zero & viewportBox.size;
     final visible = selfRect.overlaps(viewportRect);
@@ -69,16 +97,13 @@ class _GifImageState extends State<GifImage> {
 
   @override
   void dispose() {
-    _scrollPosition?.removeListener(_recheckOnstage);
+    _recheckTimer?.cancel();
+    _scrollPosition?.removeListener(_onScroll);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 重新挂载/位置变化时，随手确认一次是否在屏幕内（滚动之外的场景，
-    // 比如切换分组导致同一路径重新出现在别的位置）。
-    WidgetsBinding.instance.addPostFrameCallback((_) => _attachScrollListener());
-
     final canAnimate = _onstage; // 不在可视区域内一律冻结动图
 
     if (widget.gifMode == GifDisplayMode.unlimited) {

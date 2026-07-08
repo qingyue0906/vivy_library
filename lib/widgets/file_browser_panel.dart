@@ -45,6 +45,28 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   final FocusNode _focusNode = FocusNode();
   bool _isDragOver = false;
 
+  /// 目录列举结果缓存：拖动底部分隔条时本面板每帧重建，但 item.path
+  /// 与 showSystemFiles 不变，故缓存一次即可，避免每帧同步 listSync 读盘造成卡顿。
+  String? _rawListPath;
+  List<FileSystemEntity>? _rawListCache;
+
+  List<FileSystemEntity> _getRawList() {
+    final path = widget.item.path;
+    if (path == _rawListPath && _rawListCache != null) return _rawListCache!;
+    final dir = Directory(path);
+    if (!dir.existsSync()) {
+      _rawListCache = const [];
+    } else {
+      _rawListCache = dir
+          .listSync()
+          .where((e) => e is File || e is Directory)
+          .toList()
+        ..sort((a, b) => _baseName(a.path).compareTo(_baseName(b.path)));
+    }
+    _rawListPath = path;
+    return _rawListCache!;
+  }
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -174,20 +196,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   }
 
   Widget _buildFileGrid(BuildContext context, double c) {
-    final dir = Directory(widget.item.path);
-    if (!dir.existsSync()) {
+    final raw = _getRawList();
+    if (raw.isEmpty) {
       return Center(child: Text(Strings.t('folderNotExist')));
     }
 
-    final entries = dir
-        .listSync()
-        .where((e) => e is File || e is Directory)
-        .toList()
-      ..sort((a, b) => _baseName(a.path).compareTo(_baseName(b.path)));
-
     final visible = widget.state.showSystemFiles
-        ? entries
-        : entries.where((f) {
+        ? raw
+        : raw.where((f) {
             final name = _baseName(f.path).toLowerCase();
             final isInfo = name == 'info.json';
             final isPreview = previewExtensions.any((ext) => name == 'preview$ext');
@@ -290,17 +306,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       },
       onShiftTap: () {
         _focusNode.requestFocus();
-        final dir = Directory(widget.item.path);
-        final list = <String>[];
-        if (dir.existsSync()) {
-          final entries = dir
-              .listSync()
-              .where((e) => e is File || e is Directory)
-              .map((e) => e.path)
-              .toList();
-          entries.sort((a, b) => _baseName(a).compareTo(_baseName(b)));
-          list.addAll(entries);
-        }
+        final list = _getRawList().map((e) => e.path).toList();
         widget.state.selectBrowserRange(file.path, list);
       },
       onDoubleTap: () => _openFile(file.path),

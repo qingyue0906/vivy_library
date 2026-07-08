@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
@@ -21,6 +22,194 @@ import 'package:flutter/services.dart';
 import 'compact_level.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
+
+/// 分组扁平化后的单元：要么是一张普通卡片（[isHeader]=false），要么是一个
+/// 占满整行的分组标题（[isHeader]=true）。单个 SliverGrid 按此顺序排版，
+/// 既保留清晰的分组视觉，又让 SliverGrid 数量恒为 ≤3（不再一个分组一个）。
+class _FlatEntry<T> {
+  final T? entry;
+  final String? headerLabel;
+  final bool isHeader;
+
+  _FlatEntry.card(this.entry)
+      : isHeader = false,
+        headerLabel = null;
+  _FlatEntry.header(this.headerLabel)
+      : isHeader = true,
+        entry = null;
+}
+
+/// 单 section 内统一用一个 SliverGrid 排版：每个分组的首个单元是占满整行的
+/// 分组标题（[headerIndices]），其余为普通卡片格。这样分组视觉清晰，同时
+/// SliverGrid 数量恒为 ≤3（不再是一个分组一个），消除拖动重排卡顿。
+class _SectionGridDelegate extends SliverGridDelegate {
+  final int crossAxisCount;
+  final double mainAxisExtent;
+  final double crossAxisSpacing;
+  final double mainAxisSpacing;
+  final double headerExtent;
+  final Set<int> headerIndices;
+  final int childCount;
+
+  const _SectionGridDelegate({
+    required this.crossAxisCount,
+    required this.mainAxisExtent,
+    required this.crossAxisSpacing,
+    required this.mainAxisSpacing,
+    required this.headerExtent,
+    required this.headerIndices,
+    required this.childCount,
+  });
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    return _SectionGridLayout(
+      crossAxisCount: crossAxisCount,
+      mainAxisExtent: mainAxisExtent,
+      crossAxisSpacing: crossAxisSpacing,
+      mainAxisSpacing: mainAxisSpacing,
+      headerExtent: headerExtent,
+      headerIndices: headerIndices,
+      childCount: childCount,
+      crossAxisExtent: constraints.crossAxisExtent,
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _SectionGridDelegate old) {
+    return old.crossAxisCount != crossAxisCount ||
+        old.mainAxisExtent != mainAxisExtent ||
+        old.crossAxisSpacing != crossAxisSpacing ||
+        old.mainAxisSpacing != mainAxisSpacing ||
+        old.headerExtent != headerExtent ||
+        old.headerIndices != headerIndices ||
+        old.childCount != childCount;
+  }
+}
+
+/// 支持「整行标题 + 普通卡片格」混合布局的 SliverGridLayout。
+/// 标题单元占满整行（crossAxisExtent=整宽），卡片按 crossAxisCount 排列。
+/// 预计算每张单元的绝对 scrollOffset / crossOffset，查询走二分，滚动高效。
+class _SectionGridLayout extends SliverGridLayout {
+  _SectionGridLayout({
+    required this.crossAxisCount,
+    required this.mainAxisExtent,
+    required this.crossAxisSpacing,
+    required this.mainAxisSpacing,
+    required this.headerExtent,
+    required this.headerIndices,
+    required this.childCount,
+    required this.crossAxisExtent,
+  }) {
+    _compute();
+  }
+
+  final int crossAxisCount;
+  final double mainAxisExtent;
+  final double crossAxisSpacing;
+  final double mainAxisSpacing;
+  final double headerExtent;
+  final Set<int> headerIndices;
+  final int childCount;
+  final double crossAxisExtent;
+
+  late final double _tileWidth;
+  late final List<double> _starts;
+  late final List<double> _extents;
+  late final List<double> _crossOffsets;
+  late final double _maxScroll;
+
+  void _compute() {
+    _tileWidth =
+        (crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1)) /
+        crossAxisCount;
+    _starts = List<double>.filled(childCount, 0);
+    _extents = List<double>.filled(childCount, 0);
+    _crossOffsets = List<double>.filled(childCount, 0);
+    var offset = 0.0;
+    var col = 0;
+    for (var i = 0; i < childCount; i++) {
+      if (headerIndices.contains(i)) {
+        // 标题前若本行有未填完的卡片，先换行，避免标题与上一组卡片同行。
+        if (col > 0) {
+          offset += mainAxisExtent + mainAxisSpacing;
+          col = 0;
+        }
+        _starts[i] = offset;
+        _extents[i] = headerExtent;
+        _crossOffsets[i] = 0;
+        offset += headerExtent + mainAxisSpacing;
+        col = 0;
+      } else {
+        _starts[i] = offset;
+        _extents[i] = mainAxisExtent;
+        _crossOffsets[i] = col * (_tileWidth + crossAxisSpacing);
+        col++;
+        if (col >= crossAxisCount) {
+          offset += mainAxisExtent + mainAxisSpacing;
+          col = 0;
+        }
+      }
+    }
+    _maxScroll = col > 0 ? offset + mainAxisExtent : offset;
+  }
+
+  @override
+  SliverGridGeometry getGeometryForChildIndex(int index) {
+    final isHeader = headerIndices.contains(index);
+    return SliverGridGeometry(
+      scrollOffset: _starts[index],
+      crossAxisOffset: _crossOffsets[index],
+      mainAxisExtent: _extents[index],
+      crossAxisExtent: isHeader ? crossAxisExtent : _tileWidth,
+    );
+  }
+
+  @override
+  double computeMaxScrollOffset(int childCount) => _maxScroll;
+
+  int _firstVisible(double scrollOffset) {
+    if (childCount == 0) return 0;
+    var lo = 0;
+    var hi = childCount - 1;
+    var ans = childCount - 1;
+    while (lo <= hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (_starts[mid] + _extents[mid] > scrollOffset) {
+        ans = mid;
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return ans;
+  }
+
+  int _lastVisible(double scrollOffset) {
+    if (childCount == 0) return 0;
+    var lo = 0;
+    var hi = childCount - 1;
+    var ans = 0;
+    while (lo <= hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (_starts[mid] <= scrollOffset) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans;
+  }
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset) =>
+      _firstVisible(scrollOffset);
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset) =>
+      _lastVisible(scrollOffset);
+}
 
 class GridArea extends StatefulWidget {
   final List<LibraryItem> items;
@@ -94,13 +283,17 @@ class _GridAreaState extends State<GridArea> {
   String? _cachedFullKey;
   // Tier 2: delegate cache — same SliverChildBuilderDelegate instances reused
   // with new gridDelegate, Flutter skips performRebuild, only relayouts.
+  // One delegate per SECTION (not per group): the section's groups are
+  // flattened into a single SliverGrid, so there are ≤3 SliverGrids total
+  // instead of one-per-group (dozens). This is the key drag-stutter fix —
+  // relayout cost no longer multiplies by group count.
   String? _cachedDelegateKey;
-  List<SliverChildBuilderDelegate>? _cachedFolderDelegates;
-  List<SliverChildBuilderDelegate>? _cachedItemDelegates;
-  List<SliverChildBuilderDelegate>? _cachedFileDelegates;
-  List<GroupedEntries<CategoryNode>>? _cachedGSubDirs;
-  List<GroupedEntries<LibraryItem>>? _cachedGItems;
-  List<GroupedEntries<DirectFile>>? _cachedGFiles;
+  SliverChildBuilderDelegate? _cachedFolderDelegate;
+  SliverChildBuilderDelegate? _cachedItemDelegate;
+  SliverChildBuilderDelegate? _cachedFileDelegate;
+  List<_FlatEntry<CategoryNode>>? _cachedFolderFlat;
+  List<_FlatEntry<LibraryItem>>? _cachedItemFlat;
+  List<_FlatEntry<DirectFile>>? _cachedFileFlat;
 
   @override
   Widget build(BuildContext context) {
@@ -221,14 +414,15 @@ class _GridAreaState extends State<GridArea> {
           }
         }
 
-        // Use childAspectRatio instead of mainAxisExtent so cards scale
-        // proportionally during relayout (no widget rebuild needed).
+        // Fixed mainAxisExtent (known-good 24ff0a5 baseline). childAspectRatio
+        // made every SliverGrid's per-frame relayout far more expensive; with
+        // dozens of groups in grouped mode that multiplied into the drag
+        // stutter. mainAxisExtent yields identical card sizes but is cheap to
+        // relayout.
         final imgHeight = cardWidth / aspectRatio;
-        final itemChildAspectRatio = cardWidth / (imgHeight + 38 * c);
-        final folderChildAspectRatio =
-            cardWidth / (cardWidth / aspectRatio * 0.5 + 50 * c);
-        final fileChildAspectRatio =
-            cardWidth / (cardWidth / aspectRatio * 0.5 + 46 * c);
+        final itemMainAxisExtent = imgHeight + 38 * c;
+        final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c;
+        final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c;
 
         final gSubDirs = state.groupedSubDirs;
         final gItems = state.groupedItems;
@@ -249,7 +443,7 @@ class _GridAreaState extends State<GridArea> {
             '${state.selectedFile?.path ?? ''}|'
             '${identityHashCode(gridSettings)}|'
             '${gridSettings.aspectRatioValue}|'
-            '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|$c';
+            '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|$c|$cardWidth';
         final fullKey = '$delegateKey|$crossAxisCount';
 
         // Tier 1: full cache hit — return same widget, zero work.
@@ -259,31 +453,35 @@ class _GridAreaState extends State<GridArea> {
 
         // Determine whether to reuse cached delegates.
         final delegateHit = delegateKey == _cachedDelegateKey &&
-            _cachedFolderDelegates != null;
+            _cachedFolderDelegate != null;
 
-        List<SliverChildBuilderDelegate> folderDelegates;
-        List<SliverChildBuilderDelegate> itemDelegates;
-        List<SliverChildBuilderDelegate> fileDelegates;
-        List<GroupedEntries<CategoryNode>> gSubDirsUsed;
-        List<GroupedEntries<LibraryItem>> gItemsUsed;
-        List<GroupedEntries<DirectFile>> gFilesUsed;
+        SliverChildBuilderDelegate folderDelegate;
+        SliverChildBuilderDelegate itemDelegate;
+        SliverChildBuilderDelegate fileDelegate;
+        List<_FlatEntry<CategoryNode>> gSubDirsUsed;
+        List<_FlatEntry<LibraryItem>> gItemsUsed;
+        List<_FlatEntry<DirectFile>> gFilesUsed;
 
         if (delegateHit) {
-          // Tier 2: delegate cache hit — reuse delegates, only relayout.
-          folderDelegates = _cachedFolderDelegates!;
-          itemDelegates = _cachedItemDelegates!;
-          fileDelegates = _cachedFileDelegates!;
-          gSubDirsUsed = _cachedGSubDirs!;
-          gItemsUsed = _cachedGItems!;
-          gFilesUsed = _cachedGFiles!;
+          // Tier 2: delegate cache hit — reuse flattened delegates, only relayout.
+          folderDelegate = _cachedFolderDelegate!;
+          itemDelegate = _cachedItemDelegate!;
+          fileDelegate = _cachedFileDelegate!;
+          gSubDirsUsed = _cachedFolderFlat!;
+          gItemsUsed = _cachedItemFlat!;
+          gFilesUsed = _cachedFileFlat!;
         } else {
-          // Tier 3: full miss — build new delegates.
-          gSubDirsUsed = gSubDirs;
-          gItemsUsed = gItems;
-          gFilesUsed = gFiles;
+          // Tier 3: full miss — flatten each section's groups into a single
+          // delegate (one SliverGrid per section; group labels become full-width
+          // header rows rendered by _SectionGridDelegate).
+          gSubDirsUsed = _flatten(gSubDirs);
+          gItemsUsed = _flatten(gItems);
+          gFilesUsed = _flatten(gFiles);
 
-          folderDelegates = _buildDelegates(
+          folderDelegate = _buildFlatDelegate(
             gSubDirsUsed,
+            c,
+            cs,
             (node) => FolderCard(
               key: GlobalObjectKey(node.path),
               node: node,
@@ -297,12 +495,13 @@ class _GridAreaState extends State<GridArea> {
                   _showFolderContextMenu(context, node, globalPos),
             ),
           );
-          itemDelegates = _buildDelegates(
+          itemDelegate = _buildFlatDelegate(
             gItemsUsed,
+            c,
+            cs,
             (item) => ItemCard(
               key: GlobalObjectKey(item.path),
               item: item,
-              aspectRatio: aspectRatio,
               displayWidth: cardWidth,
               displayHeight: imgHeight,
               isSelected: state.isItemSelected(item.path),
@@ -314,8 +513,10 @@ class _GridAreaState extends State<GridArea> {
               gifMode: gridSettings.cardGifMode,
             ),
           );
-          fileDelegates = _buildDelegates(
+          fileDelegate = _buildFlatDelegate(
             gFilesUsed,
+            c,
+            cs,
             (file) => FileCard(
               key: GlobalObjectKey(file.path),
               file: file,
@@ -328,54 +529,67 @@ class _GridAreaState extends State<GridArea> {
             ),
           );
 
-          _cachedFolderDelegates = folderDelegates;
-          _cachedItemDelegates = itemDelegates;
-          _cachedFileDelegates = fileDelegates;
-          _cachedGSubDirs = gSubDirsUsed;
-          _cachedGItems = gItemsUsed;
-          _cachedGFiles = gFilesUsed;
+          _cachedFolderDelegate = folderDelegate;
+          _cachedItemDelegate = itemDelegate;
+          _cachedFileDelegate = fileDelegate;
+          _cachedFolderFlat = gSubDirsUsed;
+          _cachedItemFlat = gItemsUsed;
+          _cachedFileFlat = gFilesUsed;
           _cachedDelegateKey = delegateKey;
         }
 
-        // Build slivers list using delegates + current gridDelegate.
-        final slivers = <Widget>[
-          if (gSubDirsUsed.any((g) => g.entries.isNotEmpty)) ...[
-            _sectionHeader(Strings.t('folderSection'), c, cs, top: false),
-            ..._wrapDelegatesWithGrid(
-              gSubDirsUsed,
-              folderDelegates,
-              crossAxisCount,
-              folderChildAspectRatio,
-              spacing,
-              c,
-              cs,
-            ),
-          ],
-          if (gItemsUsed.any((g) => g.entries.isNotEmpty)) ...[
-            _sectionHeader(Strings.t('itemSection'), c, cs),
-            ..._wrapDelegatesWithGrid(
-              gItemsUsed,
-              itemDelegates,
-              crossAxisCount,
-              itemChildAspectRatio,
-              spacing,
-              c,
-              cs,
-            ),
-          ],
-          if (gFilesUsed.any((g) => g.entries.isNotEmpty)) ...[
-            _sectionHeader(Strings.t('fileSection'), c, cs),
-            ..._wrapDelegatesWithGrid(
-              gFilesUsed,
-              fileDelegates,
-              crossAxisCount,
-              fileChildAspectRatio,
-              spacing,
-              c,
-              cs,
-            ),
-          ],
-        ];
+        // Build slivers list using ONE SliverGrid per section. The grid itself
+        // renders full-width group-header rows via _SectionGridDelegate, so
+        // visual grouping is preserved while SliverGrid count stays ≤3
+        // (the per-frame relayout cost no longer multiplies by group count).
+        final headerExtent = 16 * c;
+        final folderHeaderIndices = _headerIndices(gSubDirsUsed);
+        final itemHeaderIndices = _headerIndices(gItemsUsed);
+        final fileHeaderIndices = _headerIndices(gFilesUsed);
+
+        final slivers = <Widget>[];
+        if (gSubDirsUsed.isNotEmpty) {
+          slivers
+            ..add(_sectionHeader(Strings.t('folderSection'), c, cs, top: false))
+            ..add(
+              _groupedGrid(
+                folderDelegate,
+                crossAxisCount,
+                folderMainAxisExtent,
+                spacing,
+                headerExtent,
+                folderHeaderIndices,
+              ),
+            );
+        }
+        if (gItemsUsed.isNotEmpty) {
+          slivers
+            ..add(_sectionHeader(Strings.t('itemSection'), c, cs))
+            ..add(
+              _groupedGrid(
+                itemDelegate,
+                crossAxisCount,
+                itemMainAxisExtent,
+                spacing,
+                headerExtent,
+                itemHeaderIndices,
+              ),
+            );
+        }
+        if (gFilesUsed.isNotEmpty) {
+          slivers
+            ..add(_sectionHeader(Strings.t('fileSection'), c, cs))
+            ..add(
+              _groupedGrid(
+                fileDelegate,
+                crossAxisCount,
+                fileMainAxisExtent,
+                spacing,
+                headerExtent,
+                fileHeaderIndices,
+              ),
+            );
+        }
 
         _cachedScrollContent = GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -384,9 +598,11 @@ class _GridAreaState extends State<GridArea> {
             builder: (context, controller, physics) => CustomScrollView(
               controller: controller,
               physics: physics,
-              // 显式限制预构建/保活范围，避免分组导致内容更稀疏时，
-              // 同样的缓存窗口跨越了更多分组、挂载了更多屏幕外的动图卡片。
-              cacheExtent: 200,
+              // 不显式设置 cacheExtent，使用默认(≈0)：分组模式网格已被拆成
+              // 数十个稀疏 SliverGrid，扩大缓存窗口会让视口边界跨越多分组，
+              // 面板重排时边界附近的 GifImage 反复挂载/卸载造成掉帧。
+              // 屏幕外动图的 CPU 限流已由 GifImage 的 TickerMode 冻结承担，
+              // 无需再用 cacheExtent 限流。
               slivers: slivers,
             ),
           ),
@@ -423,70 +639,91 @@ class _GridAreaState extends State<GridArea> {
     );
   }
 
-  /// Creates one SliverChildBuilderDelegate per non-empty group.
-  List<SliverChildBuilderDelegate> _buildDelegates<T>(
-    List<GroupedEntries<T>> groups,
-    Widget Function(T) cardBuilder,
-  ) {
-    final delegates = <SliverChildBuilderDelegate>[];
-    for (final group in groups) {
-      if (group.entries.isEmpty) continue;
-      delegates.add(
-        SliverChildBuilderDelegate(
-          (context, index) => cardBuilder(group.entries[index]),
-          childCount: group.entries.length,
-        ),
-      );
-    }
-    return delegates;
-  }
-
-  /// Wraps cached delegates in SliverGrid widgets with the current
-  /// gridDelegate (layout params). Reusing the same delegate instance
-  /// means Flutter skips performRebuild — only performLayout runs.
-  List<Widget> _wrapDelegatesWithGrid<T>(
-    List<GroupedEntries<T>> groups,
-    List<SliverChildBuilderDelegate> delegates,
-    int crossAxisCount,
-    double childAspectRatio,
-    double spacing,
-    double c,
-    ColorScheme cs,
-  ) {
-    final slivers = <Widget>[];
-    int delegateIndex = 0;
+  /// Flattens a section's groups into a single list: for each non-empty group
+  /// first a [header] entry (the group label), then its card entries. Group and
+  /// intra-group order are preserved so one SliverGrid lays everything out
+  /// contiguously with clear per-group header rows.
+  List<_FlatEntry<T>> _flatten<T>(List<GroupedEntries<T>> groups) {
+    final out = <_FlatEntry<T>>[];
     for (final group in groups) {
       if (group.entries.isEmpty) continue;
       if (group.groupLabel.isNotEmpty) {
-        slivers.add(
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(2 * c, 4 * c, 0, 2 * c),
-              child: Text(
-                group.groupLabel,
-                style: TextStyle(
-                  fontSize: 10 * c,
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-              ),
+        out.add(_FlatEntry.header(group.groupLabel));
+      }
+      for (final entry in group.entries) {
+        out.add(_FlatEntry.card(entry));
+      }
+    }
+    return out;
+  }
+
+  /// 收集扁平列表中所有分组标题项的下标，供 [_SectionGridDelegate] 排版整行标题。
+  Set<int> _headerIndices<T>(List<_FlatEntry<T>> flat) =>
+      {for (var i = 0; i < flat.length; i++) if (flat[i].isHeader) i};
+
+  /// Builds ONE SliverChildBuilderDelegate spanning the whole section. Cards
+  /// are matched by their GlobalObjectKey so elements are reused across
+  /// rebuilds; group-label entries render as full-width header rows.
+  SliverChildBuilderDelegate _buildFlatDelegate<T>(
+    List<_FlatEntry<T>> flat,
+    double c,
+    ColorScheme cs,
+    Widget Function(T) cardBuilder,
+  ) {
+    return SliverChildBuilderDelegate(
+      (context, index) {
+        final fe = flat[index];
+        if (fe.isHeader) return _groupHeader(fe.headerLabel!, c, cs);
+        return cardBuilder(fe.entry as T);
+      },
+      childCount: flat.length,
+    );
+  }
+
+  /// Wraps a section's (single) delegate in a SliverGrid that renders full-width
+  /// group header rows via [_SectionGridDelegate]. Reusing the same delegate
+  /// instance means Flutter skips performRebuild — only performLayout runs.
+  SliverGrid _groupedGrid(
+    SliverChildBuilderDelegate delegate,
+    int crossAxisCount,
+    double mainAxisExtent,
+    double spacing,
+    double headerExtent,
+    Set<int> headerIndices,
+  ) {
+    return SliverGrid(
+      gridDelegate: _SectionGridDelegate(
+        crossAxisCount: crossAxisCount,
+        mainAxisExtent: mainAxisExtent,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+        headerExtent: headerExtent,
+        headerIndices: headerIndices,
+        childCount: delegate.childCount ?? 0,
+      ),
+      delegate: delegate,
+    );
+  }
+
+  /// 分组标题：占满整行的一行小标题（与原每分组单独 SliverGrid 前的标题一致）。
+  Widget _groupHeader(String label, double c, ColorScheme cs) {
+    return SizedBox(
+      height: 16 * c,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: EdgeInsets.only(left: 2 * c),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10 * c,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.85),
             ),
           ),
-        );
-      }
-      slivers.add(
-        SliverGrid(
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            childAspectRatio: childAspectRatio,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: spacing,
-          ),
-          delegate: delegates[delegateIndex],
         ),
-      );
-      delegateIndex++;
-    }
-    return slivers;
+      ),
+    );
   }
 
   void _showFolderContextMenu(

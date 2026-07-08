@@ -8,7 +8,6 @@ import 'gif_image.dart';
 
 class ItemCard extends StatefulWidget {
   final LibraryItem item;
-  final double aspectRatio;
   final double displayWidth;
   final double displayHeight;
   final bool isSelected;
@@ -21,7 +20,6 @@ class ItemCard extends StatefulWidget {
   const ItemCard({
     super.key,
     required this.item,
-    this.aspectRatio = 4 / 3,
     this.displayWidth = 150,
     this.displayHeight = 112.5,
     required this.isSelected,
@@ -77,38 +75,39 @@ class _ItemCardState extends State<ItemCard> {
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AspectRatio(
-              aspectRatio: widget.aspectRatio,
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(borderRadius: radius, image: null),
-                foregroundDecoration: BoxDecoration(
-                  borderRadius: radius,
-                  border: Border.all(color: borderColor, width: borderWidth),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildPreviewImage(context, c),
-                    if (widget.item.info.star)
-                      Positioned(
-                        top: 2 * c,
-                        right: 2 * c,
-                        child: Container(
-                          padding: EdgeInsets.all(2 * c),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(10 * c),
-                          ),
-                          child: Icon(
-                            Icons.star,
-                            size: 12 * c,
-                            color: Colors.amber,
-                          ),
+            Container(
+              height: widget.displayHeight,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                image: null,
+              ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: borderColor, width: borderWidth),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildPreviewImage(context, c),
+                  if (widget.item.info.star)
+                    Positioned(
+                      top: 2 * c,
+                      right: 2 * c,
+                      child: Container(
+                        padding: EdgeInsets.all(2 * c),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10 * c),
+                        ),
+                        child: Icon(
+                          Icons.star,
+                          size: 12 * c,
+                          color: Colors.amber,
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
             Expanded(child: _buildInfo(c)),
