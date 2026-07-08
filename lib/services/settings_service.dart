@@ -66,26 +66,45 @@ class WindowState {
   final double dy;
   final double width;
   final double height;
+  final bool isMaximized;
 
   const WindowState({
     required this.dx,
     required this.dy,
     required this.width,
     required this.height,
+    this.isMaximized = false,
   });
 
-  Map<String, double> toMap() => {
+  Map<String, dynamic> toMap() => {
         'dx': dx,
         'dy': dy,
         'width': width,
         'height': height,
+        'maximized': isMaximized,
       };
 
-  factory WindowState.fromMap(Map<String, double?> map) => WindowState(
-        dx: map['dx'] ?? 10,
-        dy: map['dy'] ?? 10,
-        width: map['width'] ?? 1280,
-        height: map['height'] ?? 720,
+  factory WindowState.fromMap(Map<String, dynamic> map) => WindowState(
+        dx: (map['dx'] as num?)?.toDouble() ?? 10,
+        dy: (map['dy'] as num?)?.toDouble() ?? 10,
+        width: (map['width'] as num?)?.toDouble() ?? 1280,
+        height: (map['height'] as num?)?.toDouble() ?? 720,
+        isMaximized: map['maximized'] == true,
+      );
+
+  WindowState copyWith({
+    double? dx,
+    double? dy,
+    double? width,
+    double? height,
+    bool? isMaximized,
+  }) =>
+      WindowState(
+        dx: dx ?? this.dx,
+        dy: dy ?? this.dy,
+        width: width ?? this.width,
+        height: height ?? this.height,
+        isMaximized: isMaximized ?? this.isMaximized,
       );
 }
 
@@ -258,12 +277,13 @@ class SettingsService {
 
   static Future<WindowState> loadWindowState() async {
     final data = await AppDataService.loadSettings();
-    return WindowState.fromMap({
-      'dx': data['${_windowPrefix}dx'] as double?,
-      'dy': data['${_windowPrefix}dy'] as double?,
-      'width': data['${_windowPrefix}width'] as double?,
-      'height': data['${_windowPrefix}height'] as double?,
-    });
+    return WindowState(
+      dx: (data['${_windowPrefix}dx'] as num?)?.toDouble() ?? 10,
+      dy: (data['${_windowPrefix}dy'] as num?)?.toDouble() ?? 10,
+      width: (data['${_windowPrefix}width'] as num?)?.toDouble() ?? 1280,
+      height: (data['${_windowPrefix}height'] as num?)?.toDouble() ?? 720,
+      isMaximized: data['${_windowPrefix}maximized'] == true,
+    );
   }
 
   static Future<void> saveWindowState(WindowState state) async {

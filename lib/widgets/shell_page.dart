@@ -60,10 +60,27 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   bool _isMaximized = false;
   bool _createDialogShowing = false;
 
+  /// 最近一次"正常窗口"的尺寸与位置（最大化期间不更新，用于退出全屏/重启后恢复）。
+  WindowState _lastNormal = const WindowState(dx: 10, dy: 10, width: 1280, height: 720);
+
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    SettingsService.loadWindowState().then((s) {
+      _lastNormal = s.copyWith(isMaximized: false);
+      // 启动时若上次为全屏，使内存状态与实际窗口一致
+      if (s.isMaximized) {
+        setState(() => _isMaximized = true);
+        // 以正常窗口打开后，首帧再切换为全屏，绕过 window_manager 在启动期
+        // maximize 会被原生 runner 的 ShowWindow(SW_SHOWNORMAL) 还原的问题。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 60), () {
+            if (mounted) windowManager.maximize();
+          });
+        });
+      }
+    });
     _initLibrary();
     _state.init();
     _initLayout();
@@ -74,6 +91,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// 防止换显示器后（如 4K→1080p）窗口位置在屏幕外导致看不见。
   Future<void> _ensureWindowOnScreen() async {
     try {
+      // 全屏（最大化）时不 reposition，避免 setPosition 使窗口退回窗口化
+      if (await windowManager.isMaximized()) return;
+      if (!mounted) return;
       final display = View.of(context).display;
       final screenW = display.size.width / display.devicePixelRatio;
       final screenH = display.size.height / display.devicePixelRatio;
@@ -141,11 +161,38 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   @override
   void onWindowMaximize() {
     setState(() => _isMaximized = true);
+    // 仅记录全屏标志，保留上一次正常窗口尺寸（不写入全屏尺寸）
+    SettingsService.saveWindowState(_lastNormal.copyWith(isMaximized: true));
   }
 
   @override
   void onWindowUnmaximize() {
     setState(() => _isMaximized = false);
+    // 退出全屏后回到上次正常尺寸，更新并保存
+    _updateLastNormal().then((_) => SettingsService.saveWindowState(_lastNormal));
+  }
+
+  @override
+  void onWindowResize() {
+    if (!_isMaximized) _updateLastNormal();
+  }
+
+  @override
+  void onWindowMove() {
+    if (!_isMaximized) _updateLastNormal();
+  }
+
+  /// 记录当前（非全屏）窗口尺寸到内存，供退出全屏/重启后恢复。
+  Future<void> _updateLastNormal() async {
+    if (_isMaximized) return;
+    final pos = await windowManager.getPosition();
+    final size = await windowManager.getSize();
+    _lastNormal = WindowState(
+      dx: pos.dx,
+      dy: pos.dy,
+      width: size.width,
+      height: size.height,
+    );
   }
 
   @override

@@ -25,12 +25,16 @@ void main() async {
     final dy = (saved.dy < -100 || saved.dy > 10000) ? 10.0 : saved.dy;
     final w = (saved.width < 200 || saved.width > 10000) ? 1280.0 : saved.width;
     final h = (saved.height < 200 || saved.height > 10000) ? 720.0 : saved.height;
+    windowManager.addListener(_WindowStateListener());
+
+    // 以正常窗口尺寸打开；全屏（最大化）状态改由 ShellPage 在首帧后再切换，
+    // 避免 window_manager 在启动时 maximize 被原生 runner 的 ShowWindow(SW_SHOWNORMAL) 还原。
+    await windowManager.waitUntilReadyToShow();
     await windowManager.setPosition(Offset(dx, dy));
     await windowManager.setSize(Size(w, h));
     await windowManager.setPreventClose(true);
     await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-
-    windowManager.addListener(_WindowStateListener());
+    await windowManager.show();
   }
 
   final scriptService = ScriptService();
