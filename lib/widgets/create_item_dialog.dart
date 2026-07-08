@@ -785,11 +785,24 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   }
 
   Widget _buildStarField(BuildContext context, double c, ColorScheme cs) {
+    final content = Align(
+      alignment: Alignment.centerLeft,
+      child: Transform.scale(
+        scale: 0.75,
+        child: Switch(
+          value: _star,
+          onChanged: (v) => setState(() => _star = v),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    );
     return Row(
       children: [
-        Text(Strings.t('star'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-        const Spacer(),
-        Switch(value: _star, onChanged: (v) => setState(() => _star = v)),
+        SizedBox(
+          width: 56,
+          child: Text(Strings.t('star'), style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+        ),
+        Expanded(child: content),
       ],
     );
   }

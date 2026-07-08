@@ -894,6 +894,12 @@ class Strings {
       AppLocale.en: 'Open',
       AppLocale.ja: '開く',
     },
+    'openWithDefault': {
+      AppLocale.zhHans: '以默认方式打开',
+      AppLocale.zhHant: '以預設方式開啟',
+      AppLocale.en: 'Open with default',
+      AppLocale.ja: '既定のプログラムで開く',
+    },
     'openAs': {
       AppLocale.zhHans: '打开方式...',
       AppLocale.zhHant: '開啟方式...',
