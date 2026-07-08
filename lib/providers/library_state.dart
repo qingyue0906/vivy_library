@@ -765,6 +765,7 @@ class LibraryState extends ChangeNotifier {
     } else {
       _expandedPaths.add(path);
     }
+    _bumpDataVersion();
     notifyListeners();
   }
 
