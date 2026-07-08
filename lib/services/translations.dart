@@ -888,6 +888,12 @@ class Strings {
       AppLocale.en: 'Open with default',
       AppLocale.ja: '既定のプログラムで開く',
     },
+    'open': {
+      AppLocale.zhHans: '打开',
+      AppLocale.zhHant: '開啟',
+      AppLocale.en: 'Open',
+      AppLocale.ja: '開く',
+    },
     'openAs': {
       AppLocale.zhHans: '打开方式...',
       AppLocale.zhHant: '開啟方式...',

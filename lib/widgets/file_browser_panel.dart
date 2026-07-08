@@ -337,7 +337,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               const Icon(Icons.open_in_new, size: 14),
               const SizedBox(width: 8),
               Text(
-                isBatch ? Strings.tn('openN', {'n': '${paths.length}'}) : Strings.t('defaultOpen'),
+                isBatch ? Strings.t('open') : Strings.t('defaultOpen'),
                 style: const TextStyle(fontSize: 12),
               ),
             ],
@@ -377,9 +377,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               const Icon(Icons.folder_open, size: 14),
               const SizedBox(width: 8),
               Text(
-                isBatch
-                    ? Strings.tn('locateNInExplorer', {'n': '${paths.length}'})
-                    : Strings.t('showInExplorer'),
+                Strings.t('showInExplorer'),
                 style: const TextStyle(fontSize: 12),
               ),
             ],
@@ -393,9 +391,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               const Icon(Icons.file_upload, size: 14),
               const SizedBox(width: 8),
               Text(
-                isBatch
-                    ? Strings.tn('exportN', {'n': '${paths.length}'})
-                    : Strings.t('export'),
+                Strings.t('export'),
                 style: const TextStyle(fontSize: 12),
               ),
             ],

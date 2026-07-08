@@ -1218,8 +1218,8 @@ class _DropHighlight extends StatefulWidget {
 class _DropHighlightState extends State<_DropHighlight> {
   bool _isDragOver = false;
 
-  /// 若拖入点落在 [excludeKey] 对应的矩形内，说明由内层 DropTarget 处理，
-  /// 本层应跳过，避免重复复制。
+  /// 若拖入点落在 [excludeKey] 对应的矩形内（如底部文件面板），说明由内层
+  /// DropTarget 处理，本层应跳过：既不重复复制，也不让本层高亮跟着亮起。
   bool _isExcluded(Offset globalPosition) {
     final key = widget.excludeKey;
     final renderBox =
@@ -1229,15 +1229,25 @@ class _DropHighlightState extends State<_DropHighlight> {
     return rect.contains(globalPosition);
   }
 
+  /// 仅在状态变化时触发重建，避免 onDragUpdated 每帧无谓 setState。
+  void _setOver(bool value) {
+    if (_isDragOver != value) setState(() => _isDragOver = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(8);
     return DropTarget(
-      onDragEntered: (_) => setState(() => _isDragOver = true),
-      onDragExited: (_) => setState(() => _isDragOver = false),
+      // 进入/移动时若落在被排除区域（底部面板）则不点亮本层高亮，
+      // 让“拖到哪个区域哪个区域才高亮”的语义成立。
+      onDragEntered: (details) =>
+          _setOver(!_isExcluded(details.globalPosition)),
+      onDragUpdated: (details) =>
+          _setOver(!_isExcluded(details.globalPosition)),
+      onDragExited: (_) => _setOver(false),
       onDragDone: (detail) {
-        setState(() => _isDragOver = false);
+        _setOver(false);
         if (_isExcluded(detail.globalPosition)) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
