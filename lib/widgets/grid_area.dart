@@ -251,7 +251,7 @@ class GridArea extends StatefulWidget {
   State<GridArea> createState() => _GridAreaState();
 }
 
-class _GridAreaState extends State<GridArea> {
+class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin {
   // Bridge getters — allow method bodies to reference fields by name
   // without changing every `this.xxx` to `widget.xxx`.
   List<LibraryItem> get items => widget.items;
@@ -277,6 +277,32 @@ class _GridAreaState extends State<GridArea> {
   /// 避免拖入底部面板时外层网格区也触发一次复制。
   final GlobalKey _panelKey = GlobalKey();
 
+  /// 底部文件面板进出场动画控制器：作为面板滑入/滑出与中间内容让位的唯一动画源。
+  /// 同一进度 v 同时驱动内容让位、面板位移、FAB 位置，确保三者完全同步。
+  late final AnimationController _panelAnim;
+
+  /// 退出动画期间仍需非空 item 来构建面板；可见时捕获并保留至动画结束。
+  LibraryItem? _panelItem;
+
+  @override
+  void initState() {
+    super.initState();
+    _panelAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    if (state.fileBrowserVisible && state.selectedItem != null) {
+      _panelAnim.value = 1;
+      _panelItem = state.selectedItem;
+    }
+  }
+
+  @override
+  void dispose() {
+    _panelAnim.dispose();
+    super.dispose();
+  }
+
   // ===== Drag performance cache =====
   // Tier 1: full cache — same widget returned, Flutter skips update entirely.
   Widget? _cachedScrollContent;
@@ -298,6 +324,17 @@ class _GridAreaState extends State<GridArea> {
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
+
+    // 依据可见性驱动面板进出场动画（带状态守卫，build 重复调用时为 no-op）。
+    // 同一进度 v 同时驱动「内容让位高度」与「面板位移」，二者完全同步。
+    final visible = state.fileBrowserVisible && state.selectedItem != null;
+    if (visible) {
+      _panelItem = state.selectedItem;
+      if (!_panelAnim.isCompleted) _panelAnim.forward();
+    } else {
+      if (!_panelAnim.isDismissed) _panelAnim.reverse();
+    }
+
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -312,70 +349,92 @@ class _GridAreaState extends State<GridArea> {
       child: _DropHighlight(
         onFilesDropped: (paths) => onFileDrop?.call(paths),
         excludeKey: _panelKey,
-        bottomInset:
-            (state.fileBrowserVisible && state.selectedItem != null)
-                ? filePanelHeight + 4
-                : 0,
-        child: Stack(
-          children: [
-            Column(
+        bottomInset: visible ? filePanelHeight + 4 : 0,
+        child: AnimatedBuilder(
+          animation: _panelAnim,
+          builder: (context, _) {
+            final v = _panelAnim.value;
+            final panelTotal = filePanelHeight + 4;
+            final reserved = panelTotal * v;
+            return Stack(
               children: [
-                ClassNavBar(state: state),
-                Expanded(
-                  child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
-                      ? Center(
-                          child: Text(
-                            Strings.t('noItems'),
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontSize: 12 * c,
+                Column(
+                  children: [
+                    ClassNavBar(state: state),
+                    Expanded(
+                      child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
+                          ? Center(
+                              child: Text(
+                                Strings.t('noItems'),
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  fontSize: 12 * c,
+                                ),
+                              ),
+                            )
+                          : Padding(
+                              padding: EdgeInsets.all(8 * c)
+                                  .copyWith(bottom: 8 * c + reserved),
+                              child: _buildGrid(context, c),
                             ),
-                          ),
-                        )
-                      : Padding(
-                          padding: EdgeInsets.all(8 * c),
-                          child: _buildGrid(context, c),
-                        ),
+                    ),
+                  ],
                 ),
-                if (state.fileBrowserVisible && state.selectedItem != null) ...[
-                  MouseRegion(
-                    cursor: SystemMouseCursors.resizeUpDown,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onPanUpdate: (details) =>
-                          onFilePanelResize(details.delta.dy),
-                      onPanEnd: (_) => onFilePanelResizeEnd?.call(),
-                      child: Container(height: 4, color: Colors.transparent),
+                if (v > 0 && _panelItem != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: panelTotal,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - v) * panelTotal),
+                      child: Opacity(
+                        opacity: v,
+                        child: ClipRect(
+                          child: Column(
+                            children: [
+                              MouseRegion(
+                                cursor: SystemMouseCursors.resizeUpDown,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onPanUpdate: (details) =>
+                                      onFilePanelResize(details.delta.dy),
+                                  onPanEnd: (_) => onFilePanelResizeEnd?.call(),
+                                  child: Container(
+                                    height: 4,
+                                    color: Colors.transparent,
+                                  ),
+                                ),
+                              ),
+                              FileBrowserPanel(
+                                key: _panelKey,
+                                item: _panelItem!,
+                                state: state,
+                                scriptService: scriptService,
+                                height: filePanelHeight,
+                                backgroundOpacity: middleOpacity,
+                                gifMode: gridSettings.fileGifMode,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  FileBrowserPanel(
-                    key: _panelKey,
-                    item: state.selectedItem!,
-                    state: state,
-                    scriptService: scriptService,
-                    height: filePanelHeight,
-                    backgroundOpacity: middleOpacity,
-                    gifMode: gridSettings.fileGifMode,
+                Positioned(
+                  right: 16 * c,
+                  bottom: panelTotal * v + 16 * c,
+                  child: FloatingActionButton.small(
+                    heroTag: 'createItem',
+                    onPressed: onCreateItem,
+                    child: const Icon(Icons.add),
                   ),
-                ],
+                ),
               ],
-            ),
-            Positioned(
-              right: 16 * c,
-              bottom:
-                  (state.fileBrowserVisible && state.selectedItem != null
-                      ? filePanelHeight
-                      : 0) +
-                  16 * c,
-              child: FloatingActionButton.small(
-                heroTag: 'createItem',
-                onPressed: onCreateItem,
-                child: const Icon(Icons.add),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
