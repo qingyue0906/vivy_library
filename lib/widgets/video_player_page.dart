@@ -8,11 +8,11 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/video_entry.dart';
-import '../services/video_metadata_service.dart';
 import '../services/video_playlist_service.dart';
 import '../services/translations.dart';
 import '../services/settings_service.dart';
 import 'player_settings_page.dart';
+import 'smooth_scroll.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
 
@@ -61,12 +61,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   Player? _probePlayer;
 
+  /// 播放列表滚动控制器（配合 SmoothScroll 与 Scrollbar 实现平滑滚动）。
+  final ScrollController _playlistScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
     player = Player();
     controller = VideoController(player);
+    if (widget.playlist.entries.isNotEmpty) _initProbePlayer();
     _currentIndex = widget.initialIndex.clamp(
       0,
       max(0, widget.playlist.entries.length - 1),
@@ -88,6 +92,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         .then((v) => setState(() => _playlistWidth = v));
     windowManager.isMaximized()
         .then((v) => setState(() => _isMaximized = v));
+  }
+
+  /// 创建后台探测用的 [Player]。
+  ///
+  /// 关键点：不使用 [VideoController]、**不创建任何视频输出窗口**。
+  /// media_kit 的 [Player] 在没挂 [VideoController] 时默认 `vo=null`（解码即丢弃，
+  /// 不需要窗口/GPU）。但编码名、分辨率(demux-w/h)、帧率(demux-fps)、时长都来自
+  /// 容器解析层(track-list / duration)，无需真正解码画面即可拿到。
+  /// 之前把探测挂到离屏的 [VideoController] 上，在 Windows 上需要真实可见窗口初始化
+  /// GPU 输出，离屏窗口初始化失败导致文件永远加载不出、元数据永远为空。
+  void _initProbePlayer() {
+    _probePlayer = Player();
   }
 
   void _initPlayer() {
@@ -112,11 +128,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     var meta = entry.meta ?? const VideoMeta();
-    final v = player.state.tracks.video;
-    if (v.isNotEmpty) {
-      final t = v.first;
-      meta = meta.copyWith(width: t.w, height: t.h, codec: t.codec, fps: t.fps);
+    // 取真正的视频轨（跳过 auto/no 占位轨）以拿到干净编码名与 demux 分辨率/帧率。
+    final t = _realVideoTrack(player);
+    if (t != null) {
+      meta = meta.copyWith(codec: t.codec, fps: t.fps);
+      if (t.w != null && t.h != null) {
+        meta = meta.copyWith(width: t.w, height: t.h);
+      }
     }
+    // 解码出的真实分辨率（video-params）优先于 demux 分辨率。
     final w = player.state.width;
     final h = player.state.height;
     if (w != null && h != null) {
@@ -130,25 +150,31 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
   }
 
-  /// 后台渐进探测所有视频元数据：
-  /// - 优先用 ffprobe（最快最全）；
-  /// - 无 ffprobe 时退化为用单个后台 Player 逐一读取轨道信息。
+  /// 后台渐进探测所有视频元数据（纯 media_kit，不使用系统 ffprobe）。
+  /// 仅用单个无窗口的 [Player] 打开每个文件、读取容器层信息（编码/分辨率/帧率/时长），
+  /// 读不到的视频保持 N/A 而非崩溃。当前播放项优先探测。
   void _startMetadataProbe() {
     if (widget.playlist.entries.isEmpty) return;
     _probing = true;
     if (mounted) setState(() {});
     final gen = ++_probeGen;
     () async {
-      final ff = await VideoMetadataService.hasFfprobe;
-      for (final e in widget.playlist.entries) {
+      // 优先探测当前播放项（用户最关心的），其余随后。
+      final ordered = [...widget.playlist.entries]
+        ..sort((a, b) => _isCurrent(a) == _isCurrent(b)
+            ? 0
+            : _isCurrent(a)
+                ? -1
+                : 1);
+      for (final e in ordered) {
         if (!mounted || gen != _probeGen) return;
-        VideoMeta? meta;
-        if (ff) {
-          meta = await VideoMetadataService.probe(e.path);
-        } else {
-          meta = await _probeOne(e.path);
-        }
-        if (meta != null && mounted && gen == _probeGen) {
+        final meta = await _probeOne(e.path);
+        if (meta != null &&
+            mounted &&
+            gen == _probeGen &&
+            (meta.codec != null && meta.codec!.isNotEmpty ||
+                meta.width != null && meta.width! > 0 ||
+                (meta.duration != null && meta.duration! > Duration.zero))) {
           e.meta = VideoMeta(
             codec: meta.codec ?? e.meta?.codec,
             width: meta.width ?? e.meta?.width,
@@ -164,33 +190,80 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }();
   }
 
-  /// 用后台 Player 读取单个视频的轨道信息（无 ffprobe 时的回退方案）。
+  bool _isCurrent(VideoEntry e) =>
+      _currentIndex >= 0 &&
+      _currentIndex < widget.playlist.entries.length &&
+      widget.playlist.entries[_currentIndex] == e;
+
+  /// 从 track-list 中挑出真正的视频轨（跳过 media_kit 永远前置的
+  /// [VideoTrack.auto]/[VideoTrack.no] 占位轨，它们的 codec/分辨率/帧率都是 null）。
+  VideoTrack? _realVideoTrack(Player p) {
+    for (final t in p.state.tracks.video) {
+      if (t.codec != null && t.codec!.isNotEmpty) return t;
+    }
+    return null;
+  }
+
+  /// 从后台 Player 的当前状态读取轨道元数据。
+  /// track-list 的 [Track.codec] 是干净编码名（av1/h264/hevc 等，而非解码器名）。
+  VideoMeta _readMetaFromState(Player p) {
+    var meta = const VideoMeta();
+    final t = _realVideoTrack(p);
+    if (t != null) {
+      meta = meta.copyWith(
+        codec: t.codec,
+        width: t.w,
+        height: t.h,
+        fps: t.fps,
+      );
+    }
+    final dur = p.state.duration;
+    if (dur > Duration.zero) meta = meta.copyWith(duration: dur);
+    return meta;
+  }
+
+  /// 用后台（无窗口）[Player] 读取单个视频的容器层信息：编码/分辨率/帧率/时长。
+  /// 这些均来自 demuxer，无需解码画面，故不挂 [VideoController] 也能拿到。
   Future<VideoMeta?> _probeOne(String path) async {
     try {
-      _probePlayer ??= Player();
+      if (_probePlayer == null) {
+        _initProbePlayer();
+        // media_kit 默认给无窗口 Player 设 --vid=no，需显式选上视频轨，
+        // 保证 track-list 解析出编码/分辨率/帧率。
+        await _probePlayer!.setVideoTrack(VideoTrack.auto());
+      }
       final p = _probePlayer!;
-      final completer = Completer<Tracks>();
+      await p.setVolume(0); // 探测期间不发声
+      final completer = Completer<void>();
       late final StreamSubscription sub;
       sub = p.stream.tracks.listen((t) {
-        if (!completer.isCompleted) completer.complete(t);
+        // 必须等到真正的视频轨（有 codec）出现，而非 media_kit 前置的 auto/no 占位轨。
+        final hasReal = t.video.any((v) => v.codec != null && v.codec!.isNotEmpty);
+        if (hasReal && !completer.isCompleted) completer.complete();
       });
       await p.open(Media(path), play: false);
-      final tracks = await completer.future.timeout(const Duration(seconds: 8));
-      var meta = const VideoMeta();
-      if (tracks.video.isNotEmpty) {
-        final t = tracks.video.first;
-        meta = meta.copyWith(width: t.w, height: t.h, codec: t.codec, fps: t.fps);
-      }
-      final w = p.state.width;
-      final h = p.state.height;
-      if (w != null && h != null) meta = meta.copyWith(width: w, height: h);
-      meta = meta.copyWith(duration: p.state.duration);
+      // 等待真正有编码的视频轨解析完成。
+      try {
+        await completer.future.timeout(const Duration(seconds: 5));
+      } catch (_) {}
       await sub.cancel();
+      var meta = _readMetaFromState(p);
+      // 时长有时比 track-list 稍晚到达；若尚未拿到则补等一小段（最多约 3s）。
+      if (meta.duration == null || meta.duration == Duration.zero) {
+        for (var i = 0; i < 15; i++) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          final m = _readMetaFromState(p);
+          if (m.duration != null && m.duration! > Duration.zero) {
+            meta = m;
+            break;
+          }
+        }
+      }
       try {
         await p.stop();
       } catch (_) {}
       return meta;
-    } catch (_) {
+    } catch (e) {
       return null;
     }
   }
@@ -395,6 +468,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
     }
+    _playlistScrollController.dispose();
     _probePlayer?.dispose();
     player.dispose();
     super.dispose();
@@ -532,8 +606,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   Widget _buildVideoArea() {
     return GestureDetector(
-      onTap: _revealOnTap,
-      onDoubleTap: _toggleFullscreen,
+      onTap: () {
+        _togglePlay();
+        _revealOnTap();
+      },
       child: Container(
         color: Colors.black,
         alignment: Alignment.center,
@@ -970,11 +1046,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                     ),
                   )
-                : ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    children: widget.playlist.tree
-                        .map((r) => _treeNode(r, cs, 0))
-                        .toList(),
+                : Scrollbar(
+                    controller: _playlistScrollController,
+                    thumbVisibility: true,
+                    child: SmoothScroll(
+                      controller: _playlistScrollController,
+                      builder: (context, controller, physics) => ListView(
+                        controller: controller,
+                        physics: physics,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        children: widget.playlist.tree
+                            .map((r) => _treeNode(r, cs, 0))
+                            .toList(),
+                      ),
+                    ),
                   ),
           ),
         ],
@@ -1091,12 +1176,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (playable) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '${f.meta?.codecText ?? '--'} · ${f.meta?.resolutionText ?? '--'} · ${f.meta?.fpsText ?? '--'}',
-                      style:
-                          TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-                      overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        _codecChip(cs, f.meta?.codecText),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '${f.meta?.resolutionText ?? '--'} · ${f.meta?.fpsText ?? '--'}',
+                            style: TextStyle(
+                                fontSize: 10, color: cs.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 1),
                     Text(
@@ -1120,6 +1213,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               const Icon(Icons.volume_up, size: 14, color: Colors.blue),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 编码格式：普通文本显示（不再用主题色高亮徽标）。
+  Widget _codecChip(ColorScheme cs, String? codec) {
+    final label = (codec != null && codec != '--') ? codec : 'N/A';
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 10,
+        color: cs.onSurfaceVariant,
       ),
     );
   }

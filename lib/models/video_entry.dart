@@ -24,7 +24,27 @@ class VideoMeta {
     );
   }
 
-  String get codecText => codec?.toUpperCase() ?? '--';
+  /// 常见编码的友好标签（如 h264→AVC、hevc→HEVC、av1→AV1）。
+  static const Map<String, String> _codecLabels = {
+    'av1': 'AV1',
+    'hevc': 'HEVC',
+    'h265': 'HEVC',
+    'h264': 'AVC',
+    'avc': 'AVC',
+    'vp9': 'VP9',
+    'vp8': 'VP8',
+    'mpeg4': 'MPEG4',
+    'mpeg2video': 'MPEG2',
+    'mpeg1video': 'MPEG1',
+    'theora': 'Theora',
+    'vc1': 'VC1',
+  };
+
+  String get codecText {
+    if (codec == null) return '--';
+    final lower = codec!.toLowerCase();
+    return _codecLabels[lower] ?? codec!.toUpperCase();
+  }
 
   String get resolutionText {
     if (width != null && height != null) return '${width}x$height';
