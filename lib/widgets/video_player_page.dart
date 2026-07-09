@@ -383,7 +383,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
             children: [
               Expanded(child: _buildPlayerArea(cs)),
               if (_showPlaylist && !_isFullscreen) ...[
-                _buildResizeHandle(cs),
+                _buildResizeHandle(),
                 _buildPlaylistPanel(cs),
               ],
             ],
@@ -501,14 +501,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   /// 整条可拖拽移动窗口（仅标题，避免与底栏按钮重复）。
   Widget _buildTopBar(ColorScheme cs) {
     return Container(
-      height: 38,
+      height: 32,
       decoration: BoxDecoration(
         color: cs.surface,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: DragToMoveArea(
         child: Container(
-          height: 38,
+          height: 32,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.only(left: 12),
           child: Row(
@@ -812,30 +812,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  /// 播放区与播放列表之间的可拖拽分隔条：左右拖动改变播放列表宽度。
-  Widget _buildResizeHandle(ColorScheme cs) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onPanUpdate: (details) {
-        // 播放列表在右侧，分隔条左移(dx<0)时列表变宽。
-        final next = (_playlistWidth - details.delta.dx).clamp(220.0, 640.0);
+  /// 播放区与播放列表之间的拖拽热区：平时不可见，悬停时显示一条细高亮线作提示，
+  /// 左右拖动改变播放列表宽度。
+  Widget _buildResizeHandle() {
+    return _ResizeHandle(
+      onDrag: (dx) {
+        // 播放列表在右侧，热区左移(dx<0)时列表变宽。
+        final next = (_playlistWidth - dx).clamp(220.0, 640.0);
         if (next != _playlistWidth) {
           setState(() => _playlistWidth = next);
         }
       },
-      child: MouseRegion(
-        cursor: SystemMouseCursors.resizeLeftRight,
-        child: Container(
-          width: 5,
-          color: Colors.transparent,
-          child: Center(
-            child: Container(
-              width: 1,
-              color: cs.outlineVariant,
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1080,6 +1067,40 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _openCurrent();
     setState(() {});
     _startMetadataProbe();
+  }
+}
+
+/// 播放区与播放列表之间的可拖拽分隔条。常驻显示一条细线，左/右拖动通过 [onDrag]
+/// 回调上报位移量（dx），由父级换算为播放列表宽度。
+class _ResizeHandle extends StatefulWidget {
+  final void Function(double dx) onDrag;
+
+  const _ResizeHandle({required this.onDrag});
+
+  @override
+  State<_ResizeHandle> createState() => _ResizeHandleState();
+}
+
+class _ResizeHandleState extends State<_ResizeHandle> {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanUpdate: (d) => widget.onDrag(d.delta.dx),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: SizedBox(
+          width: 5,
+          child: Center(
+            child: Container(
+              width: 1,
+              color: cs.outlineVariant,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
