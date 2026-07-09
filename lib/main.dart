@@ -42,7 +42,9 @@ void main() async {
 
   final scriptService = ScriptService();
   await scriptService.init();
-  runApp(VivyApp(initialThemeMode: savedTheme, scriptService: scriptService));
+  runApp(ExcludeSemantics(
+    child: VivyApp(initialThemeMode: savedTheme, scriptService: scriptService),
+  ));
 }
 
 class _WindowStateListener with WindowListener {
