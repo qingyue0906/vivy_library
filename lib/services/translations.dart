@@ -1610,6 +1610,36 @@ class Strings {
       AppLocale.en: 'Close Player',
       AppLocale.ja: 'プレーヤーを閉じる',
     },
+    'playerSettings': {
+      AppLocale.zhHans: '播放器设置',
+      AppLocale.zhHant: '播放器設定',
+      AppLocale.en: 'Player Settings',
+      AppLocale.ja: 'プレーヤー設定',
+    },
+    'showMilliseconds': {
+      AppLocale.zhHans: '显示毫秒时间',
+      AppLocale.zhHant: '顯示毫秒時間',
+      AppLocale.en: 'Show milliseconds',
+      AppLocale.ja: 'ミリ秒を表示',
+    },
+    'showMillisecondsDesc': {
+      AppLocale.zhHans: '进度条时间以 分:秒.毫秒 显示，如 0:09.150',
+      AppLocale.zhHant: '進度條時間以 分:秒.毫秒 顯示，如 0:09.150',
+      AppLocale.en: 'Show progress time as M:SS.mmm, e.g. 0:09.150',
+      AppLocale.ja: '再生バーの時間を 分:秒.ミリ秒 で表示 (例: 0:09.150)',
+    },
+    'minimize': {
+      AppLocale.zhHans: '最小化',
+      AppLocale.zhHant: '最小化',
+      AppLocale.en: 'Minimize',
+      AppLocale.ja: '最小化',
+    },
+    'maximize': {
+      AppLocale.zhHans: '最大化',
+      AppLocale.zhHant: '最大化',
+      AppLocale.en: 'Maximize',
+      AppLocale.ja: '最大化',
+    },
     'play': {
       AppLocale.zhHans: '播放',
       AppLocale.zhHant: '播放',

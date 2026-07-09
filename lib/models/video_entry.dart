@@ -48,6 +48,20 @@ class VideoMeta {
     return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
   }
 
+  /// 进度条时钟格式：分:秒.毫秒(3位)，如 0:09.150；超过 1 小时为 时:分:秒.毫秒。
+  static String formatClock(Duration? d) {
+    if (d == null || d == Duration.zero) return '--:--';
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    final ms = d.inMilliseconds.remainder(1000);
+    final ss = s.toString().padLeft(2, '0');
+    final mmm = ms.toString().padLeft(3, '0');
+    return h > 0
+        ? '$h:${m.toString().padLeft(2, '0')}:$ss.$mmm'
+        : '$m:$ss.$mmm';
+  }
+
   String get durationText => formatDuration(duration);
 }
 

@@ -11,6 +11,8 @@ import '../models/video_entry.dart';
 import '../services/video_metadata_service.dart';
 import '../services/video_playlist_service.dart';
 import '../services/translations.dart';
+import '../services/settings_service.dart';
+import 'player_settings_page.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
 
@@ -37,9 +39,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   late int _currentIndex;
   bool _isFullscreen = false;
+  bool _isMaximized = false;
   bool _showTop = false;
   bool _showBottom = false;
   bool _showPlaylist = true;
+  bool _showSettings = false;
+  bool _showMilliseconds = false;
   double _playlistWidth = 340;
   Timer? _hideTimer;
 
@@ -75,6 +80,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     _initPlayer();
     _startMetadataProbe();
+    SettingsService.loadPlayerShowMilliseconds()
+        .then((v) => setState(() => _showMilliseconds = v));
+    SettingsService.loadPlayerShowPlaylist()
+        .then((v) => setState(() => _showPlaylist = v));
+    SettingsService.loadPlayerPlaylistWidth()
+        .then((v) => setState(() => _playlistWidth = v));
+    windowManager.isMaximized()
+        .then((v) => setState(() => _isMaximized = v));
   }
 
   void _initPlayer() {
@@ -294,6 +307,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
   }
 
+  @override
+  void onWindowMaximize() {
+    if (mounted) setState(() => _isMaximized = true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    if (mounted) setState(() => _isMaximized = false);
+  }
+
+  Future<void> _toggleMaximize() async {
+    if (_isMaximized) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+
   /// 全屏模式：按鼠标所在区域（顶部/底部）分别显示对应浮层，静止后自动隐藏。
   void _onHover(PointerHoverEvent event) {
     if (!_isFullscreen) return;
@@ -379,13 +410,29 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         backgroundColor: Colors.black,
         body: MouseRegion(
           onHover: _onHover,
-          child: Row(
+          child: Stack(
             children: [
-              Expanded(child: _buildPlayerArea(cs)),
-              if (_showPlaylist && !_isFullscreen) ...[
-                _buildResizeHandle(),
-                _buildPlaylistPanel(cs),
-              ],
+              Row(
+                children: [
+                  Expanded(child: _buildPlayerArea(cs)),
+                  if (_showPlaylist && !_isFullscreen) ...[
+                    _buildResizeHandle(),
+                    _buildPlaylistPanel(cs),
+                  ],
+                ],
+              ),
+              if (_showSettings)
+                Positioned.fill(
+                  child: PlayerSettingsPage(
+                    showMilliseconds: _showMilliseconds,
+                    onMillisecondsChanged: (v) {
+                      setState(() => _showMilliseconds = v);
+                      SettingsService.savePlayerShowMilliseconds(v);
+                    },
+                    onBack: () => setState(() => _showSettings = false),
+                    trailing: _buildWindowControls(cs, iconColor: cs.onSurface),
+                  ),
+                ),
             ],
           ),
         ),
@@ -460,7 +507,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         _toggleFullscreen();
         return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
-        if (_isFullscreen) {
+        if (_showSettings) {
+          setState(() => _showSettings = false);
+        } else if (_isFullscreen) {
           _toggleFullscreen();
         } else {
           _close();
@@ -498,7 +547,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 
   /// 窗口模式下的顶栏：跟随主题(surface)，与播放列表(surfaceContainerHigh)区分层次；
-  /// 整条可拖拽移动窗口（仅标题，避免与底栏按钮重复）。
+  /// 标题区域可拖拽移动窗口，右上角为最小化/最大化/全屏/关闭窗口控件。
   Widget _buildTopBar(ColorScheme cs) {
     return Container(
       height: 32,
@@ -506,30 +555,86 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         color: cs.surface,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: DragToMoveArea(
-        child: Container(
-          height: 32,
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.only(left: 12),
-          child: Row(
-            children: [
-              Icon(Icons.play_circle_outline, size: 16, color: cs.primary),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  widget.title,
-                  style: TextStyle(fontSize: 13, color: cs.onSurface),
-                  overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(
+            child: DragToMoveArea(
+              child: Container(
+                height: 32,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.play_circle_outline, size: 16, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: TextStyle(fontSize: 13, color: cs.onSurface),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          _buildWindowControls(cs, iconColor: cs.onSurface),
+        ],
       ),
     );
   }
 
-  /// 全屏模式下顶部悬浮条：仅显示标题（按钮统一在底部控制条，避免重复）。
+  /// 右上角窗口控件：最小化 / 最大化 / 全屏 / 关闭。供窗口顶栏与全屏浮层、设置页复用。
+  Widget _buildWindowControls(ColorScheme cs, {required Color iconColor}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.horizontal_rule),
+          color: iconColor,
+          iconSize: 18,
+          splashRadius: 16,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: Strings.t('minimize'),
+          onPressed: () => windowManager.minimize(),
+        ),
+        IconButton(
+          icon: Icon(_isMaximized ? Icons.crop_square : Icons.crop_16_9),
+          color: iconColor,
+          iconSize: 18,
+          splashRadius: 16,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: Strings.t('maximize'),
+          onPressed: _toggleMaximize,
+        ),
+        IconButton(
+          icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+          color: iconColor,
+          iconSize: 18,
+          splashRadius: 16,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: _isFullscreen ? Strings.t('exitFullscreen') : Strings.t('fullscreen'),
+          onPressed: _toggleFullscreen,
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          color: Colors.redAccent,
+          iconSize: 18,
+          splashRadius: 16,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          tooltip: Strings.t('closePlayer'),
+          onPressed: _close,
+        ),
+      ],
+    );
+  }
+
+  /// 全屏模式下顶部悬浮条：显示标题与右上角窗口控件（鼠标靠近顶部时显示）。
   Widget _buildTopOverlay(ColorScheme cs) {
     final current = widget.playlist.entries.isEmpty
         ? null
@@ -553,6 +658,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          _buildWindowControls(cs, iconColor: Colors.white),
         ],
       ),
     );
@@ -628,24 +734,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 _buildAudioMenu(iconColor),
                 _buildSubtitleMenu(iconColor),
                 IconButton(
-                  icon: Icon(_showPlaylist
-                      ? Icons.playlist_add_check
-                      : Icons.playlist_play),
-                  color: iconColor,
-                  tooltip: Strings.t('playlist'),
-                  onPressed: () =>
-                      setState(() => _showPlaylist = !_showPlaylist),
-                ),
-                IconButton(
-                  icon: Icon(
-                      _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                  color: iconColor,
-                  tooltip: _isFullscreen
-                      ? Strings.t('exitFullscreen')
-                      : Strings.t('fullscreen'),
-                  onPressed: _toggleFullscreen,
-                ),
-                IconButton(
                   icon: const Icon(Icons.folder_open),
                   color: iconColor,
                   tooltip: Strings.t('openFolder'),
@@ -658,10 +746,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   onPressed: _openLocalFile,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
-                  color: Colors.redAccent,
-                  tooltip: Strings.t('closePlayer'),
-                  onPressed: _close,
+                  icon: const Icon(Icons.settings),
+                  color: iconColor,
+                  tooltip: Strings.t('playerSettings'),
+                  onPressed: () => setState(() => _showSettings = true),
+                ),
+                IconButton(
+                  icon: Icon(_showPlaylist
+                      ? Icons.playlist_add_check
+                      : Icons.playlist_play),
+                  color: iconColor,
+                  tooltip: Strings.t('playlist'),
+                  onPressed: () {
+                    setState(() => _showPlaylist = !_showPlaylist);
+                    SettingsService.savePlayerShowPlaylist(_showPlaylist);
+                  },
                 ),
               ],
             ),
@@ -674,7 +773,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   /// 进度条：独立 StatefulWidget，自身订阅 position 流。
   /// 拖拽时暂停外部流更新，避免父级频繁 setState 重建 Slider 导致拖拽中断/卡死。
   Widget _buildProgress(ColorScheme cs) {
-    return _ProgressSlider(player, cs);
+    return _ProgressSlider(player, cs, showMilliseconds: _showMilliseconds);
   }
 
   Widget _buildVolume(ColorScheme cs, Color iconColor) {
@@ -823,6 +922,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
           setState(() => _playlistWidth = next);
         }
       },
+      onDragEnd: () => SettingsService.savePlayerPlaylistWidth(_playlistWidth),
     );
   }
 
@@ -1071,11 +1171,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 }
 
 /// 播放区与播放列表之间的可拖拽分隔条。常驻显示一条细线，左/右拖动通过 [onDrag]
-/// 回调上报位移量（dx），由父级换算为播放列表宽度。
+/// 回调上报位移量（dx），由父级换算为播放列表宽度；拖拽结束时触发 [onDragEnd]。
 class _ResizeHandle extends StatefulWidget {
   final void Function(double dx) onDrag;
+  final VoidCallback? onDragEnd;
 
-  const _ResizeHandle({required this.onDrag});
+  const _ResizeHandle({required this.onDrag, this.onDragEnd});
 
   @override
   State<_ResizeHandle> createState() => _ResizeHandleState();
@@ -1088,6 +1189,7 @@ class _ResizeHandleState extends State<_ResizeHandle> {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanUpdate: (d) => widget.onDrag(d.delta.dx),
+      onPanEnd: (_) => widget.onDragEnd?.call(),
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeLeftRight,
         child: SizedBox(
@@ -1109,8 +1211,9 @@ class _ResizeHandleState extends State<_ResizeHandle> {
 class _ProgressSlider extends StatefulWidget {
   final Player player;
   final ColorScheme cs;
+  final bool showMilliseconds;
 
-  const _ProgressSlider(this.player, this.cs);
+  const _ProgressSlider(this.player, this.cs, {this.showMilliseconds = false});
 
   @override
   State<_ProgressSlider> createState() => _ProgressSliderState();
@@ -1156,7 +1259,9 @@ class _ProgressSliderState extends State<_ProgressSlider> {
     return Row(
       children: [
         Text(
-          VideoMeta.formatDuration(position),
+          widget.showMilliseconds
+              ? VideoMeta.formatClock(position)
+              : VideoMeta.formatDuration(position),
           style: const TextStyle(color: Colors.white70, fontSize: 11),
         ),
         Expanded(
@@ -1180,7 +1285,9 @@ class _ProgressSliderState extends State<_ProgressSlider> {
           ),
         ),
         Text(
-          VideoMeta.formatDuration(duration),
+          widget.showMilliseconds
+              ? VideoMeta.formatClock(duration)
+              : VideoMeta.formatDuration(duration),
           style: const TextStyle(color: Colors.white70, fontSize: 11),
         ),
       ],

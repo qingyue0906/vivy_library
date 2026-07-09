@@ -383,6 +383,43 @@ class SettingsService {
     await AppDataService.setString(_classSourceKey, source.name);
   }
 
+  // --- Player settings ---
+
+  static const _playerShowMsKey = 'player_show_milliseconds';
+
+  static Future<bool> loadPlayerShowMilliseconds() async {
+    return (await AppDataService.getString(_playerShowMsKey)) == 'true';
+  }
+
+  static Future<void> savePlayerShowMilliseconds(bool v) async {
+    await AppDataService.setString(_playerShowMsKey, v.toString());
+  }
+
+  // --- Player playlist panel ---
+
+  static const _playerShowPlaylistKey = 'player_show_playlist';
+  static const _playerPlaylistWidthKey = 'player_playlist_width';
+
+  static Future<bool> loadPlayerShowPlaylist() async {
+    // 默认显示播放列表
+    final val = await AppDataService.getString(_playerShowPlaylistKey);
+    return val == null || val == 'true';
+  }
+
+  static Future<void> savePlayerShowPlaylist(bool v) async {
+    await AppDataService.setString(_playerShowPlaylistKey, v.toString());
+  }
+
+  static Future<double> loadPlayerPlaylistWidth() async {
+    final val = await AppDataService.getString(_playerPlaylistWidthKey);
+    final w = double.tryParse(val ?? '');
+    return w != null ? w.clamp(220.0, 640.0) : 340.0;
+  }
+
+  static Future<void> savePlayerPlaylistWidth(double w) async {
+    await AppDataService.setString(_playerPlaylistWidthKey, w.toString());
+  }
+
   // --- Grouping ---
 
   static Future<bool> loadGroupingEnabled() async {
