@@ -34,7 +34,7 @@ class VideoPlaylistService {
   static Future<VideoPlaylist> build(LibraryItem item) async {
     final root = item.path;
     final entries = <VideoEntry>[];
-    final rootNode = VideoFolderNode(p.basename(root));
+    final rootNode = VideoFolderNode(p.basename(root), root);
     if (Directory(root).existsSync()) {
       await _scan(Directory(root), entries, rootNode);
     }
@@ -70,22 +70,23 @@ class VideoPlaylistService {
           name: p.basename(e.path),
           dirPath: dir.path,
           sizeInBytes: size,
+          isVideo: true,
         );
+        node.files.add(entry);
         entries.add(entry);
-        node.videos.add(entry);
       }
     }
     for (final d in subDirs) {
-      final child = VideoFolderNode(p.basename(d.path));
+      final child = VideoFolderNode(p.basename(d.path), d.path);
       node.children.add(child);
       await _scan(d, entries, child);
     }
     // 清理扫描后仍无内容的空文件夹节点
-    node.children.removeWhere((c) => c.children.isEmpty && c.videos.isEmpty);
+    node.children.removeWhere((c) => c.children.isEmpty && c.files.isEmpty);
   }
 
   static void _sortNode(VideoFolderNode node) {
-    node.videos.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    node.files.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     node.children.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     for (final c in node.children) {
       _sortNode(c);
@@ -95,7 +96,7 @@ class VideoPlaylistService {
   /// 直接扫描一个文件夹路径构建播放列表（用于"打开文件夹"加载额外视频）。
   static Future<VideoPlaylist> buildFromPath(String path) async {
     final entries = <VideoEntry>[];
-    final rootNode = VideoFolderNode(p.basename(path));
+    final rootNode = VideoFolderNode(p.basename(path), path);
     if (Directory(path).existsSync()) {
       await _scan(Directory(path), entries, rootNode);
     }

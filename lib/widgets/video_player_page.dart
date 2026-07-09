@@ -37,8 +37,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   late int _currentIndex;
   bool _isFullscreen = false;
-  bool _showControls = true;
+  bool _showTop = false;
+  bool _showBottom = false;
   bool _showPlaylist = true;
+  double _playlistWidth = 340;
   Timer? _hideTimer;
 
   double _volume = 100;
@@ -46,12 +48,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   double _rate = 1.0;
   _RepeatMode _repeat = _RepeatMode.all;
 
-  VideoFolderNode? _selectedFolder;
+  /// 已展开的文件夹路径集合（用于树形播放列表的收起/展开）。
+  final Set<String> _expanded = {};
   final Random _random = Random();
   bool _probing = false;
+  int _probeGen = 0;
 
-  bool _dragging = false;
-  double _dragValue = 0;
+  Player? _probePlayer;
 
   @override
   void initState() {
@@ -63,8 +66,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       0,
       max(0, widget.playlist.entries.length - 1),
     );
-    if (widget.playlist.tree.isNotEmpty) {
-      _selectedFolder = widget.playlist.tree.first;
+    // 默认展开根节点，并展开当前播放视频所在的目录链，保证其可见。
+    for (final r in widget.playlist.tree) {
+      _expanded.add(r.path);
+    }
+    if (widget.playlist.entries.isNotEmpty) {
+      _ensureExpanded(widget.playlist.entries[_currentIndex]);
     }
     _initPlayer();
     _startMetadataProbe();
@@ -110,16 +117,25 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
   }
 
-  /// 后台渐进探测所有视频元数据（优先 ffprobe）。
+  /// 后台渐进探测所有视频元数据：
+  /// - 优先用 ffprobe（最快最全）；
+  /// - 无 ffprobe 时退化为用单个后台 Player 逐一读取轨道信息。
   void _startMetadataProbe() {
     if (widget.playlist.entries.isEmpty) return;
     _probing = true;
     if (mounted) setState(() {});
+    final gen = ++_probeGen;
     () async {
+      final ff = await VideoMetadataService.hasFfprobe;
       for (final e in widget.playlist.entries) {
-        if (!mounted) return;
-        final meta = await VideoMetadataService.probe(e.path);
-        if (meta != null && mounted) {
+        if (!mounted || gen != _probeGen) return;
+        VideoMeta? meta;
+        if (ff) {
+          meta = await VideoMetadataService.probe(e.path);
+        } else {
+          meta = await _probeOne(e.path);
+        }
+        if (meta != null && mounted && gen == _probeGen) {
           e.meta = VideoMeta(
             codec: meta.codec ?? e.meta?.codec,
             width: meta.width ?? e.meta?.width,
@@ -133,6 +149,37 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       _probing = false;
       if (mounted) setState(() {});
     }();
+  }
+
+  /// 用后台 Player 读取单个视频的轨道信息（无 ffprobe 时的回退方案）。
+  Future<VideoMeta?> _probeOne(String path) async {
+    try {
+      _probePlayer ??= Player();
+      final p = _probePlayer!;
+      final completer = Completer<Tracks>();
+      late final StreamSubscription sub;
+      sub = p.stream.tracks.listen((t) {
+        if (!completer.isCompleted) completer.complete(t);
+      });
+      await p.open(Media(path), play: false);
+      final tracks = await completer.future.timeout(const Duration(seconds: 8));
+      var meta = const VideoMeta();
+      if (tracks.video.isNotEmpty) {
+        final t = tracks.video.first;
+        meta = meta.copyWith(width: t.w, height: t.h, codec: t.codec, fps: t.fps);
+      }
+      final w = p.state.width;
+      final h = p.state.height;
+      if (w != null && h != null) meta = meta.copyWith(width: w, height: h);
+      meta = meta.copyWith(duration: p.state.duration);
+      await sub.cancel();
+      try {
+        await p.stop();
+      } catch (_) {}
+      return meta;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _onCompleted() {
@@ -156,6 +203,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _currentIndex = i;
     _openCurrent();
     _updateCurrentMetaFromPlayer();
+    _ensureExpanded(widget.playlist.entries[i]);
     setState(() {});
   }
 
@@ -211,18 +259,78 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     setState(() {});
   }
 
+  /// 真正的 OS 全屏：调用 window_manager 缩放窗口铺满屏幕（隐藏任务栏）。
   Future<void> _toggleFullscreen() async {
-    _isFullscreen = !_isFullscreen;
+    setState(() {
+      _isFullscreen = !_isFullscreen;
+      if (_isFullscreen) {
+        _showTop = false;
+        _showBottom = false;
+      }
+    });
     await windowManager.setFullScreen(_isFullscreen);
-    setState(() {});
   }
 
-  void _onMouseMove() {
-    if (!_showControls) setState(() => _showControls = true);
+  @override
+  void onWindowEnterFullScreen() {
+    // 进入真全屏后强制重建并常显控件，避免命中测试错位/控件被隐藏。
+    if (mounted) {
+      setState(() {
+        _isFullscreen = true;
+        _showTop = false;
+        _showBottom = false;
+      });
+    }
+  }
+
+  @override
+  void onWindowLeaveFullScreen() {
+    if (mounted) {
+      setState(() {
+        _isFullscreen = false;
+        _showTop = false;
+        _showBottom = false;
+      });
+    }
+  }
+
+  /// 全屏模式：按鼠标所在区域（顶部/底部）分别显示对应浮层，静止后自动隐藏。
+  void _onHover(PointerHoverEvent event) {
+    if (!_isFullscreen) return;
+    final h = MediaQuery.of(context).size.height;
+    final dy = event.localPosition.dy;
+    final topZone = dy < 90;
+    final bottomZone = dy > h - 120;
+    if (_showTop != topZone || _showBottom != bottomZone) {
+      setState(() {
+        _showTop = topZone;
+        _showBottom = bottomZone;
+      });
+    }
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showControls = false);
+    if (topZone || bottomZone) {
+      _hideTimer = Timer(const Duration(seconds: 3), _hideAll);
+    }
+  }
+
+  void _hideAll() {
+    if (mounted) {
+      setState(() {
+        _showTop = false;
+        _showBottom = false;
+      });
+    }
+  }
+
+  /// 点击视频区域临时唤出顶/底栏（全屏模式）。
+  void _revealOnTap() {
+    if (!_isFullscreen) return;
+    setState(() {
+      _showTop = true;
+      _showBottom = true;
     });
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 3), _hideAll);
   }
 
   void _close() {
@@ -232,14 +340,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     Navigator.of(context).pop();
   }
 
-  @override
-  void onWindowEnterFullScreen() {
-    if (mounted) setState(() => _isFullscreen = true);
-  }
+  /// 将 [v] 所在目录链上的所有文件夹节点标记为展开，使其可见。
+  void _ensureExpanded(VideoEntry v) {
+    final dir = v.dirPath;
+    void walk(VideoFolderNode n) {
+      if (dir == n.path || dir.startsWith(n.path + Platform.pathSeparator)) {
+        _expanded.add(n.path);
+      }
+      for (final c in n.children) {
+        walk(c);
+      }
+    }
 
-  @override
-  void onWindowLeaveFullScreen() {
-    if (mounted) setState(() => _isFullscreen = false);
+    for (final r in widget.playlist.tree) {
+      walk(r);
+    }
   }
 
   @override
@@ -249,6 +364,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
     }
+    _probePlayer?.dispose();
     player.dispose();
     super.dispose();
   }
@@ -262,26 +378,63 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       child: Scaffold(
         backgroundColor: Colors.black,
         body: MouseRegion(
-          onHover: (_) => _onMouseMove(),
+          onHover: _onHover,
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(child: _buildVideoArea()),
-                    AnimatedOpacity(
-                      opacity: (!_isFullscreen || _showControls) ? 1 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: _buildControlBar(cs),
-                    ),
-                  ],
-                ),
-              ),
-              if (_showPlaylist && !_isFullscreen) _buildPlaylistPanel(cs),
+              Expanded(child: _buildPlayerArea(cs)),
+              if (_showPlaylist && !_isFullscreen) ...[
+                _buildResizeHandle(cs),
+                _buildPlaylistPanel(cs),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// 播放区：窗口模式为「顶栏 + 视频 + 底栏」独立成行的竖向布局；
+  /// 全屏模式为视频铺满 + 顶/底浮层（半透明，鼠标悬停显示）。
+  Widget _buildPlayerArea(ColorScheme cs) {
+    if (_isFullscreen) {
+      return Stack(
+        children: [
+          _buildVideoArea(),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _showTop ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_showTop,
+                child: _buildTopOverlay(cs),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _showBottom ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_showBottom,
+                child: _buildControlBar(cs, overlay: true),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        _buildTopBar(cs),
+        Expanded(child: _buildVideoArea()),
+        _buildControlBar(cs),
+      ],
     );
   }
 
@@ -329,206 +482,242 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 
   Widget _buildVideoArea() {
-    final current = widget.playlist.entries.isEmpty
-        ? null
-        : widget.playlist.entries[_currentIndex];
-    return Stack(
-      children: [
-        GestureDetector(
-          onTap: _onMouseMove,
-          onDoubleTap: _toggleFullscreen,
-          child: Container(
-            color: Colors.black,
-            alignment: Alignment.center,
-            child: Video(
-              controller: controller,
-              fit: BoxFit.contain,
-              controls: null,
-            ),
-          ),
+    return GestureDetector(
+      onTap: _revealOnTap,
+      onDoubleTap: _toggleFullscreen,
+      child: Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: Video(
+          controller: controller,
+          fit: BoxFit.contain,
+          controls: null,
         ),
-        Positioned(
-          top: 8,
-          left: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '${widget.title}  ·  ${current?.name ?? ''}',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildControlBar(ColorScheme cs) {
-    final current = widget.playlist.entries.isEmpty
-        ? null
-        : widget.playlist.entries[_currentIndex];
-    final playing = player.state.playing;
+  /// 窗口模式下的顶栏：跟随主题(surface)，与播放列表(surfaceContainerHigh)区分层次；
+  /// 整条可拖拽移动窗口（仅标题，避免与底栏按钮重复）。
+  Widget _buildTopBar(ColorScheme cs) {
     return Container(
-      color: Colors.black.withValues(alpha: 0.85),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        children: [
-          _buildProgress(cs),
-          const SizedBox(height: 4),
-          Row(
+      height: 38,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+      ),
+      child: DragToMoveArea(
+        child: Container(
+          height: 38,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 12),
+          child: Row(
             children: [
-              IconButton(
-                icon: Icon(playing ? Icons.pause : Icons.play_arrow),
-                color: Colors.white,
-                tooltip: playing ? Strings.t('pause') : Strings.t('play'),
-                onPressed: _togglePlay,
-              ),
-              IconButton(
-                icon: const Icon(Icons.skip_previous),
-                color: Colors.white,
-                tooltip: Strings.t('prevTrack'),
-                onPressed: _prev,
-              ),
-              IconButton(
-                icon: const Icon(Icons.skip_next),
-                color: Colors.white,
-                tooltip: Strings.t('nextTrack'),
-                onPressed: () => _next(),
-              ),
-              _buildVolume(cs),
-              const SizedBox(width: 8),
+              Icon(Icons.play_circle_outline, size: 16, color: cs.primary),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  current?.name ?? '',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 1,
+                  widget.title,
+                  style: TextStyle(fontSize: 13, color: cs.onSurface),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              _buildSpeedButton(),
-              _buildRepeatButton(),
-              _buildAudioMenu(),
-              _buildSubtitleMenu(),
-              IconButton(
-                icon: Icon(_showPlaylist ? Icons.playlist_add_check : Icons.playlist_play),
-                color: Colors.white,
-                tooltip: Strings.t('playlist'),
-                onPressed: () => setState(() => _showPlaylist = !_showPlaylist),
-              ),
-              IconButton(
-                icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                color: Colors.white,
-                tooltip: _isFullscreen ? Strings.t('exitFullscreen') : Strings.t('fullscreen'),
-                onPressed: _toggleFullscreen,
-              ),
-              IconButton(
-                icon: const Icon(Icons.folder_open),
-                color: Colors.white,
-                tooltip: Strings.t('openFolder'),
-                onPressed: _openLocalFolder,
-              ),
-              IconButton(
-                icon: const Icon(Icons.file_open),
-                color: Colors.white,
-                tooltip: Strings.t('openFile'),
-                onPressed: _openLocalFile,
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                color: Colors.red,
-                tooltip: Strings.t('closePlayer'),
-                onPressed: _close,
-              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 全屏模式下顶部悬浮条：仅显示标题（按钮统一在底部控制条，避免重复）。
+  Widget _buildTopOverlay(ColorScheme cs) {
+    final current = widget.playlist.entries.isEmpty
+        ? null
+        : widget.playlist.entries[_currentIndex];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${widget.title}  ·  ${current?.name ?? ''}',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProgress(ColorScheme cs) {
-    return StreamBuilder<Duration>(
-      stream: player.stream.position,
-      builder: (context, posSnap) {
-        return StreamBuilder<Duration?>(
-          stream: player.stream.duration,
-          builder: (context, durSnap) {
-            final duration = durSnap.data ?? Duration.zero;
-            final position = _dragging
-                ? Duration(seconds: _dragValue.round())
-                : (posSnap.data ?? Duration.zero);
-            final max = duration.inSeconds.toDouble();
-            final value = max > 0 ? position.inSeconds.toDouble().clamp(0, max).toDouble() : 0.0;
-            return Row(
+  /// 底部控制条。窗口模式跟随主题（surface，独立成行）；全屏模式使用半透明深色浮层。
+  Widget _buildControlBar(ColorScheme cs, {bool overlay = false}) {
+    final current = widget.playlist.entries.isEmpty
+        ? null
+        : widget.playlist.entries[_currentIndex];
+    final playing = player.state.playing;
+    // 窗口模式用 surface，与播放列表(surfaceContainerHigh)形成层次；全屏用半透明深色浮层。
+    final Color iconColor = overlay ? Colors.white : cs.onSurface;
+    return Container(
+      decoration: BoxDecoration(
+        color: overlay
+            ? Colors.black.withValues(alpha: 0.82)
+            : cs.surface,
+        border: overlay
+            ? null
+            : Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+      child: IconButtonTheme(
+        data: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            iconSize: 20,
+            minimumSize: const Size(32, 32),
+            padding: const EdgeInsets.all(4),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildProgress(cs),
+            Row(
               children: [
-                Text(
-                  VideoMeta.formatDuration(position),
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                IconButton(
+                  icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                  color: iconColor,
+                  tooltip: playing ? Strings.t('pause') : Strings.t('play'),
+                  onPressed: _togglePlay,
                 ),
+                IconButton(
+                  icon: const Icon(Icons.skip_previous),
+                  color: iconColor,
+                  tooltip: Strings.t('prevTrack'),
+                  onPressed: _prev,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_next),
+                  color: iconColor,
+                  tooltip: Strings.t('nextTrack'),
+                  onPressed: () => _next(),
+                ),
+                _buildVolume(cs, iconColor),
+                const SizedBox(width: 6),
                 Expanded(
-                  child: Slider(
-                    value: value,
-                    max: max > 0 ? max : 1.0,
-                    activeColor: cs.primary,
-                    onChangeStart: (_) => setState(() => _dragging = true),
-                    onChanged: (v) => setState(() => _dragValue = v),
-                    onChangeEnd: (v) {
-                      _dragging = false;
-                      player.seek(Duration(seconds: v.round()));
-                    },
+                  child: Text(
+                    current?.name ?? '',
+                    style: TextStyle(
+                      color: iconColor.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  VideoMeta.formatDuration(duration),
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                _buildSpeedButton(iconColor),
+                _buildRepeatButton(iconColor),
+                _buildAudioMenu(iconColor),
+                _buildSubtitleMenu(iconColor),
+                IconButton(
+                  icon: Icon(_showPlaylist
+                      ? Icons.playlist_add_check
+                      : Icons.playlist_play),
+                  color: iconColor,
+                  tooltip: Strings.t('playlist'),
+                  onPressed: () =>
+                      setState(() => _showPlaylist = !_showPlaylist),
+                ),
+                IconButton(
+                  icon: Icon(
+                      _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                  color: iconColor,
+                  tooltip: _isFullscreen
+                      ? Strings.t('exitFullscreen')
+                      : Strings.t('fullscreen'),
+                  onPressed: _toggleFullscreen,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.folder_open),
+                  color: iconColor,
+                  tooltip: Strings.t('openFolder'),
+                  onPressed: _openLocalFolder,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.file_open),
+                  color: iconColor,
+                  tooltip: Strings.t('openFile'),
+                  onPressed: _openLocalFile,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  color: Colors.redAccent,
+                  tooltip: Strings.t('closePlayer'),
+                  onPressed: _close,
                 ),
               ],
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildVolume(ColorScheme cs) {
+  /// 进度条：独立 StatefulWidget，自身订阅 position 流。
+  /// 拖拽时暂停外部流更新，避免父级频繁 setState 重建 Slider 导致拖拽中断/卡死。
+  Widget _buildProgress(ColorScheme cs) {
+    return _ProgressSlider(player, cs);
+  }
+
+  Widget _buildVolume(ColorScheme cs, Color iconColor) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           icon: Icon(_muted || _volume == 0 ? Icons.volume_off : Icons.volume_up),
-          color: Colors.white,
+          color: iconColor,
           tooltip: Strings.t('mute'),
           onPressed: _toggleMute,
         ),
         SizedBox(
-          width: 90,
-          child: Slider(
-            value: _volume,
-            max: 100,
-            activeColor: cs.primary,
-            onChanged: (v) {
-              _volume = v;
-              _muted = v == 0;
-              player.setVolume(v);
-              setState(() {});
-            },
+          width: 78,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2.5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+            ),
+            child: Slider(
+              value: _volume,
+              max: 100,
+              activeColor: cs.primary,
+              onChanged: (v) {
+                _volume = v;
+                _muted = v == 0;
+                player.setVolume(v);
+                setState(() {});
+              },
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSpeedButton() {
+  Widget _buildSpeedButton(Color iconColor) {
     return PopupMenuButton<double>(
       tooltip: Strings.t('speed'),
       icon: Text(
         '${_rate.toStringAsFixed(2)}x',
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+        style: TextStyle(color: iconColor, fontSize: 12),
       ),
       itemBuilder: (ctx) {
         return [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((r) {
@@ -546,7 +735,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  Widget _buildRepeatButton() {
+  Widget _buildRepeatButton(Color iconColor) {
     IconData icon;
     String tip;
     switch (_repeat) {
@@ -565,17 +754,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     return IconButton(
       icon: Icon(icon),
-      color: Colors.white,
+      color: iconColor,
       tooltip: tip,
       onPressed: _cycleRepeat,
     );
   }
 
-  Widget _buildAudioMenu() {
+  Widget _buildAudioMenu(Color iconColor) {
     final tracks = player.state.tracks.audio;
     return PopupMenuButton<AudioTrack>(
       tooltip: Strings.t('audioTrack'),
-      icon: const Icon(Icons.audiotrack, color: Colors.white),
+      icon: Icon(Icons.audiotrack, color: iconColor),
       enabled: tracks.isNotEmpty,
       itemBuilder: (ctx) {
         return [
@@ -595,11 +784,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  Widget _buildSubtitleMenu() {
+  Widget _buildSubtitleMenu(Color iconColor) {
     final tracks = player.state.tracks.subtitle;
     return PopupMenuButton<SubtitleTrack>(
       tooltip: Strings.t('subtitle'),
-      icon: const Icon(Icons.subtitles, color: Colors.white),
+      icon: Icon(Icons.subtitles, color: iconColor),
       enabled: tracks.isNotEmpty,
       itemBuilder: (ctx) {
         return [
@@ -623,19 +812,43 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
+  /// 播放区与播放列表之间的可拖拽分隔条：左右拖动改变播放列表宽度。
+  Widget _buildResizeHandle(ColorScheme cs) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanUpdate: (details) {
+        // 播放列表在右侧，分隔条左移(dx<0)时列表变宽。
+        final next = (_playlistWidth - details.delta.dx).clamp(220.0, 640.0);
+        if (next != _playlistWidth) {
+          setState(() => _playlistWidth = next);
+        }
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: Container(
+          width: 5,
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              width: 1,
+              color: cs.outlineVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlaylistPanel(ColorScheme cs) {
     return Container(
-      width: 360,
-      color: cs.surface,
+      width: _playlistWidth,
+      color: cs.surfaceContainerHigh,
       child: Column(
         children: [
           Container(
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-            ),
             child: Row(
               children: [
                 Icon(Icons.queue_music, size: 16, color: cs.onSurfaceVariant),
@@ -654,61 +867,79 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                       color: cs.primary,
                     ),
                   ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.playlist.entries.length}',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                ),
               ],
             ),
           ),
           Expanded(
-            child: Row(
-              children: [
-                SizedBox(width: 150, child: _buildTreePane(cs)),
-                VerticalDivider(width: 1, color: cs.outlineVariant),
-                Expanded(child: _buildListPane(cs)),
-              ],
-            ),
+            child: widget.playlist.tree.isEmpty
+                ? Center(
+                    child: Text(
+                      Strings.t('playListEmpty'),
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    children: widget.playlist.tree
+                        .map((r) => _treeNode(r, cs, 0))
+                        .toList(),
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTreePane(ColorScheme cs) {
-    if (widget.playlist.tree.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      children: [
-        _treeTile(widget.playlist.tree.first, cs, isRoot: true),
-      ],
-    );
-  }
-
-  Widget _treeTile(VideoFolderNode node, ColorScheme cs, {bool isRoot = false}) {
-    final hasChildren = node.children.isNotEmpty || node.videos.isNotEmpty;
-    final isSelected = _selectedFolder == node;
+  /// 递归渲染文件夹树节点（含展开/收起）。
+  Widget _treeNode(VideoFolderNode node, ColorScheme cs, int depth) {
+    final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
+    final expanded = _expanded.contains(node.path);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
-          onTap: () => setState(() => _selectedFolder = node),
+          onTap: hasKids
+              ? () => setState(() {
+                    if (expanded) {
+                      _expanded.remove(node.path);
+                    } else {
+                      _expanded.add(node.path);
+                    }
+                  })
+              : null,
           child: Container(
-            color: isSelected ? cs.primary.withValues(alpha: 0.18) : null,
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            padding: EdgeInsets.only(
+              left: 8.0 + depth * 14,
+              right: 8,
+              top: 4,
+              bottom: 4,
+            ),
             child: Row(
               children: [
+                if (hasKids)
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: cs.onSurfaceVariant,
+                  )
+                else
+                  const SizedBox(width: 16),
+                const SizedBox(width: 4),
                 Icon(
-                  isSelected ? Icons.folder_open : Icons.folder,
+                  expanded ? Icons.folder_open : Icons.folder,
                   size: 16,
-                  color: isSelected ? cs.primary : Colors.amber.shade400,
+                  color: expanded ? cs.primary : Colors.amber.shade400,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    isRoot ? Strings.t('allVideos') : node.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isSelected ? cs.primary : cs.onSurface,
-                    ),
+                    node.name,
+                    style: TextStyle(fontSize: 12, color: cs.onSurface),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -716,114 +947,93 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
             ),
           ),
         ),
-        if (hasChildren)
-          ...node.children.map((c) => _treeTile(c, cs)),
+        if (hasKids && expanded)
+          ...[
+            for (final c in node.children) _treeNode(c, cs, depth + 1),
+            for (final f in node.files) _fileLeaf(f, cs, depth + 1),
+          ],
       ],
     );
   }
 
-  List<VideoEntry> _visibleVideos() {
-    if (_selectedFolder == null) return widget.playlist.entries;
-    final out = <VideoEntry>[];
-    void collect(VideoFolderNode n) {
-      out.addAll(n.videos);
-      for (final c in n.children) collect(c);
-    }
-
-    collect(_selectedFolder!);
-    return out;
-  }
-
-  Widget _buildListPane(ColorScheme cs) {
-    final videos = _visibleVideos();
-    if (videos.isEmpty) {
-      return Center(
-        child: Text(
-          Strings.t('playListEmpty'),
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-        ),
-      );
-    }
-    final headerStyle = TextStyle(
-      fontSize: 11,
-      color: cs.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-    );
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-          ),
-          child: Row(
-            children: [
-              Expanded(flex: 4, child: Text('Name', style: headerStyle)),
-              Expanded(flex: 2, child: Text(Strings.t('videoCodec'), style: headerStyle)),
-              Expanded(flex: 2, child: Text(Strings.t('videoResolution'), style: headerStyle)),
-              Expanded(flex: 1, child: Text(Strings.t('videoFps'), style: headerStyle)),
-              Expanded(flex: 2, child: Text(Strings.t('videoDuration'), style: headerStyle)),
-              Expanded(flex: 2, child: Text(Strings.t('videoSize'), style: headerStyle)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: videos.length,
-            itemBuilder: (context, index) {
-              final e = videos[index];
-              final globalIndex = widget.playlist.entries.indexOf(e);
-              final isCurrent = globalIndex == _currentIndex;
-              return InkWell(
-                onTap: () => _playIndex(globalIndex),
-                child: Container(
-                  color: isCurrent ? cs.primary.withValues(alpha: 0.18) : null,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 4,
-                        child: Row(
-                          children: [
-                            if (isCurrent)
-                              Icon(Icons.play_arrow, size: 14, color: cs.primary)
-                            else
-                              const SizedBox(width: 14),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                e.name,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isCurrent ? cs.primary : cs.onSurface,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(flex: 2, child: _metaText(e.meta?.codecText ?? Strings.t('loadingMeta'), cs)),
-                      Expanded(flex: 2, child: _metaText(e.meta?.resolutionText ?? '--', cs)),
-                      Expanded(flex: 1, child: _metaText(e.meta?.fpsText ?? '--', cs)),
-                      Expanded(flex: 2, child: _metaText(e.meta?.durationText ?? '--', cs)),
-                      Expanded(flex: 2, child: _metaText(e.sizeText, cs)),
-                    ],
-                  ),
+  /// 树中的文件叶（视频可点击播放；非视频灰显）。
+  Widget _fileLeaf(VideoEntry f, ColorScheme cs, int depth) {
+    final globalIndex = widget.playlist.entries.indexOf(f);
+    final isCurrent = globalIndex == _currentIndex && f.isVideo;
+    final playable = f.isVideo;
+    return InkWell(
+      onTap: playable ? () => _playIndex(globalIndex) : null,
+      child: Container(
+        decoration: isCurrent
+            ? BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: cs.primary, width: 3),
                 ),
-              );
-            },
-          ),
+                color: cs.primary.withValues(alpha: 0.16),
+              )
+            : null,
+        padding: EdgeInsets.only(
+          left: 8.0 + depth * 14 + 14,
+          right: 8,
+          top: 6,
+          bottom: 6,
         ),
-      ],
-    );
-  }
-
-  Widget _metaText(String text, ColorScheme cs) {
-    return Text(
-      text,
-      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-      overflow: TextOverflow.ellipsis,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              playable ? Icons.movie : Icons.insert_drive_file,
+              size: 15,
+              color: playable
+                  ? (isCurrent ? cs.primary : cs.onSurfaceVariant)
+                  : cs.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    f.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: playable
+                          ? (isCurrent ? cs.primary : cs.onSurface)
+                          : cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (playable) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '${f.meta?.codecText ?? '--'} · ${f.meta?.resolutionText ?? '--'} · ${f.meta?.fpsText ?? '--'}',
+                      style:
+                          TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      '${f.meta?.durationText ?? '--'} · ${f.sizeText}',
+                      style:
+                          TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ] else
+                    Text(
+                      f.sizeText,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (isCurrent)
+              const Icon(Icons.volume_up, size: 14, color: Colors.blue),
+          ],
+        ),
+      ),
     );
   }
 
@@ -841,16 +1051,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       name: name,
       dirPath: File(path).parent.path,
       sizeInBytes: size,
+      isVideo: true,
     );
     widget.playlist.entries.add(entry);
     if (widget.playlist.tree.isNotEmpty) {
-      widget.playlist.tree.first.videos.add(entry);
+      widget.playlist.tree.first.files.add(entry);
     }
-    _selectedFolder = widget.playlist.tree.isNotEmpty
-        ? widget.playlist.tree.first
-        : _selectedFolder;
     setState(() {});
     _playIndex(widget.playlist.entries.length - 1);
+    _startMetadataProbe();
   }
 
   Future<void> _openLocalFolder() async {
@@ -864,10 +1073,96 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     widget.playlist.tree
       ..clear()
       ..addAll(newPlaylist.tree);
-    _selectedFolder = newPlaylist.tree.isNotEmpty ? newPlaylist.tree.first : null;
+    _expanded
+      ..clear()
+      ..addAll(newPlaylist.tree.map((r) => r.path));
     _currentIndex = 0;
     _openCurrent();
     setState(() {});
     _startMetadataProbe();
+  }
+}
+
+/// 进度条组件：独立状态，自身订阅播放位置流。
+/// 拖拽期间忽略外部流更新，避免父级重建打断拖拽手势导致进度条卡死。
+class _ProgressSlider extends StatefulWidget {
+  final Player player;
+  final ColorScheme cs;
+
+  const _ProgressSlider(this.player, this.cs);
+
+  @override
+  State<_ProgressSlider> createState() => _ProgressSliderState();
+}
+
+class _ProgressSliderState extends State<_ProgressSlider> {
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  bool _dragging = false;
+  double _dragValue = 0;
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration>? _durSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.player.state.position;
+    _duration = widget.player.state.duration;
+    _posSub = widget.player.stream.position.listen((p) {
+      if (!_dragging && mounted) setState(() => _position = p);
+    });
+    _durSub = widget.player.stream.duration.listen((d) {
+      if (mounted) setState(() => _duration = d);
+    });
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _durSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = _duration;
+    final position =
+        _dragging ? Duration(seconds: _dragValue.round()) : _position;
+    final max = duration.inSeconds.toDouble();
+    final value = max > 0
+        ? position.inSeconds.toDouble().clamp(0, max).toDouble()
+        : 0.0;
+    return Row(
+      children: [
+        Text(
+          VideoMeta.formatDuration(position),
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+            ),
+            child: Slider(
+              value: value,
+              max: max > 0 ? max : 1.0,
+              activeColor: widget.cs.primary,
+              onChangeStart: (_) => setState(() => _dragging = true),
+              onChanged: (v) => setState(() => _dragValue = v),
+              onChangeEnd: (v) {
+                _dragging = false;
+                widget.player.seek(Duration(seconds: v.round()));
+              },
+            ),
+          ),
+        ),
+        Text(
+          VideoMeta.formatDuration(duration),
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+        ),
+      ],
+    );
   }
 }
