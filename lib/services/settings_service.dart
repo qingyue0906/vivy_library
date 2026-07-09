@@ -420,6 +420,44 @@ class SettingsService {
     await AppDataService.setString(_playerPlaylistWidthKey, w.toString());
   }
 
+  // --- Player hardware/software decode ---
+
+  static const _playerHwdecKey = 'player_hwdec';
+
+  /// 默认启用硬件解码。
+  static Future<bool> loadPlayerHardwareDecode() async {
+    final val = await AppDataService.getString(_playerHwdecKey);
+    return val == null || val == 'true';
+  }
+
+  static Future<void> savePlayerHardwareDecode(bool v) async {
+    await AppDataService.setString(_playerHwdecKey, v.toString());
+  }
+
+  // --- Player volume ---
+
+  static const _playerVolumeKey = 'player_volume';
+  static const _playerMutedKey = 'player_muted';
+
+  /// 默认音量为 100。
+  static Future<double> loadPlayerVolume() async {
+    final val = await AppDataService.getString(_playerVolumeKey);
+    final v = double.tryParse(val ?? '');
+    return v != null ? v.clamp(0, 100) : 100;
+  }
+
+  static Future<void> savePlayerVolume(double v) async {
+    await AppDataService.setString(_playerVolumeKey, v.toString());
+  }
+
+  static Future<bool> loadPlayerMuted() async {
+    return (await AppDataService.getString(_playerMutedKey)) == 'true';
+  }
+
+  static Future<void> savePlayerMuted(bool v) async {
+    await AppDataService.setString(_playerMutedKey, v.toString());
+  }
+
   // --- Grouping ---
 
   static Future<bool> loadGroupingEnabled() async {

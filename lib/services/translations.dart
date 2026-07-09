@@ -1604,6 +1604,18 @@ class Strings {
       AppLocale.en: 'Open Folder',
       AppLocale.ja: 'フォルダを開く',
     },
+    'hardwareDecode': {
+      AppLocale.zhHans: '硬件解码',
+      AppLocale.zhHant: '硬體解碼',
+      AppLocale.en: 'Hardware Decode',
+      AppLocale.ja: 'ハードウェアデコード',
+    },
+    'softwareDecode': {
+      AppLocale.zhHans: '软件解码',
+      AppLocale.zhHant: '軟體解碼',
+      AppLocale.en: 'Software Decode',
+      AppLocale.ja: 'ソフトウェアデコード',
+    },
     'closePlayer': {
       AppLocale.zhHans: '关闭播放器',
       AppLocale.zhHant: '關閉播放器',

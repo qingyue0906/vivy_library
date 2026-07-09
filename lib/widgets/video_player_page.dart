@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit/src/player/native/player/real.dart' // ignore: implementation_imports
+    show NativePlayer;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
@@ -59,6 +61,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _probing = false;
   int _probeGen = 0;
 
+  /// 是否使用硬件解码。默认开启；切换时重新载入当前视频以生效。
+  bool _useHardwareDecode = true;
+
   Player? _probePlayer;
 
   /// 播放列表滚动控制器（配合 SmoothScroll 与 Scrollbar 实现平滑滚动）。
@@ -83,6 +88,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       _ensureExpanded(widget.playlist.entries[_currentIndex]);
     }
     _initPlayer();
+    _initPlayback();
     _startMetadataProbe();
     SettingsService.loadPlayerShowMilliseconds()
         .then((v) => setState(() => _showMilliseconds = v));
@@ -92,6 +98,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         .then((v) => setState(() => _playlistWidth = v));
     windowManager.isMaximized()
         .then((v) => setState(() => _isMaximized = v));
+    // 载入并应用持久化的音量与静音状态。
+    () async {
+      _volume = await SettingsService.loadPlayerVolume();
+      _muted = await SettingsService.loadPlayerMuted();
+      player.setVolume(_muted ? 0 : _volume);
+      if (mounted) setState(() {});
+    }();
   }
 
   /// 创建后台探测用的 [Player]。
@@ -110,7 +123,26 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     player.stream.completed.listen((_) => _onCompleted());
     player.stream.tracks.listen((_) => _updateCurrentMetaFromPlayer());
     player.stream.duration.listen((_) => _updateCurrentMetaFromPlayer());
+  }
+
+  /// 先读取硬件解码偏好并写入 mpv 的 hwdec 选项，再打开当前视频，
+  /// 保证解码方式从首次播放起即生效（hwdec 改变需重新载入文件）。
+  Future<void> _initPlayback() async {
+    _useHardwareDecode = await SettingsService.loadPlayerHardwareDecode();
+    await _setHwdecOption(_useHardwareDecode);
+    if (!mounted) return;
+    setState(() {});
     _openCurrent();
+  }
+
+  /// 通过 media_kit 内部 [NativePlayer.setProperty]（公开但未在基类暴露）写入 mpv 的
+  /// hwdec 选项。media_kit 未提供公开的解码方式 API，这里走其官方的“escape hatch”。
+  Future<void> _setHwdecOption(bool hardware) async {
+    final platform = player.platform;
+    if (platform is! NativePlayer) return;
+    try {
+      await platform.setProperty('hwdec', hardware ? 'auto' : 'no');
+    } catch (_) {}
   }
 
   void _openCurrent() {
@@ -331,18 +363,45 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _volume = (_volume + delta).clamp(0, 100);
     _muted = _volume == 0;
     player.setVolume(_volume);
+    SettingsService.savePlayerVolume(_volume);
+    SettingsService.savePlayerMuted(_muted);
     setState(() {});
   }
 
   void _toggleMute() {
     _muted = !_muted;
     player.setVolume(_muted ? 0 : _volume);
+    SettingsService.savePlayerMuted(_muted);
     setState(() {});
   }
 
   void _cycleRepeat() {
     _repeat = _RepeatMode.values[(_repeat.index + 1) % _RepeatMode.values.length];
     setState(() {});
+  }
+
+  void _toggleDecode() {
+    _useHardwareDecode = !_useHardwareDecode;
+    SettingsService.savePlayerHardwareDecode(_useHardwareDecode);
+    setState(() {});
+    _applyHwdec();
+  }
+
+  /// 切换硬件/软件解码：mpv 的 hwdec 选项改变需重新载入文件才生效。
+  /// 重新打开当前视频并恢复到切换前的播放位置。
+  Future<void> _applyHwdec() async {
+    if (widget.playlist.entries.isEmpty) return;
+    if (_currentIndex < 0 || _currentIndex >= widget.playlist.entries.length) {
+      return;
+    }
+    final pos = player.state.position;
+    await _setHwdecOption(_useHardwareDecode);
+    final entry = widget.playlist.entries[_currentIndex];
+    await player.open(Media(entry.path), play: true);
+    if (pos > Duration.zero) {
+      // 等待媒体载入后再 seek，避免被重置。
+      await player.seek(pos).catchError((_) {});
+    }
   }
 
   /// 真正的 OS 全屏：调用 window_manager 缩放窗口铺满屏幕（隐藏任务栏）。
@@ -610,6 +669,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         _togglePlay();
         _revealOnTap();
       },
+      onSecondaryTap: _close,
       child: Container(
         color: Colors.black,
         alignment: Alignment.center,
@@ -809,6 +869,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 _buildRepeatButton(iconColor),
                 _buildAudioMenu(iconColor),
                 _buildSubtitleMenu(iconColor),
+                _buildDecodeButton(iconColor),
                 IconButton(
                   icon: const Icon(Icons.folder_open),
                   color: iconColor,
@@ -878,6 +939,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 _volume = v;
                 _muted = v == 0;
                 player.setVolume(v);
+                SettingsService.savePlayerVolume(_volume);
+                SettingsService.savePlayerMuted(_muted);
                 setState(() {});
               },
             ),
@@ -984,6 +1047,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         ];
       },
       onSelected: (t) => player.setSubtitleTrack(t),
+    );
+  }
+
+  /// 解码方式切换：硬件解码(图标 memory) / 软件解码(图标 computer)。
+  /// tooltip 显示当前模式，点击在两者间切换并重新载入当前视频。
+  Widget _buildDecodeButton(Color iconColor) {
+    final isHw = _useHardwareDecode;
+    return IconButton(
+      icon: Icon(isHw ? Icons.memory : Icons.computer),
+      color: isHw ? iconColor : iconColor.withValues(alpha: 0.55),
+      tooltip: isHw ? Strings.t('hardwareDecode') : Strings.t('softwareDecode'),
+      onPressed: _toggleDecode,
     );
   }
 
