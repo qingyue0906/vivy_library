@@ -227,6 +227,7 @@ class GridArea extends StatefulWidget {
   final void Function(List<String> paths)? onFileDrop;
   final GridSettings gridSettings;
   final double middleOpacity;
+  final void Function(LibraryItem item, {String? startPath}) onOpenVideoPlayer;
 
   const GridArea({
     super.key,
@@ -245,6 +246,7 @@ class GridArea extends StatefulWidget {
     this.middleOpacity = 1.0,
     this.onCreateItem,
     this.onFileDrop,
+    required this.onOpenVideoPlayer,
   });
 
   @override
@@ -416,6 +418,12 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                                 height: filePanelHeight,
                                 backgroundOpacity: middleOpacity,
                                 gifMode: gridSettings.fileGifMode,
+                                onPlayProject: () =>
+                                    widget.onOpenVideoPlayer(_panelItem!),
+                                onPlayVideoFile: (path) => widget.onOpenVideoPlayer(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
                               ),
                             ],
                           ),
@@ -567,6 +575,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
               onTap: () => state.setSelectedItem(item),
               onCtrlTap: () => state.toggleItemSelection(item),
               onShiftTap: () => state.selectRange(item, items),
+              onDoubleTap: () => widget.onOpenVideoPlayer(item),
               onRightClick: (globalPos) =>
                   _showContextMenu(context, item, globalPos),
               gifMode: gridSettings.cardGifMode,

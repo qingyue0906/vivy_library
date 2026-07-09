@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
+import '../models/library_item.dart';
+import '../widgets/video_player_page.dart';
+import '../services/video_playlist_service.dart';
 import 'category_panel.dart';
 import 'detail_panel.dart';
 import 'grid_area.dart';
@@ -482,6 +485,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     ),
                   ).whenComplete(() => _createDialogShowing = false);
                 },
+                onOpenVideoPlayer: _openVideoPlayer,
               );
             },
           ),
@@ -570,6 +574,35 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       rightPanelWidth: _rightPanelWidth.value,
       filePanelHeight: _filePanelHeight.value,
     ));
+  }
+
+  /// 打开内置视频播放器：递归扫描项目内所有视频构建播放列表，
+  /// [startPath] 指定从哪个视频开始播放（底部面板双击视频文件时传入）。
+  Future<void> _openVideoPlayer(LibraryItem item, {String? startPath}) async {
+    final playlist = await VideoPlaylistService.build(item);
+    if (!mounted) return;
+    if (playlist.entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Strings.t('noVideoFiles')),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+    final startIndex = startPath != null
+        ? playlist.entries.indexWhere((e) => e.path == startPath)
+        : 0;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => VideoPlayerPage(
+          playlist: playlist,
+          initialIndex: startIndex < 0 ? 0 : startIndex,
+          title: item.info.title,
+        ),
+      ),
+    );
   }
 }
 

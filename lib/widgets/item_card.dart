@@ -14,6 +14,7 @@ class ItemCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onCtrlTap;
   final VoidCallback onShiftTap;
+  final VoidCallback? onDoubleTap;
   final void Function(Offset globalPosition) onRightClick;
   final GifDisplayMode gifMode;
 
@@ -26,6 +27,7 @@ class ItemCard extends StatefulWidget {
     required this.onTap,
     required this.onCtrlTap,
     required this.onShiftTap,
+    this.onDoubleTap,
     required this.onRightClick,
     this.gifMode = GifDisplayMode.hover,
   });
@@ -36,8 +38,18 @@ class ItemCard extends StatefulWidget {
 
 class _ItemCardState extends State<ItemCard> {
   bool _isHovered = false;
+  DateTime? _lastTapTime;
 
+  /// 手动双击判定：300ms 内二次点击触发 [onDoubleTap]，单击立即响应无延迟。
   void _handleTap() {
+    final now = DateTime.now();
+    if (_lastTapTime != null &&
+        now.difference(_lastTapTime!).inMilliseconds < 300) {
+      _lastTapTime = null;
+      widget.onDoubleTap?.call();
+      return;
+    }
+    _lastTapTime = now;
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
     if (isShift) {
@@ -72,15 +84,12 @@ class _ItemCardState extends State<ItemCard> {
         ClipRRect(
           borderRadius: radius,
           child: GestureDetector(
+            onTap: _handleTap,
             onSecondaryTapUp: (details) =>
                 widget.onRightClick(details.globalPosition),
-            child: InkWell(
-              onTap: _handleTap,
-              onHover: (v) => setState(() => _isHovered = v),
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-              customBorder: RoundedRectangleBorder(borderRadius: radius),
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _isHovered = true),
+              onExit: (_) => setState(() => _isHovered = false),
               child: Container(
                 height: widget.displayHeight,
                 clipBehavior: Clip.antiAlias,

@@ -26,6 +26,8 @@ class FileBrowserPanel extends StatefulWidget {
   final double height;
   final double backgroundOpacity;
   final GifDisplayMode gifMode;
+  final VoidCallback? onPlayProject;
+  final void Function(String path)? onPlayVideoFile;
 
   const FileBrowserPanel({
     super.key,
@@ -35,6 +37,8 @@ class FileBrowserPanel extends StatefulWidget {
     required this.height,
     this.backgroundOpacity = 1.0,
     this.gifMode = GifDisplayMode.hover,
+    this.onPlayProject,
+    this.onPlayVideoFile,
   });
 
   @override
@@ -156,6 +160,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
                 : Strings.t('showInfo'),
             onTap: widget.state.toggleSystemFiles,
           ),
+          if (widget.item.info.type.toLowerCase() == 'video')
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.play_arrow,
+              tooltip: Strings.t('openProjectVideos'),
+              onTap: widget.onPlayProject ?? () {},
+            ),
           _headerIconButton(
             c: c,
             cs: cs,
@@ -309,7 +321,24 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         final list = _getRawList().map((e) => e.path).toList();
         widget.state.selectBrowserRange(file.path, list);
       },
-      onDoubleTap: () => _openFile(file.path),
+      onDoubleTap: () {
+        final ext = file.path.toLowerCase().split('.').last;
+        final isVid = const {
+          'mp4',
+          'mkv',
+          'avi',
+          'mov',
+          'wmv',
+          'flv',
+          'webm',
+          'm4v',
+        }.contains(ext);
+        if (widget.item.info.type.toLowerCase() == 'video' && isVid) {
+          widget.onPlayVideoFile?.call(file.path);
+        } else {
+          _openFile(file.path);
+        }
+      },
       onRightClick: (globalPos) => _showContextMenu(context, file, globalPos),
     );
   }
