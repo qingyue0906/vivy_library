@@ -63,6 +63,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _probing = false;
   int _probeGen = 0;
 
+  /// 最近一次真正打开视频的时间戳。用于过滤 media_kit 在 open 瞬间误发的
+  /// [completed] 事件：若 completed 在打开后极短时间内触发且播放位置仍接近 0，
+  /// 视为误触发而非真正播完，避免据此自动跳到下一集（到末尾时还会回绕到第一个）。
+  DateTime? _lastOpenAt;
+
+
   /// 是否使用硬件解码。默认开启；切换时重新载入当前视频以生效。
   bool _useHardwareDecode = true;
 
@@ -156,6 +162,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       return;
     }
     final entry = widget.playlist.entries[_currentIndex];
+    _lastOpenAt = DateTime.now();
     player.open(Media(entry.path), play: true);
   }
 
@@ -307,6 +314,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 
   void _onCompleted() {
+    // 过滤打开瞬间的误触发：media_kit 有时在 open 后会立刻发一次 completed，
+    // 此时播放位置仍接近 0，并非真正播完。若据此自动下一集，会跳到错误的视频
+    // （到列表末尾时还会回绕到第一个）。仅当打开已超过 1.5s 且确有播放进度时才视为有效。
+    final justOpened = _lastOpenAt != null &&
+        DateTime.now().difference(_lastOpenAt!) <
+            const Duration(milliseconds: 1500);
+    if (justOpened || player.state.position < const Duration(seconds: 1)) {
+      return;
+    }
     switch (_repeat) {
       case _RepeatMode.one:
         player.seek(Duration.zero);
@@ -403,6 +419,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     final pos = player.state.position;
     await _setHwdecOption(_useHardwareDecode);
     final entry = widget.playlist.entries[_currentIndex];
+    _lastOpenAt = DateTime.now();
     await player.open(Media(entry.path), play: true);
     if (pos > Duration.zero) {
       // 等待媒体载入后再 seek，避免被重置。
