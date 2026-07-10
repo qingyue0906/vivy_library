@@ -13,6 +13,7 @@ import '../services/ebook_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import '../services/ebook_playlist_service.dart';
+import 'smooth_scroll.dart';
 
 /// 内置电子书阅读器。窗口/全屏骨架、顶栏拖拽+窗口控件、右侧可拖拽面板、点击分区
 /// 翻页、键盘、右键退出 均复用漫画阅读器同一套交互；内容区按格式与阅读模式渲染。
@@ -753,15 +754,20 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     return SelectionArea(
       child: Scrollbar(
         controller: _contentScrollController,
-        child: SingleChildScrollView(
+        child: SmoothScroll(
           controller: _contentScrollController,
-          padding: EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < _book!.chapters.length; i++)
-                _txtChapterBlock(i),
-            ],
+          builder: (context, controller, physics) => SingleChildScrollView(
+            controller: controller,
+            physics: physics,
+            padding:
+                EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < _book!.chapters.length; i++)
+                  _txtChapterBlock(i),
+              ],
+            ),
           ),
         ),
       ),
@@ -816,28 +822,36 @@ class _EbookReaderPageState extends State<EbookReaderPage>
           child: SelectionArea(
             child: Scrollbar(
               controller: _contentScrollController,
-              child: SingleChildScrollView(
+              child: SmoothScroll(
                 controller: _contentScrollController,
-                padding: EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (ch.title.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          ch.title,
-                          style: _textStyle(
-                            size: _fontSize + 4,
-                            weight: FontWeight.bold,
+                builder: (context, controller, physics) =>
+                    SingleChildScrollView(
+                  controller: controller,
+                  physics: physics,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _pageMargin,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (ch.title.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            ch.title,
+                            style: _textStyle(
+                              size: _fontSize + 4,
+                              weight: FontWeight.bold,
+                            ),
                           ),
                         ),
+                      Html(
+                        data: ch.html ?? '',
+                        style: _htmlStyle(),
                       ),
-                    Html(
-                      data: ch.html ?? '',
-                      style: _htmlStyle(),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -853,15 +867,20 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     return SelectionArea(
       child: Scrollbar(
         controller: _contentScrollController,
-        child: SingleChildScrollView(
+        child: SmoothScroll(
           controller: _contentScrollController,
-          padding: EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < _book!.chapters.length; i++)
-                _richChapterBlock(i),
-            ],
+          builder: (context, controller, physics) => SingleChildScrollView(
+            controller: controller,
+            physics: physics,
+            padding:
+                EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < _book!.chapters.length; i++)
+                  _richChapterBlock(i),
+              ],
+            ),
           ),
         ),
       ),
@@ -921,17 +940,22 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   Widget _buildPdfScroll(ColorScheme cs) {
     return Scrollbar(
       controller: _contentScrollController,
-      child: SingleChildScrollView(
+      child: SmoothScroll(
         controller: _contentScrollController,
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          children: [
-            for (var i = 0; i < _book!.chapters.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Center(child: _pdfImage(_book!.chapters[i].pdfPage!, 600)),
-              ),
-          ],
+        builder: (context, controller, physics) => SingleChildScrollView(
+          controller: controller,
+          physics: physics,
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            children: [
+              for (var i = 0; i < _book!.chapters.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child:
+                      Center(child: _pdfImage(_book!.chapters[i].pdfPage!, 600)),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1408,12 +1432,16 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     return Scrollbar(
       controller: _treeScrollController,
       thumbVisibility: true,
-      child: ListView(
+      child: SmoothScroll(
         controller: _treeScrollController,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        children: [
-          for (final r in tree) _treeNode(r, cs, 0),
-        ],
+        builder: (context, controller, physics) => ListView(
+          controller: controller,
+          physics: physics,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          children: [
+            for (final r in tree) _treeNode(r, cs, 0),
+          ],
+        ),
       ),
     );
   }
@@ -1541,34 +1569,41 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     return Scrollbar(
       controller: _tocScrollController,
       thumbVisibility: true,
-      child: ListView.builder(
+      child: SmoothScroll(
         controller: _tocScrollController,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: book.chapters.length,
-        itemBuilder: (context, i) {
-          final isCurrent = i == _chapterIndex;
-          return InkWell(
-            onTap: () => _jumpToChapter(i),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: isCurrent
-                  ? BoxDecoration(
-                      border: Border(left: BorderSide(color: cs.primary, width: 3)),
-                      color: cs.primary.withValues(alpha: 0.16),
-                    )
-                  : null,
-              child: Text(
-                book.chapters[i].title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isCurrent ? cs.primary : cs.onSurface,
+        builder: (context, controller, physics) => ListView.builder(
+          controller: controller,
+          physics: physics,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: book.chapters.length,
+          itemBuilder: (context, i) {
+            final isCurrent = i == _chapterIndex;
+            return InkWell(
+              onTap: () => _jumpToChapter(i),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: isCurrent
+                    ? BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: cs.primary, width: 3),
+                        ),
+                        color: cs.primary.withValues(alpha: 0.16),
+                      )
+                    : null,
+                child: Text(
+                  book.chapters[i].title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isCurrent ? cs.primary : cs.onSurface,
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1588,46 +1623,54 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     return Scrollbar(
       controller: _tocScrollController,
       thumbVisibility: true,
-      child: ListView.builder(
+      child: SmoothScroll(
         controller: _tocScrollController,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: _results.length,
-        itemBuilder: (context, i) {
-          final r = _results[i];
-          return InkWell(
-            onTap: () => _gotoResult(r),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _book!.chapters[r.chapterIndex].title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: cs.primary,
+        builder: (context, controller, physics) => ListView.builder(
+          controller: controller,
+          physics: physics,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: _results.length,
+          itemBuilder: (context, i) {
+            final r = _results[i];
+            return InkWell(
+              onTap: () => _gotoResult(r),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    r.snippet,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-                  ),
-                ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _book!.chapters[r.chapterIndex].title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      r.snippet,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
