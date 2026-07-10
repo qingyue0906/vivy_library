@@ -50,6 +50,16 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   final ScrollController _thumbScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
+  /// 缩略图树中已展开的文件夹/压缩包节点路径集合（默认全展开）。
+  final Set<String> _expandedNodes = {};
+
+  /// 页码（扁平 entry）按 id 查索引，供树渲染 O(1) 定位高亮与跳转。
+  final Map<String, int> _pageIndexById = {};
+
+  /// 双页模式下的“跨页”分组：同一来源（压缩包或同一文件夹）的连续页成对，
+  /// 不同来源的页不混排（如根目录的 1.png 不会与 2.zip 的首页拼在同一跨页）。
+  late final List<List<int>> _spreads;
+
   List<ComicPage> get _entries => widget.playlist.entries;
 
   int get _step => _layout == ComicLayoutMode.double ? 2 : 1;
@@ -62,6 +72,11 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
       0,
       _entries.isEmpty ? 0 : _entries.length - 1,
     );
+    for (var i = 0; i < _entries.length; i++) {
+      _pageIndexById[_entries[i].id] = i;
+    }
+    _spreads = _buildSpreads();
+    _initExpandedAll();
     if (widget.initialThumbnailWidth != null) {
       _thumbWidth = widget.initialThumbnailWidth!;
     }
@@ -88,6 +103,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   void _setIndex(int i) {
     final clamped = i.clamp(0, _entries.length - 1);
     if (clamped == _currentIndex) return;
+    _expandAncestors(_entries[clamped]);
     setState(() => _currentIndex = clamped);
     _ensureThumbVisible();
     if (_layout == ComicLayoutMode.vertical) _scrollVerticalTo(clamped);
@@ -95,21 +111,93 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
 
   void _next() {
     if (_entries.isEmpty) return;
-    _setIndex((_currentIndex + _step).clamp(0, _entries.length - 1));
+    if (_layout == ComicLayoutMode.double) {
+      _setIndex(_nextSpreadStart(_currentIndex));
+    } else {
+      _setIndex((_currentIndex + _step).clamp(0, _entries.length - 1));
+    }
   }
 
   void _prev() {
     if (_entries.isEmpty) return;
-    _setIndex((_currentIndex - _step).clamp(0, _entries.length - 1));
+    if (_layout == ComicLayoutMode.double) {
+      _setIndex(_prevSpreadStart(_currentIndex));
+    } else {
+      _setIndex((_currentIndex - _step).clamp(0, _entries.length - 1));
+    }
   }
 
   void _first() => _setIndex(0);
-  void _last() => _setIndex(_entries.length - 1);
+  void _last() => _setIndex(
+        _layout == ComicLayoutMode.double && _spreads.isNotEmpty
+            ? _spreads.last.first
+            : _entries.length - 1,
+      );
 
   void _jumpTo(int i) {
-    setState(() => _currentIndex = i.clamp(0, _entries.length - 1));
+    final clamped = i.clamp(0, _entries.length - 1);
+    // 双页模式跳转到点击页所在跨页的起始页，避免把不同来源的页拼在一起。
+    final target = _layout == ComicLayoutMode.double
+        ? _spreadStart(clamped)
+        : clamped;
+    _expandAncestors(_entries[target]);
+    setState(() => _currentIndex = target);
     _ensureThumbVisible();
     if (_layout == ComicLayoutMode.vertical) _scrollVerticalTo(_currentIndex);
+  }
+
+  // ===== 双页跨页分组 =====
+
+  /// 来源标识：压缩包内页取 archivePath；直接图片取所在文件夹路径。
+  /// 仅同来源的连续页才允许拼在同一跨页。
+  String _sourceKey(ComicPage p) => p.isArchived ? p.archivePath! : p.dirPath;
+
+  /// 将扁平 entries 按“同来源连续页成对、异来源拆开”切分为跨页。
+  List<List<int>> _buildSpreads() {
+    final sp = <List<int>>[];
+    var i = 0;
+    final n = _entries.length;
+    while (i < n) {
+      final key = _sourceKey(_entries[i]);
+      if (i + 1 < n && _sourceKey(_entries[i + 1]) == key) {
+        sp.add([i, i + 1]);
+        i += 2;
+      } else {
+        sp.add([i]);
+        i += 1;
+      }
+    }
+    return sp;
+  }
+
+  /// [index] 所在跨页的起始页索引。
+  int _spreadStart(int index) {
+    final i = index.clamp(0, _entries.length - 1);
+    for (final s in _spreads) {
+      if (i >= s.first && i <= s.last) return s.first;
+    }
+    return i;
+  }
+
+  int _nextSpreadStart(int index) {
+    final start = _spreadStart(index);
+    final si = _spreads.indexWhere((s) => s.first == start);
+    if (si < 0 || si + 1 >= _spreads.length) return start;
+    return _spreads[si + 1].first;
+  }
+
+  int _prevSpreadStart(int index) {
+    final start = _spreadStart(index);
+    final si = _spreads.indexWhere((s) => s.first == start);
+    if (si <= 0) return start;
+    return _spreads[si - 1].first;
+  }
+
+  /// 当前跨页包含的页索引（用于双页模式下高亮与取图）。
+  List<int> get _currentSpreadPages {
+    final start = _spreadStart(_currentIndex);
+    final si = _spreads.indexWhere((s) => s.first == start);
+    return si < 0 ? [_currentIndex] : _spreads[si];
   }
 
   void _scrollVerticalTo(int index) {
@@ -140,6 +228,124 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   final Map<int, GlobalKey> _verticalKeys = {};
   GlobalKey _thumbKey(int i) => _thumbKeys.putIfAbsent(i, () => GlobalKey());
   GlobalKey _verticalKey(int i) => _verticalKeys.putIfAbsent(i, () => GlobalKey());
+
+  // ===== 缩略图文件夹/压缩包树 =====
+
+  /// 默认展开全部节点（保持旧版“全部可见”的体验，同时提供折叠分组）。
+  void _initExpandedAll() {
+    for (final root in widget.playlist.tree) _collectPaths(root);
+  }
+
+  void _collectPaths(ComicFolderNode node) {
+    _expandedNodes.add(node.path);
+    for (final c in node.children) _collectPaths(c);
+  }
+
+  /// 确保包含 [page] 的所有祖先节点已展开，使当前页在树中可见。
+  void _expandAncestors(ComicPage page) {
+    for (final root in widget.playlist.tree) {
+      final chain = <ComicFolderNode>[];
+      if (_nodeContains(root, page, chain)) {
+        var changed = false;
+        for (final n in chain) {
+          if (_expandedNodes.add(n.path)) changed = true;
+        }
+        if (changed) setState(() {});
+        return;
+      }
+    }
+  }
+
+  bool _nodeContains(
+    ComicFolderNode node,
+    ComicPage page,
+    List<ComicFolderNode> chain,
+  ) {
+    chain.add(node);
+    if (node.files.any((f) => f.id == page.id)) return true;
+    for (final c in node.children) {
+      if (_nodeContains(c, page, chain)) return true;
+    }
+    chain.removeLast();
+    return false;
+  }
+
+  /// 计算当前应显示的树行（仅展开节点可见），保持与扁平 entries 相同的 DFS 顺序。
+  List<_TreeRow> _visibleRows() {
+    final rows = <_TreeRow>[];
+    for (final root in widget.playlist.tree) {
+      _appendVisible(root, 0, rows);
+    }
+    return rows;
+  }
+
+  void _appendVisible(ComicFolderNode node, int depth, List<_TreeRow> rows) {
+    final hasContent = node.children.isNotEmpty || node.files.isNotEmpty;
+    if (!hasContent) return;
+    rows.add(_TreeRow.header(node, depth));
+    if (_expandedNodes.contains(node.path)) {
+      for (final f in node.files) {
+        rows.add(_TreeRow.file(f, depth + 1));
+      }
+      for (final c in node.children) {
+        _appendVisible(c, depth + 1, rows);
+      }
+    }
+  }
+
+  Widget _treeHeaderRow(ColorScheme cs, ComicFolderNode node, int depth) {
+    final expanded = _expandedNodes.contains(node.path);
+    return InkWell(
+      onTap: () => setState(() {
+        if (expanded) {
+          _expandedNodes.remove(node.path);
+        } else {
+          _expandedNodes.add(node.path);
+        }
+      }),
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 8.0 + depth * 14,
+          right: 8,
+          top: 4,
+          bottom: 4,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              expanded ? Icons.expand_more : Icons.chevron_right,
+              size: 16,
+              color: cs.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              node.isArchive ? Icons.folder_zip : Icons.folder,
+              size: 14,
+              color: node.isArchive ? Colors.orange.shade400 : Colors.amber.shade400,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                node.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${node.files.length}',
+              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ===== 设置切换 =====
 
@@ -451,9 +657,10 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
 
   Widget _buildDouble() {
     final rtl = _direction == ComicReadDirection.rtl;
-    final left = _entries[_currentIndex];
+    final spread = _currentSpreadPages;
+    final left = _entries[spread[0]];
     final ComicPage? right =
-        _currentIndex + 1 < _entries.length ? _entries[_currentIndex + 1] : null;
+        spread.length > 1 ? _entries[spread[1]] : null;
     return LayoutBuilder(
       builder: (context, cons) {
         final halfW = cons.maxWidth / 2;
@@ -480,7 +687,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
         // LTR：左=当前页，右=下一页；RTL：右=当前页，左=下一页。
         final children = rtl ? [pageB, pageA] : [pageA, pageB];
         return _ZoomablePage(
-          pageKey: _currentIndex,
+          pageKey: spread[0],
           viewportWidth: cons.maxWidth,
           viewportHeight: cons.maxHeight,
           invertHorizontal: rtl,
@@ -889,14 +1096,23 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
                     thumbVisibility: true,
                     child: SmoothScroll(
                       controller: _thumbScrollController,
-                      builder: (context, controller, physics) =>
-                          ListView.builder(
-                        controller: controller,
-                        physics: physics,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        itemCount: _entries.length,
-                        itemBuilder: (context, i) => _thumbItem(cs, i),
-                      ),
+                      builder: (context, controller, physics) {
+                        final rows = _visibleRows();
+                        return ListView.builder(
+                          controller: controller,
+                          physics: physics,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: rows.length,
+                          itemBuilder: (context, i) {
+                            final row = rows[i];
+                            if (row.node != null) {
+                              return _treeHeaderRow(cs, row.node!, row.depth);
+                            }
+                            final index = _pageIndexById[row.page!.id]!;
+                            return _thumbItem(cs, index, indent: row.depth * 14.0);
+                          },
+                        );
+                      },
                     ),
                   ),
           ),
@@ -905,15 +1121,21 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
     );
   }
 
-  Widget _thumbItem(ColorScheme cs, int index) {
+  Widget _thumbItem(ColorScheme cs, int index, {double indent = 0}) {
     final page = _entries[index];
-    final isCurrent = index == _currentIndex ||
-        (_layout == ComicLayoutMode.double && index == _currentIndex + 1);
+    final isCurrent = _layout == ComicLayoutMode.double
+        ? _currentSpreadPages.contains(index)
+        : index == _currentIndex;
     return InkWell(
       key: _thumbKey(index),
       onTap: () => _jumpTo(index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        padding: EdgeInsets.only(
+          left: 8 + indent,
+          right: 8,
+          top: 5,
+          bottom: 5,
+        ),
         decoration: isCurrent
             ? BoxDecoration(
                 border: Border(left: BorderSide(color: cs.primary, width: 3)),
@@ -982,6 +1204,16 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
       ),
     );
   }
+}
+
+/// 缩略图树的一行描述：要么是文件夹/压缩包节点表头，要么是图片文件。
+class _TreeRow {
+  final ComicFolderNode? node;
+  final ComicPage? page;
+  final int depth;
+
+  _TreeRow.header(this.node, this.depth) : page = null;
+  _TreeRow.file(this.page, this.depth) : node = null;
 }
 
 /// 直接图片或压缩包内图片的统一显示：直接图用 [Image.file]，压缩包内条目
