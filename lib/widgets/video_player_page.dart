@@ -1293,19 +1293,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   ),
                   if (playable) ...[
                     const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        _codecChip(cs, f.meta?.codecText),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            '${f.meta?.resolutionText ?? '--'} · ${f.meta?.fpsText ?? '--'}',
-                            style: TextStyle(
-                                fontSize: 10, color: cs.onSurfaceVariant),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      _metaLine(f),
+                      style: TextStyle(
+                          fontSize: 10, color: cs.onSurfaceVariant),
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 1),
                     Text(
@@ -1333,16 +1325,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  /// 编码格式：普通文本显示（不再用主题色高亮徽标）。
-  Widget _codecChip(ColorScheme cs, String? codec) {
-    final label = (codec != null && codec != '--') ? codec : 'N/A';
-    return Text(
-      label,
-      style: TextStyle(
-        fontSize: 10,
-        color: cs.onSurfaceVariant,
-      ),
-    );
+  /// 播放列表中的元信息行：编码格式 · 分辨率 · 帧率，用“·”分隔。
+  String _metaLine(VideoEntry f) {
+    final codec = f.meta?.codecText;
+    final codecLabel = (codec != null && codec != '--') ? codec : 'N/A';
+    return [
+      codecLabel,
+      f.meta?.resolutionText ?? '--',
+      f.meta?.fpsText ?? '--',
+    ].join(' · ');
   }
 
   Future<void> _openLocalFile() async {

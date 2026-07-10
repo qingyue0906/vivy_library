@@ -173,6 +173,10 @@ class _ItemCardState extends State<ItemCard> {
         return Icons.photo;
       case 'comic':
         return Icons.auto_stories;
+      case 'voice':
+        return Icons.mic;
+      case 'music':
+        return Icons.music_note;
       default:
         return Icons.label;
     }
@@ -196,6 +200,10 @@ class _ItemCardState extends State<ItemCard> {
         return Colors.greenAccent;
       case 'comic':
         return Colors.purpleAccent;
+      case 'voice':
+        return Colors.orangeAccent;
+      case 'music':
+        return Colors.cyanAccent;
       default:
         return Colors.grey;
     }
