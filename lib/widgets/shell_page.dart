@@ -670,6 +670,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     await SettingsService.loadEbookPageMargin();
     await SettingsService.loadEbookJustify();
     await SettingsService.loadEbookShowToc();
+    await SettingsService.loadEbookTocWidth();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

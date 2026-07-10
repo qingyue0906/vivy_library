@@ -597,6 +597,7 @@ class SettingsService {
   static const _ebookPageMarginKey = 'ebook_page_margin';
   static const _ebookJustifyKey = 'ebook_justify';
   static const _ebookShowTocKey = 'ebook_show_toc';
+  static const _ebookTocWidthKey = 'ebook_toc_width';
 
   static EbookReadMode _cachedEbookReadMode = EbookReadMode.paginated;
   static double _cachedEbookFontSize = 16.0;
@@ -606,6 +607,7 @@ class SettingsService {
   static double _cachedEbookPageMargin = 28.0;
   static bool _cachedEbookJustify = true;
   static bool _cachedEbookShowToc = true;
+  static double _cachedEbookTocWidth = 220.0;
 
   static EbookReadMode loadEbookReadModeSync() => _cachedEbookReadMode;
   static double loadEbookFontSizeSync() => _cachedEbookFontSize;
@@ -615,6 +617,7 @@ class SettingsService {
   static double loadEbookPageMarginSync() => _cachedEbookPageMargin;
   static bool loadEbookJustifySync() => _cachedEbookJustify;
   static bool loadEbookShowTocSync() => _cachedEbookShowToc;
+  static double loadEbookTocWidthSync() => _cachedEbookTocWidth;
 
   static Future<EbookReadMode> loadEbookReadMode() async {
     final val = await AppDataService.getString(_ebookReadModeKey);
@@ -711,6 +714,18 @@ class SettingsService {
   static Future<void> saveEbookShowToc(bool v) async {
     _cachedEbookShowToc = v;
     await AppDataService.setString(_ebookShowTocKey, v.toString());
+  }
+
+  static Future<double> loadEbookTocWidth() async {
+    final val = await AppDataService.getString(_ebookTocWidthKey);
+    final v = double.tryParse(val ?? '');
+    _cachedEbookTocWidth = v != null ? v.clamp(160.0, 420.0) : 220.0;
+    return _cachedEbookTocWidth;
+  }
+
+  static Future<void> saveEbookTocWidth(double w) async {
+    _cachedEbookTocWidth = w.clamp(160.0, 420.0);
+    await AppDataService.setString(_ebookTocWidthKey, w.toString());
   }
 
   // --- Grouping ---

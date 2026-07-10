@@ -86,7 +86,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   bool _showBottom = false;
   Timer? _hideTimer;
 
-  double _tocWidth = 220.0;
+  double _tocWidth = SettingsService.loadEbookTocWidthSync();
 
   @override
   void initState() {
@@ -597,7 +597,10 @@ class _EbookReaderPageState extends State<EbookReaderPage>
                     final next = (_tocWidth - dx).clamp(160.0, 420.0);
                     if (next != _tocWidth) setState(() => _tocWidth = next);
                   },
-                  onDragEnd: () => SettingsService.saveEbookShowToc(_showToc),
+                  onDragEnd: () {
+                    SettingsService.saveEbookShowToc(_showToc);
+                    SettingsService.saveEbookTocWidth(_tocWidth);
+                  },
                 ),
                 _buildTocPanel(cs),
               ],
