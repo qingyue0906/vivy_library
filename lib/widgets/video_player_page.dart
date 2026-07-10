@@ -49,6 +49,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _showPlaylist = SettingsService.loadPlayerShowPlaylistSync();
   bool _showSettings = false;
   bool _showMilliseconds = SettingsService.loadPlayerShowMillisecondsSync();
+  bool _switchingDecode = false;
   double _playlistWidth = SettingsService.loadPlayerPlaylistWidthSync();
   Timer? _hideTimer;
 
@@ -406,21 +407,37 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 
   /// 切换硬件/软件解码：mpv 的 hwdec 选项改变需重新载入文件才生效。
-  /// 重新打开当前视频并恢复到切换前的播放位置。
+  /// 重新打开当前视频并以切换前的播放进度继续播放（保留播放/暂停状态），
+  /// 不再从开头重播。
   Future<void> _applyHwdec() async {
     if (widget.playlist.entries.isEmpty) return;
     if (_currentIndex < 0 || _currentIndex >= widget.playlist.entries.length) {
       return;
     }
     final pos = player.state.position;
+    final wasPlaying = player.state.playing;
+    // 切换期间冻结进度条，避免 open 重置 position/duration 流使进度条跳到 0 再跳回。
+    _switchingDecode = true;
+    if (mounted) setState(() {});
     await _setHwdecOption(_useHardwareDecode);
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
-    await player.open(Media(entry.path), play: true);
+    // 先以暂停方式重新打开，待媒体可定位后 seek 到原进度，再恢复播放/暂停，
+    // 避免 open(play:true) 后 seek 被载入过程吞掉而从开头重播。
+    await player.open(Media(entry.path), play: false);
     if (pos > Duration.zero) {
-      // 等待媒体载入后再 seek，避免被重置。
+      final deadline = DateTime.now().add(const Duration(seconds: 3));
+      while (DateTime.now().isBefore(deadline)) {
+        if (player.state.duration > Duration.zero) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
       await player.seek(pos).catchError((_) {});
     }
+    if (wasPlaying) {
+      await player.play();
+    }
+    _switchingDecode = false;
+    if (mounted) setState(() {});
   }
 
   /// 真正的 OS 全屏：调用 window_manager 缩放窗口铺满屏幕（隐藏任务栏）。
@@ -929,7 +946,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   /// 进度条：独立 StatefulWidget，自身订阅 position 流。
   /// 拖拽时暂停外部流更新，避免父级频繁 setState 重建 Slider 导致拖拽中断/卡死。
   Widget _buildProgress(ColorScheme cs) {
-    return _ProgressSlider(player, cs, showMilliseconds: _showMilliseconds);
+    return _ProgressSlider(
+      player,
+      cs,
+      showMilliseconds: _showMilliseconds,
+      freeze: _switchingDecode,
+    );
   }
 
   Widget _buildVolume(ColorScheme cs, Color iconColor) {
@@ -1411,8 +1433,10 @@ class _ProgressSlider extends StatefulWidget {
   final Player player;
   final ColorScheme cs;
   final bool showMilliseconds;
+  final bool freeze;
 
-  const _ProgressSlider(this.player, this.cs, {this.showMilliseconds = false});
+  const _ProgressSlider(this.player, this.cs,
+      {this.showMilliseconds = false, this.freeze = false});
 
   @override
   State<_ProgressSlider> createState() => _ProgressSliderState();
@@ -1432,10 +1456,10 @@ class _ProgressSliderState extends State<_ProgressSlider> {
     _position = widget.player.state.position;
     _duration = widget.player.state.duration;
     _posSub = widget.player.stream.position.listen((p) {
-      if (!_dragging && mounted) setState(() => _position = p);
+      if (!_dragging && mounted && !widget.freeze) setState(() => _position = p);
     });
     _durSub = widget.player.stream.duration.listen((d) {
-      if (mounted) setState(() => _duration = d);
+      if (mounted && !widget.freeze) setState(() => _duration = d);
     });
   }
 
