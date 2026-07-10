@@ -110,6 +110,15 @@ class WindowState {
 
 enum GifDisplayMode { unlimited, hover, static }
 
+/// 漫画阅读器页面布局：单页 / 双页 / 垂直滚动(webtoon)。
+enum ComicLayoutMode { single, double, vertical }
+
+/// 漫画阅读方向：从左到右 / 从右到左（对单页与双页生效，垂直模式忽略）。
+enum ComicReadDirection { ltr, rtl }
+
+/// 漫画适应模式：适应宽度 / 适应高度 / 适应页面 / 原始大小。
+enum ComicFitMode { width, height, page, original }
+
 class GridSettings {
   final double minCardWidth;
   final double maxCardWidth;
@@ -471,6 +480,105 @@ class SettingsService {
 
   static Future<void> savePlayerMuted(bool v) async {
     await AppDataService.setString(_playerMutedKey, v.toString());
+  }
+
+  // --- Comic reader settings ---
+
+  static const _readerLayoutKey = 'reader_layout_mode';
+  static const _readerDirectionKey = 'reader_direction';
+  static const _readerFitKey = 'reader_fit_mode';
+  static const _readerShowThumbsKey = 'reader_show_thumbnails';
+  static const _readerShowPageNumKey = 'reader_show_page_number';
+  static const _readerThumbWidthKey = 'reader_thumbnail_width';
+
+  static ComicLayoutMode _cachedReaderLayout = ComicLayoutMode.single;
+  static ComicReadDirection _cachedReaderDirection = ComicReadDirection.rtl;
+  static ComicFitMode _cachedReaderFit = ComicFitMode.height;
+  static bool _cachedReaderShowThumbs = true;
+  static bool _cachedReaderShowPageNum = true;
+  static double _cachedReaderThumbWidth = 200.0;
+
+  static ComicLayoutMode loadReaderLayoutModeSync() => _cachedReaderLayout;
+  static ComicReadDirection loadReaderDirectionSync() => _cachedReaderDirection;
+  static ComicFitMode loadReaderFitModeSync() => _cachedReaderFit;
+  static bool loadReaderShowThumbnailsSync() => _cachedReaderShowThumbs;
+  static bool loadReaderShowPageNumberSync() => _cachedReaderShowPageNum;
+  static double loadReaderThumbnailWidthSync() => _cachedReaderThumbWidth;
+
+  static Future<ComicLayoutMode> loadReaderLayoutMode() async {
+    final val = await AppDataService.getString(_readerLayoutKey);
+    _cachedReaderLayout = ComicLayoutMode.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => ComicLayoutMode.single,
+    );
+    return _cachedReaderLayout;
+  }
+
+  static Future<void> saveReaderLayoutMode(ComicLayoutMode m) async {
+    _cachedReaderLayout = m;
+    await AppDataService.setString(_readerLayoutKey, m.name);
+  }
+
+  static Future<ComicReadDirection> loadReaderDirection() async {
+    final val = await AppDataService.getString(_readerDirectionKey);
+    _cachedReaderDirection = ComicReadDirection.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => ComicReadDirection.rtl,
+    );
+    return _cachedReaderDirection;
+  }
+
+  static Future<void> saveReaderDirection(ComicReadDirection d) async {
+    _cachedReaderDirection = d;
+    await AppDataService.setString(_readerDirectionKey, d.name);
+  }
+
+  static Future<ComicFitMode> loadReaderFitMode() async {
+    final val = await AppDataService.getString(_readerFitKey);
+    _cachedReaderFit = ComicFitMode.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => ComicFitMode.height,
+    );
+    return _cachedReaderFit;
+  }
+
+  static Future<void> saveReaderFitMode(ComicFitMode f) async {
+    _cachedReaderFit = f;
+    await AppDataService.setString(_readerFitKey, f.name);
+  }
+
+  static Future<bool> loadReaderShowThumbnails() async {
+    final val = await AppDataService.getString(_readerShowThumbsKey);
+    _cachedReaderShowThumbs = val == null || val == 'true';
+    return _cachedReaderShowThumbs;
+  }
+
+  static Future<void> saveReaderShowThumbnails(bool v) async {
+    _cachedReaderShowThumbs = v;
+    await AppDataService.setString(_readerShowThumbsKey, v.toString());
+  }
+
+  static Future<bool> loadReaderShowPageNumber() async {
+    final val = await AppDataService.getString(_readerShowPageNumKey);
+    _cachedReaderShowPageNum = val == null || val == 'true';
+    return _cachedReaderShowPageNum;
+  }
+
+  static Future<void> saveReaderShowPageNumber(bool v) async {
+    _cachedReaderShowPageNum = v;
+    await AppDataService.setString(_readerShowPageNumKey, v.toString());
+  }
+
+  static Future<double> loadReaderThumbnailWidth() async {
+    final val = await AppDataService.getString(_readerThumbWidthKey);
+    final w = double.tryParse(val ?? '');
+    _cachedReaderThumbWidth = w != null ? w.clamp(140.0, 460.0) : 200.0;
+    return _cachedReaderThumbWidth;
+  }
+
+  static Future<void> saveReaderThumbnailWidth(double w) async {
+    _cachedReaderThumbWidth = w;
+    await AppDataService.setString(_readerThumbWidthKey, w.toString());
   }
 
   // --- Grouping ---

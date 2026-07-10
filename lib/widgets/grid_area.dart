@@ -228,6 +228,7 @@ class GridArea extends StatefulWidget {
   final GridSettings gridSettings;
   final double middleOpacity;
   final void Function(LibraryItem item, {String? startPath}) onOpenVideoPlayer;
+  final void Function(LibraryItem item, {String? startPath}) onOpenComicReader;
 
   const GridArea({
     super.key,
@@ -247,6 +248,7 @@ class GridArea extends StatefulWidget {
     this.onCreateItem,
     this.onFileDrop,
     required this.onOpenVideoPlayer,
+    required this.onOpenComicReader,
   });
 
   @override
@@ -273,6 +275,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   VoidCallback? get onCreateItem => widget.onCreateItem;
   void Function(List<String> paths)? get onFileDrop => widget.onFileDrop;
   GridSettings get gridSettings => widget.gridSettings;
+  void Function(LibraryItem item, {String? startPath}) get onOpenComicReader =>
+      widget.onOpenComicReader;
   double get middleOpacity => widget.middleOpacity;
 
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
@@ -421,6 +425,13 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                                 onPlayProject: () =>
                                     widget.onOpenVideoPlayer(_panelItem!),
                                 onPlayVideoFile: (path) => widget.onOpenVideoPlayer(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
+                                onReadProject: () =>
+                                    widget.onOpenComicReader(_panelItem!),
+                                onReadImageFile: (path) =>
+                                    widget.onOpenComicReader(
                                   _panelItem!,
                                   startPath: path,
                                 ),
@@ -579,6 +590,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                 final type = item.info.type.toLowerCase();
                 if (type == 'video' || type == 'anime') {
                   widget.onOpenVideoPlayer(item);
+                } else if (type == 'comic' || type == 'picture') {
+                  widget.onOpenComicReader(item);
                 }
               },
               onRightClick: (globalPos) =>

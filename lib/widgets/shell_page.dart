@@ -4,6 +4,8 @@ import '../providers/library_state.dart';
 import '../models/library_item.dart';
 import '../widgets/video_player_page.dart';
 import '../services/video_playlist_service.dart';
+import '../widgets/comic_reader_page.dart';
+import '../services/comic_playlist_service.dart';
 import 'category_panel.dart';
 import 'detail_panel.dart';
 import 'grid_area.dart';
@@ -486,6 +488,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   ).whenComplete(() => _createDialogShowing = false);
                 },
                 onOpenVideoPlayer: _openVideoPlayer,
+                onOpenComicReader: _openComicReader,
               );
             },
           ),
@@ -605,6 +608,47 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           initialIndex: startIndex < 0 ? 0 : startIndex,
           title: item.info.title,
           initialPlaylistWidth: playlistWidth,
+        ),
+      ),
+    );
+  }
+
+  /// 打开内置图片/漫画阅读器：递归扫描项目内所有图片与 zip/cbz 构建阅读列表，
+  /// [startPath] 指定从哪张图片/压缩包开始阅读（底部面板双击图片/压缩包时传入）。
+  Future<void> _openComicReader(LibraryItem item, {String? startPath}) async {
+    final playlist = await ComicPlaylistService.build(item);
+    final thumbWidth = await SettingsService.loadReaderThumbnailWidth();
+    if (!mounted) return;
+    if (playlist.entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Strings.t('noComicFiles')),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+    var startIndex = 0;
+    if (startPath != null) {
+      final norm = startPath.replaceAll('\\', '/').toLowerCase();
+      startIndex = playlist.entries.indexWhere((e) {
+        if (e.isArchived) {
+          return e.archivePath != null &&
+              e.archivePath!.replaceAll('\\', '/').toLowerCase() == norm;
+        }
+        return e.sourcePath != null &&
+            e.sourcePath!.replaceAll('\\', '/').toLowerCase() == norm;
+      });
+      if (startIndex < 0) startIndex = 0;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => ComicReaderPage(
+          playlist: playlist,
+          initialIndex: startIndex,
+          title: item.info.title,
+          initialThumbnailWidth: thumbWidth,
         ),
       ),
     );

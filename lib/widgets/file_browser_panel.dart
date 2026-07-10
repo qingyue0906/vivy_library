@@ -12,6 +12,7 @@ import '../services/library_scanner.dart';
 import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../services/comic_playlist_service.dart';
 import 'exe_picker_dialog.dart';
 import 'file_properties_dialog.dart';
 import 'compact_level.dart';
@@ -28,6 +29,8 @@ class FileBrowserPanel extends StatefulWidget {
   final GifDisplayMode gifMode;
   final VoidCallback? onPlayProject;
   final void Function(String path)? onPlayVideoFile;
+  final VoidCallback? onReadProject;
+  final void Function(String path)? onReadImageFile;
 
   const FileBrowserPanel({
     super.key,
@@ -39,6 +42,8 @@ class FileBrowserPanel extends StatefulWidget {
     this.gifMode = GifDisplayMode.hover,
     this.onPlayProject,
     this.onPlayVideoFile,
+    this.onReadProject,
+    this.onReadImageFile,
   });
 
   @override
@@ -168,6 +173,15 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               icon: Icons.play_arrow,
               tooltip: Strings.t('openProjectVideos'),
               onTap: widget.onPlayProject ?? () {},
+            ),
+          if (widget.item.info.type.toLowerCase() == 'comic' ||
+              widget.item.info.type.toLowerCase() == 'picture')
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.auto_stories,
+              tooltip: Strings.t('openProjectComic'),
+              onTap: widget.onReadProject ?? () {},
             ),
           _headerIconButton(
             c: c,
@@ -337,6 +351,9 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         final itemType = widget.item.info.type.toLowerCase();
         if ((itemType == 'video' || itemType == 'anime') && isVid) {
           widget.onPlayVideoFile?.call(file.path);
+        } else if ((itemType == 'comic' || itemType == 'picture') &&
+            ComicPlaylistService.isReadableFile(file.path)) {
+          widget.onReadImageFile?.call(file.path);
         } else {
           _openFile(file.path);
         }
