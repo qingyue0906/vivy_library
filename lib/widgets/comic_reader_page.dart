@@ -442,6 +442,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
           onNext: _next,
           onPrev: _prev,
           onToggleUi: _toggleUiOverlay,
+          onClose: _close,
           child: _fitWidget(page, cons.maxWidth, cons.maxHeight),
         );
       },
@@ -486,6 +487,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
           onNext: _next,
           onPrev: _prev,
           onToggleUi: _toggleUiOverlay,
+          onClose: _close,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: children,
@@ -498,7 +500,10 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   Widget _buildVertical() {
     return LayoutBuilder(
       builder: (context, cons) {
-        return Scrollbar(
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onSecondaryTap: _close,
+          child: Scrollbar(
           controller: _verticalScrollController,
           child: SmoothScroll(
             controller: _verticalScrollController,
@@ -519,7 +524,8 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
               },
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -1082,6 +1088,7 @@ class _ZoomablePage extends StatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onPrev;
   final VoidCallback onToggleUi;
+  final VoidCallback onClose;
   final Widget child;
 
   const _ZoomablePage({
@@ -1092,6 +1099,7 @@ class _ZoomablePage extends StatefulWidget {
     required this.onNext,
     required this.onPrev,
     required this.onToggleUi,
+    required this.onClose,
     required this.child,
   });
 
@@ -1196,6 +1204,7 @@ class _ZoomablePageState extends State<_ZoomablePage> {
         behavior: HitTestBehavior.opaque,
         onTapUp: _handleTapUp,
         onDoubleTap: _handleDoubleTap,
+        onSecondaryTap: widget.onClose,
         onScaleStart: _onScaleStart,
         onScaleUpdate: _onScaleUpdate,
         child: ClipRect(
