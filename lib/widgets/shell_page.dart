@@ -581,6 +581,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   Future<void> _openVideoPlayer(LibraryItem item, {String? startPath}) async {
     final playlist = await VideoPlaylistService.build(item);
     final playlistWidth = await SettingsService.loadPlayerPlaylistWidth();
+    // 预加载播放列表/毫秒开关以填充同步缓存，避免播放器首帧按默认闪现后跳变。
+    await SettingsService.loadPlayerShowPlaylist();
+    await SettingsService.loadPlayerShowMilliseconds();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

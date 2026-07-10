@@ -386,12 +386,17 @@ class SettingsService {
   // --- Player settings ---
 
   static const _playerShowMsKey = 'player_show_milliseconds';
+  static bool _cachedShowMilliseconds = false;
+  static bool loadPlayerShowMillisecondsSync() => _cachedShowMilliseconds;
 
   static Future<bool> loadPlayerShowMilliseconds() async {
-    return (await AppDataService.getString(_playerShowMsKey)) == 'true';
+    _cachedShowMilliseconds =
+        (await AppDataService.getString(_playerShowMsKey)) == 'true';
+    return _cachedShowMilliseconds;
   }
 
   static Future<void> savePlayerShowMilliseconds(bool v) async {
+    _cachedShowMilliseconds = v;
     await AppDataService.setString(_playerShowMsKey, v.toString());
   }
 
@@ -399,14 +404,18 @@ class SettingsService {
 
   static const _playerShowPlaylistKey = 'player_show_playlist';
   static const _playerPlaylistWidthKey = 'player_playlist_width';
+  static bool _cachedShowPlaylist = true;
+  static bool loadPlayerShowPlaylistSync() => _cachedShowPlaylist;
 
   static Future<bool> loadPlayerShowPlaylist() async {
     // 默认显示播放列表
     final val = await AppDataService.getString(_playerShowPlaylistKey);
-    return val == null || val == 'true';
+    _cachedShowPlaylist = val == null || val == 'true';
+    return _cachedShowPlaylist;
   }
 
   static Future<void> savePlayerShowPlaylist(bool v) async {
+    _cachedShowPlaylist = v;
     await AppDataService.setString(_playerShowPlaylistKey, v.toString());
   }
 

@@ -46,9 +46,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _isMaximized = false;
   bool _showTop = false;
   bool _showBottom = false;
-  bool _showPlaylist = true;
+  bool _showPlaylist = SettingsService.loadPlayerShowPlaylistSync();
   bool _showSettings = false;
-  bool _showMilliseconds = false;
+  bool _showMilliseconds = SettingsService.loadPlayerShowMillisecondsSync();
   double _playlistWidth = SettingsService.loadPlayerPlaylistWidthSync();
   Timer? _hideTimer;
 
@@ -98,10 +98,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _initPlayer();
     _initPlayback();
     _startMetadataProbe();
-    SettingsService.loadPlayerShowMilliseconds()
-        .then((v) => setState(() => _showMilliseconds = v));
-    SettingsService.loadPlayerShowPlaylist()
-        .then((v) => setState(() => _showPlaylist = v));
     if (widget.initialPlaylistWidth != null) {
       _playlistWidth = widget.initialPlaylistWidth!;
     } else {
