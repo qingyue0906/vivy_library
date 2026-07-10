@@ -119,6 +119,12 @@ enum ComicReadDirection { ltr, rtl }
 /// 漫画适应模式：适应宽度 / 适应高度 / 适应页面 / 原始大小。
 enum ComicFitMode { width, height, page, original }
 
+/// 电子书阅读模式：翻页 / 滚动。
+enum EbookReadMode { paginated, scroll }
+
+/// 电子书阅读主题：浅色 / 深色 / 护眼( sepia )。
+enum EbookTheme { light, dark, sepia }
+
 class GridSettings {
   final double minCardWidth;
   final double maxCardWidth;
@@ -579,6 +585,132 @@ class SettingsService {
   static Future<void> saveReaderThumbnailWidth(double w) async {
     _cachedReaderThumbWidth = w;
     await AppDataService.setString(_readerThumbWidthKey, w.toString());
+  }
+
+  // --- Ebook reader settings ---
+
+  static const _ebookReadModeKey = 'ebook_read_mode';
+  static const _ebookFontSizeKey = 'ebook_font_size';
+  static const _ebookLineHeightKey = 'ebook_line_height';
+  static const _ebookFontFamilyKey = 'ebook_font_family';
+  static const _ebookThemeKey = 'ebook_theme';
+  static const _ebookPageMarginKey = 'ebook_page_margin';
+  static const _ebookJustifyKey = 'ebook_justify';
+  static const _ebookShowTocKey = 'ebook_show_toc';
+
+  static EbookReadMode _cachedEbookReadMode = EbookReadMode.paginated;
+  static double _cachedEbookFontSize = 16.0;
+  static double _cachedEbookLineHeight = 1.7;
+  static String _cachedEbookFontFamily = 'system';
+  static EbookTheme _cachedEbookTheme = EbookTheme.light;
+  static double _cachedEbookPageMargin = 28.0;
+  static bool _cachedEbookJustify = true;
+  static bool _cachedEbookShowToc = true;
+
+  static EbookReadMode loadEbookReadModeSync() => _cachedEbookReadMode;
+  static double loadEbookFontSizeSync() => _cachedEbookFontSize;
+  static double loadEbookLineHeightSync() => _cachedEbookLineHeight;
+  static String loadEbookFontFamilySync() => _cachedEbookFontFamily;
+  static EbookTheme loadEbookThemeSync() => _cachedEbookTheme;
+  static double loadEbookPageMarginSync() => _cachedEbookPageMargin;
+  static bool loadEbookJustifySync() => _cachedEbookJustify;
+  static bool loadEbookShowTocSync() => _cachedEbookShowToc;
+
+  static Future<EbookReadMode> loadEbookReadMode() async {
+    final val = await AppDataService.getString(_ebookReadModeKey);
+    _cachedEbookReadMode = EbookReadMode.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => EbookReadMode.paginated,
+    );
+    return _cachedEbookReadMode;
+  }
+
+  static Future<void> saveEbookReadMode(EbookReadMode m) async {
+    _cachedEbookReadMode = m;
+    await AppDataService.setString(_ebookReadModeKey, m.name);
+  }
+
+  static Future<double> loadEbookFontSize() async {
+    final val = await AppDataService.getString(_ebookFontSizeKey);
+    final v = double.tryParse(val ?? '');
+    _cachedEbookFontSize = v != null ? v.clamp(10.0, 40.0) : 16.0;
+    return _cachedEbookFontSize;
+  }
+
+  static Future<void> saveEbookFontSize(double v) async {
+    _cachedEbookFontSize = v.clamp(10.0, 40.0);
+    await AppDataService.setString(_ebookFontSizeKey, v.toString());
+  }
+
+  static Future<double> loadEbookLineHeight() async {
+    final val = await AppDataService.getString(_ebookLineHeightKey);
+    final v = double.tryParse(val ?? '');
+    _cachedEbookLineHeight = v != null ? v.clamp(1.0, 3.0) : 1.7;
+    return _cachedEbookLineHeight;
+  }
+
+  static Future<void> saveEbookLineHeight(double v) async {
+    _cachedEbookLineHeight = v.clamp(1.0, 3.0);
+    await AppDataService.setString(_ebookLineHeightKey, v.toString());
+  }
+
+  static Future<String> loadEbookFontFamily() async {
+    final val = await AppDataService.getString(_ebookFontFamilyKey);
+    _cachedEbookFontFamily = val ?? 'system';
+    return _cachedEbookFontFamily;
+  }
+
+  static Future<void> saveEbookFontFamily(String v) async {
+    _cachedEbookFontFamily = v;
+    await AppDataService.setString(_ebookFontFamilyKey, v);
+  }
+
+  static Future<EbookTheme> loadEbookTheme() async {
+    final val = await AppDataService.getString(_ebookThemeKey);
+    _cachedEbookTheme = EbookTheme.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => EbookTheme.light,
+    );
+    return _cachedEbookTheme;
+  }
+
+  static Future<void> saveEbookTheme(EbookTheme t) async {
+    _cachedEbookTheme = t;
+    await AppDataService.setString(_ebookThemeKey, t.name);
+  }
+
+  static Future<double> loadEbookPageMargin() async {
+    final val = await AppDataService.getString(_ebookPageMarginKey);
+    final v = double.tryParse(val ?? '');
+    _cachedEbookPageMargin = v != null ? v.clamp(0.0, 80.0) : 28.0;
+    return _cachedEbookPageMargin;
+  }
+
+  static Future<void> saveEbookPageMargin(double v) async {
+    _cachedEbookPageMargin = v.clamp(0.0, 80.0);
+    await AppDataService.setString(_ebookPageMarginKey, v.toString());
+  }
+
+  static Future<bool> loadEbookJustify() async {
+    final val = await AppDataService.getString(_ebookJustifyKey);
+    _cachedEbookJustify = val != 'false';
+    return _cachedEbookJustify;
+  }
+
+  static Future<void> saveEbookJustify(bool v) async {
+    _cachedEbookJustify = v;
+    await AppDataService.setString(_ebookJustifyKey, v.toString());
+  }
+
+  static Future<bool> loadEbookShowToc() async {
+    final val = await AppDataService.getString(_ebookShowTocKey);
+    _cachedEbookShowToc = val != 'false';
+    return _cachedEbookShowToc;
+  }
+
+  static Future<void> saveEbookShowToc(bool v) async {
+    _cachedEbookShowToc = v;
+    await AppDataService.setString(_ebookShowTocKey, v.toString());
   }
 
   // --- Grouping ---

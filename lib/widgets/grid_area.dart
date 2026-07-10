@@ -229,6 +229,7 @@ class GridArea extends StatefulWidget {
   final double middleOpacity;
   final void Function(LibraryItem item, {String? startPath}) onOpenVideoPlayer;
   final void Function(LibraryItem item, {String? startPath}) onOpenComicReader;
+  final void Function(LibraryItem item, {String? startPath}) onOpenEbookReader;
 
   const GridArea({
     super.key,
@@ -247,8 +248,9 @@ class GridArea extends StatefulWidget {
     this.middleOpacity = 1.0,
     this.onCreateItem,
     this.onFileDrop,
-    required this.onOpenVideoPlayer,
+    required     this.onOpenVideoPlayer,
     required this.onOpenComicReader,
+    required this.onOpenEbookReader,
   });
 
   @override
@@ -277,6 +279,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   GridSettings get gridSettings => widget.gridSettings;
   void Function(LibraryItem item, {String? startPath}) get onOpenComicReader =>
       widget.onOpenComicReader;
+  void Function(LibraryItem item, {String? startPath}) get onOpenEbookReader =>
+      widget.onOpenEbookReader;
   double get middleOpacity => widget.middleOpacity;
 
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
@@ -432,6 +436,13 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                                     widget.onOpenComicReader(_panelItem!),
                                 onReadImageFile: (path) =>
                                     widget.onOpenComicReader(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
+                                onReadEbookProject: () =>
+                                    widget.onOpenEbookReader(_panelItem!),
+                                onReadEbookFile: (path) =>
+                                    widget.onOpenEbookReader(
                                   _panelItem!,
                                   startPath: path,
                                 ),
@@ -592,6 +603,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                   widget.onOpenVideoPlayer(item);
                 } else if (type == 'comic' || type == 'picture') {
                   widget.onOpenComicReader(item);
+                } else if (type == 'novel' || type == 'book') {
+                  widget.onOpenEbookReader(item);
                 }
               },
               onRightClick: (globalPos) =>

@@ -6,6 +6,8 @@ import '../widgets/video_player_page.dart';
 import '../services/video_playlist_service.dart';
 import '../widgets/comic_reader_page.dart';
 import '../services/comic_playlist_service.dart';
+import '../widgets/ebook_reader_page.dart';
+import '../services/ebook_playlist_service.dart';
 import 'category_panel.dart';
 import 'detail_panel.dart';
 import 'grid_area.dart';
@@ -489,6 +491,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 },
                 onOpenVideoPlayer: _openVideoPlayer,
                 onOpenComicReader: _openComicReader,
+                onOpenEbookReader: _openEbookReader,
               );
             },
           ),
@@ -649,6 +652,48 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           initialIndex: startIndex,
           title: item.info.title,
           initialThumbnailWidth: thumbWidth,
+        ),
+      ),
+    );
+  }
+
+  /// 打开内置电子书阅读器：递归扫描项目内所有 txt/epub/pdf/md 构建书列表，
+  /// [startPath] 指定从哪本书开始阅读（底部面板双击电子书文件时传入）。
+  Future<void> _openEbookReader(LibraryItem item, {String? startPath}) async {
+    final playlist = await EbookPlaylistService.build(item);
+    // 预加载阅读设置以填充同步缓存，避免首帧按默认值闪现后跳变。
+    await SettingsService.loadEbookReadMode();
+    await SettingsService.loadEbookFontSize();
+    await SettingsService.loadEbookLineHeight();
+    await SettingsService.loadEbookFontFamily();
+    await SettingsService.loadEbookTheme();
+    await SettingsService.loadEbookPageMargin();
+    await SettingsService.loadEbookJustify();
+    await SettingsService.loadEbookShowToc();
+    if (!mounted) return;
+    if (playlist.entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Strings.t('noEbookFiles')),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+    var startIndex = 0;
+    if (startPath != null) {
+      final norm = startPath.replaceAll('\\', '/').toLowerCase();
+      startIndex = playlist.entries
+          .indexWhere((e) => e.replaceAll('\\', '/').toLowerCase() == norm);
+      if (startIndex < 0) startIndex = 0;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => EbookReaderPage(
+          playlist: playlist,
+          initialIndex: startIndex,
+          title: item.info.title,
         ),
       ),
     );
