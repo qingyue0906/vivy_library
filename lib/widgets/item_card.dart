@@ -105,6 +105,7 @@ class _ItemCardState extends State<ItemCard> {
                   fit: StackFit.expand,
                   children: [
                     _buildPreviewImage(context, c),
+                    _buildTypeBadge(c),
                     if (widget.item.info.star)
                       Positioned(
                         top: 2 * c,
@@ -117,7 +118,7 @@ class _ItemCardState extends State<ItemCard> {
                           ),
                           child: Icon(
                             Icons.star,
-                            size: 12 * c,
+                            size: 14 * c,
                             color: Colors.amber,
                           ),
                         ),
@@ -131,6 +132,73 @@ class _ItemCardState extends State<ItemCard> {
         Expanded(child: _buildInfo(c)),
       ],
     );
+  }
+
+  Widget _buildTypeBadge(double c) {
+    final type = widget.item.info.type.toLowerCase();
+    if (type.isEmpty || type == 'default') return const SizedBox.shrink();
+    return Positioned(
+      top: 2 * c,
+      left: 2 * c,
+      child: Container(
+        padding: EdgeInsets.all(2 * c),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10 * c),
+        ),
+        child: Icon(
+          _typeIcon(type),
+          size: 14 * c,
+          color: _typeColor(type),
+        ),
+      ),
+    );
+  }
+
+  IconData _typeIcon(String type) {
+    switch (type) {
+      case 'video':
+        return Icons.movie;
+      case 'anime':
+        return Icons.live_tv;
+      case 'novel':
+        return Icons.menu_book;
+      case 'book':
+        return Icons.book;
+      case 'application':
+        return Icons.apps;
+      case 'zip':
+        return Icons.archive;
+      case 'picture':
+        return Icons.photo;
+      case 'comic':
+        return Icons.auto_stories;
+      default:
+        return Icons.label;
+    }
+  }
+
+  Color _typeColor(String type) {
+    switch (type) {
+      case 'video':
+        return Colors.redAccent;
+      case 'anime':
+        return Colors.pinkAccent;
+      case 'novel':
+        return Colors.tealAccent;
+      case 'book':
+        return Colors.brown.shade300;
+      case 'application':
+        return Colors.lightBlueAccent;
+      case 'zip':
+        return Colors.amber;
+      case 'picture':
+        return Colors.greenAccent;
+      case 'comic':
+        return Colors.purpleAccent;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildPreviewImage(BuildContext context, double c) {
