@@ -580,6 +580,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// [startPath] 指定从哪个视频开始播放（底部面板双击视频文件时传入）。
   Future<void> _openVideoPlayer(LibraryItem item, {String? startPath}) async {
     final playlist = await VideoPlaylistService.build(item);
+    final playlistWidth = await SettingsService.loadPlayerPlaylistWidth();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -600,6 +601,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           playlist: playlist,
           initialIndex: startIndex < 0 ? 0 : startIndex,
           title: item.info.title,
+          initialPlaylistWidth: playlistWidth,
         ),
       ),
     );

@@ -22,12 +22,14 @@ class VideoPlayerPage extends StatefulWidget {
   final VideoPlaylist playlist;
   final int initialIndex;
   final String title;
+  final double? initialPlaylistWidth;
 
   const VideoPlayerPage({
     super.key,
     required this.playlist,
     this.initialIndex = 0,
     required this.title,
+    this.initialPlaylistWidth,
   });
 
   @override
@@ -47,7 +49,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _showPlaylist = true;
   bool _showSettings = false;
   bool _showMilliseconds = false;
-  double _playlistWidth = 340;
+  double _playlistWidth = SettingsService.loadPlayerPlaylistWidthSync();
   Timer? _hideTimer;
 
   double _volume = 100;
@@ -94,8 +96,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         .then((v) => setState(() => _showMilliseconds = v));
     SettingsService.loadPlayerShowPlaylist()
         .then((v) => setState(() => _showPlaylist = v));
-    SettingsService.loadPlayerPlaylistWidth()
-        .then((v) => setState(() => _playlistWidth = v));
+    if (widget.initialPlaylistWidth != null) {
+      _playlistWidth = widget.initialPlaylistWidth!;
+    } else {
+      SettingsService.loadPlayerPlaylistWidth()
+          .then((v) => setState(() => _playlistWidth = v));
+    }
     windowManager.isMaximized()
         .then((v) => setState(() => _isMaximized = v));
     // 载入并应用持久化的音量与静音状态。

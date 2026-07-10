@@ -410,13 +410,19 @@ class SettingsService {
     await AppDataService.setString(_playerShowPlaylistKey, v.toString());
   }
 
+  static double _cachedPlaylistWidth = 340.0;
+
+  static double loadPlayerPlaylistWidthSync() => _cachedPlaylistWidth;
+
   static Future<double> loadPlayerPlaylistWidth() async {
     final val = await AppDataService.getString(_playerPlaylistWidthKey);
     final w = double.tryParse(val ?? '');
-    return w != null ? w.clamp(220.0, 640.0) : 340.0;
+    _cachedPlaylistWidth = w != null ? w.clamp(220.0, 640.0) : 340.0;
+    return _cachedPlaylistWidth;
   }
 
   static Future<void> savePlayerPlaylistWidth(double w) async {
+    _cachedPlaylistWidth = w;
     await AppDataService.setString(_playerPlaylistWidthKey, w.toString());
   }
 

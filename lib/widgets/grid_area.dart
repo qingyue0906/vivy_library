@@ -575,7 +575,12 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
               onTap: () => state.setSelectedItem(item),
               onCtrlTap: () => state.toggleItemSelection(item),
               onShiftTap: () => state.selectRange(item, items),
-              onDoubleTap: () => widget.onOpenVideoPlayer(item),
+              onDoubleTap: () {
+                final type = item.info.type.toLowerCase();
+                if (type == 'video' || type == 'anime') {
+                  widget.onOpenVideoPlayer(item);
+                }
+              },
               onRightClick: (globalPos) =>
                   _showContextMenu(context, item, globalPos),
               gifMode: gridSettings.cardGifMode,

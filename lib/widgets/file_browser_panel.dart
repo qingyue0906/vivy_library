@@ -160,7 +160,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
                 : Strings.t('showInfo'),
             onTap: widget.state.toggleSystemFiles,
           ),
-          if (widget.item.info.type.toLowerCase() == 'video')
+          if (widget.item.info.type.toLowerCase() == 'video' ||
+              widget.item.info.type.toLowerCase() == 'anime')
             _headerIconButton(
               c: c,
               cs: cs,
@@ -333,7 +334,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
           'webm',
           'm4v',
         }.contains(ext);
-        if (widget.item.info.type.toLowerCase() == 'video' && isVid) {
+        final itemType = widget.item.info.type.toLowerCase();
+        if ((itemType == 'video' || itemType == 'anime') && isVid) {
           widget.onPlayVideoFile?.call(file.path);
         } else {
           _openFile(file.path);
