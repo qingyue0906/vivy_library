@@ -1762,6 +1762,13 @@ class Strings {
       AppLocale.en: 'MIDI may need a soundfont to produce sound',
       AppLocale.ja: 'MIDI は音源(soundfont)が必要な場合があります',
     },
+    'audioOpenFailed': {
+      AppLocale.zhHans: '无法播放该文件（格式不受支持）',
+      AppLocale.zhHant: '無法播放該檔案（格式不受支援）',
+      AppLocale.en: 'Cannot play this file (unsupported format)',
+      AppLocale.ja: 'このファイルを再生できません（非対応フォーマット）',
+    },
+
 
     // ======== 图片/漫画阅读器 ========
     'comicReader': {

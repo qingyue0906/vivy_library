@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/audio_track.dart';
@@ -11,6 +10,7 @@ import '../services/audio_playlist_service.dart';
 import '../services/audio_tag_service.dart';
 import '../services/translations.dart';
 import '../services/settings_service.dart';
+import '../services/fvp_player.dart';
 import 'smooth_scroll.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
@@ -35,7 +35,7 @@ class AudioPlayerPage extends StatefulWidget {
 
 class _AudioPlayerPageState extends State<AudioPlayerPage>
     with WindowListener {
-  late final Player player;
+  late final FvpPlayer player;
 
   late int _currentIndex;
   bool _isFullscreen = false;
@@ -60,7 +60,6 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   final ScrollController _lyricScrollController = ScrollController();
 
   // 标签/时长渐进探测
-  Player? _probePlayer;
   bool _probing = false;
   int _probeGen = 0;
 
@@ -75,8 +74,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    player = Player();
-    if (widget.playlist.entries.isNotEmpty) _initProbePlayer();
+    player = FvpPlayer();
     _currentIndex = widget.initialIndex.clamp(
       0,
       max(0, widget.playlist.entries.length - 1),
@@ -109,14 +107,10 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }();
   }
 
-  void _initProbePlayer() {
-    _probePlayer = Player();
-  }
-
   void _initPlayer() {
-    player.stream.completed.listen((_) => _onCompleted());
-    player.stream.position.listen((pos) => _updateLyric(pos));
-    player.stream.duration.listen((_) => _refreshCurrentMetaFromState());
+    player.completedStream.listen((_) => _onCompleted());
+    player.positionStream.listen((pos) => _updateLyric(pos));
+    player.durationStream.listen((_) => _refreshCurrentMetaFromState());
   }
 
   Future<void> _initPlayback() async {
@@ -131,8 +125,25 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
-    player.open(Media(entry.path), play: true);
+    _openEntry(entry);
     _onEntryChanged();
+  }
+
+  /// 打开指定曲目；若格式不受支持导致打开失败，播放器内部已停止并释放上一首，
+  /// 这里仅弹出提示，避免 PlatformException 作为未捕获异常刷屏。
+  Future<void> _openEntry(AudioEntry entry) async {
+    try {
+      await player.open(entry.path, play: true);
+    } catch (e) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(Strings.t('audioOpenFailed')),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   /// 当前曲目切换/打开后：重新解析歌词、刷新元信息。
@@ -165,15 +176,13 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   }
 
   /// 后台渐进加载标签（标题/艺人/封面/歌词）与时长。
+  /// 标签来自纯 Dart 的 [AudioTagService]；时长来自 fvp 的 getMediaInfo() 离屏探测。
   void _startMetaProbe() {
     if (widget.playlist.entries.isEmpty) return;
     _probing = true;
     if (mounted) setState(() {});
     final gen = ++_probeGen;
     () async {
-      if (_probePlayer == null) _initProbePlayer();
-      final p = _probePlayer!;
-      await p.setVolume(0);
       final ordered = [...widget.playlist.entries]
         ..sort((a, b) => _isCurrent(a) == _isCurrent(b)
             ? 0
@@ -185,16 +194,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
         final tag = await AudioTagService.read(e.path);
         Duration? dur;
         try {
-          await p.open(Media(e.path), play: false);
-          dur = p.state.duration > Duration.zero ? p.state.duration : null;
-          if (dur == null) {
-            try {
-              dur = await p.stream.duration
-                  .firstWhere((d) => d > Duration.zero)
-                  .timeout(const Duration(seconds: 3));
-            } catch (_) {}
-          }
-          await p.stop();
+          dur = (await FvpPlayer.probeVideoMeta(e.path))?.duration;
         } catch (_) {}
         if (!mounted || gen != _probeGen) return;
         e.meta = (e.meta ?? const AudioMeta()).copyWith(
@@ -438,7 +438,6 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }
     _playlistScrollController.dispose();
     _lyricScrollController.dispose();
-    _probePlayer?.dispose();
     player.dispose();
     super.dispose();
   }
@@ -1360,7 +1359,7 @@ class _ResizeHandleState extends State<_ResizeHandle> {
 
 /// 进度条组件：独立状态，自身订阅播放位置流。
 class _ProgressSlider extends StatefulWidget {
-  final Player player;
+  final FvpPlayer player;
   final ColorScheme cs;
 
   const _ProgressSlider(this.player, this.cs);
@@ -1382,10 +1381,10 @@ class _ProgressSliderState extends State<_ProgressSlider> {
     super.initState();
     _position = widget.player.state.position;
     _duration = widget.player.state.duration;
-    _posSub = widget.player.stream.position.listen((p) {
+    _posSub = widget.player.positionStream.listen((p) {
       if (!_dragging && mounted) setState(() => _position = p);
     });
-    _durSub = widget.player.stream.duration.listen((d) {
+    _durSub = widget.player.durationStream.listen((d) {
       if (mounted) setState(() => _duration = d);
     });
   }
