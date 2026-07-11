@@ -44,9 +44,8 @@ dependencies:
   markdown: ^7.3.0
   flutter_html: ^3.0.0
   pdfrx: ^2.4.7
-  media_kit: ^1.1.11
-  media_kit_video: ^1.2.5
-  media_kit_libs_windows_video: ^1.0.11
+  video_player: ^2.10.0
+  fvp: ^0.37.0
 
 dev_dependencies:
   flutter_test:

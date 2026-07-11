@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:fvp/fvp.dart' as fvp;
+import 'package:fvp/mdk.dart' as mdk;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
@@ -16,7 +17,7 @@ void main() async {
   await pdfrxFlutterInitialize();
 
 
-  MediaKit.ensureInitialized();
+  fvp.registerWith();
 
   await AppDataService.migrateIfNeeded();
 
@@ -49,6 +50,13 @@ void main() async {
   runApp(ExcludeSemantics(
     child: VivyApp(initialThemeMode: savedTheme, scriptService: scriptService),
   ));
+
+  // fvp 注册时会把 libmdk 日志设为 "all"，解码/打开媒体时产生大量原生→Dart 日志
+  // 投递，偶发 "postCObject error"（fvp 源码记为无害死日志）。延迟到 fvp 初始化后
+  // 将日志降为 warning，停止日志洪流以消除刷屏，不影响播放/进度/元数据探测。
+  Future.delayed(const Duration(milliseconds: 200), () {
+    mdk.setGlobalOption('log', 'warning'); // 想完全安静可改 'off'
+  });
 }
 
 class _WindowStateListener with WindowListener {

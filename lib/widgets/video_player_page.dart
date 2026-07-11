@@ -3,16 +3,16 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit/src/player/native/player/real.dart' // ignore: implementation_imports
-    show NativePlayer;
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:video_player/video_player.dart';
+import 'package:fvp/fvp.dart' as fvp;
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/video_entry.dart';
 import '../services/video_playlist_service.dart';
 import '../services/translations.dart';
 import '../services/settings_service.dart';
+import '../services/fvp_player.dart';
+import '../services/video_metadata_service.dart';
 import 'player_settings_page.dart';
 import 'smooth_scroll.dart';
 
@@ -38,8 +38,7 @@ class VideoPlayerPage extends StatefulWidget {
 
 class _VideoPlayerPageState extends State<VideoPlayerPage>
     with WindowListener {
-  late final Player player;
-  late final VideoController controller;
+  late final FvpPlayer player;
 
   late int _currentIndex;
   bool _isFullscreen = false;
@@ -64,16 +63,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   bool _probing = false;
   int _probeGen = 0;
 
-  /// 最近一次真正打开视频的时间戳。用于过滤 media_kit 在 open 瞬间误发的
+  /// 最近一次真正打开视频的时间戳。用于过滤播放器在打开瞬间误发的
   /// [completed] 事件：若 completed 在打开后极短时间内触发且播放位置仍接近 0，
   /// 视为误触发而非真正播完，避免据此自动跳到下一集（到末尾时还会回绕到第一个）。
   DateTime? _lastOpenAt;
 
-
   /// 是否使用硬件解码。默认开启；切换时重新载入当前视频以生效。
   bool _useHardwareDecode = true;
-
-  Player? _probePlayer;
 
   /// 播放列表滚动控制器（配合 SmoothScroll 与 Scrollbar 实现平滑滚动）。
   final ScrollController _playlistScrollController = ScrollController();
@@ -82,9 +78,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    player = Player();
-    controller = VideoController(player);
-    if (widget.playlist.entries.isNotEmpty) _initProbePlayer();
+    player = FvpPlayer();
+    if (widget.playlist.entries.isNotEmpty) {
+      // 预热一次，使 fvp 后端就绪（与 registerWith 配合）。
+      fvp.registerWith();
+    }
     _currentIndex = widget.initialIndex.clamp(
       0,
       max(0, widget.playlist.entries.length - 1),
@@ -116,42 +114,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }();
   }
 
-  /// 创建后台探测用的 [Player]。
-  ///
-  /// 关键点：不使用 [VideoController]、**不创建任何视频输出窗口**。
-  /// media_kit 的 [Player] 在没挂 [VideoController] 时默认 `vo=null`（解码即丢弃，
-  /// 不需要窗口/GPU）。但编码名、分辨率(demux-w/h)、帧率(demux-fps)、时长都来自
-  /// 容器解析层(track-list / duration)，无需真正解码画面即可拿到。
-  /// 之前把探测挂到离屏的 [VideoController] 上，在 Windows 上需要真实可见窗口初始化
-  /// GPU 输出，离屏窗口初始化失败导致文件永远加载不出、元数据永远为空。
-  void _initProbePlayer() {
-    _probePlayer = Player();
-  }
-
   void _initPlayer() {
-    player.stream.completed.listen((_) => _onCompleted());
-    player.stream.tracks.listen((_) => _updateCurrentMetaFromPlayer());
-    player.stream.duration.listen((_) => _updateCurrentMetaFromPlayer());
+    player.completedStream.listen((_) => _onCompleted());
+    player.tracksStream.listen((_) => _updateCurrentMetaFromPlayer());
+    player.durationStream.listen((_) => _updateCurrentMetaFromPlayer());
+    player.playingStream.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
-  /// 先读取硬件解码偏好并写入 mpv 的 hwdec 选项，再打开当前视频，
-  /// 保证解码方式从首次播放起即生效（hwdec 改变需重新载入文件）。
+  /// 先读取硬件解码偏好并写入 fvp 的解码设置，再打开当前视频，
+  /// 保证解码方式从首次播放起即生效（解码器改变需重新载入文件）。
   Future<void> _initPlayback() async {
     _useHardwareDecode = await SettingsService.loadPlayerHardwareDecode();
-    await _setHwdecOption(_useHardwareDecode);
+    player.setHardwareDecode(_useHardwareDecode);
     if (!mounted) return;
     setState(() {});
     _openCurrent();
-  }
-
-  /// 通过 media_kit 内部 [NativePlayer.setProperty]（公开但未在基类暴露）写入 mpv 的
-  /// hwdec 选项。media_kit 未提供公开的解码方式 API，这里走其官方的“escape hatch”。
-  Future<void> _setHwdecOption(bool hardware) async {
-    final platform = player.platform;
-    if (platform is! NativePlayer) return;
-    try {
-      await platform.setProperty('hwdec', hardware ? 'auto' : 'no');
-    } catch (_) {}
   }
 
   void _openCurrent() {
@@ -160,7 +139,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
-    player.open(Media(entry.path), play: true);
+    // 不 await：元数据/轨道通过流在初始化完成后回填。
+    player.open(entry.path, play: true);
   }
 
   /// 当播放器解析出当前视频的轨道信息/分辨率/时长时，回填到播放列表条目。
@@ -170,13 +150,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     var meta = entry.meta ?? const VideoMeta();
-    // 取真正的视频轨（跳过 auto/no 占位轨）以拿到干净编码名与 demux 分辨率/帧率。
-    final t = _realVideoTrack(player);
-    if (t != null) {
-      meta = meta.copyWith(codec: t.codec, fps: t.fps);
-      if (t.w != null && t.h != null) {
-        meta = meta.copyWith(width: t.w, height: t.h);
-      }
+    // 编码/分辨率/帧率来自 getMediaInfo()。
+    final snap = player.snapshotVideoMeta();
+    if (snap != null) {
+      meta = meta.copyWith(
+        codec: snap.codec,
+        width: snap.width,
+        height: snap.height,
+        fps: snap.fps,
+      );
     }
     // 解码出的真实分辨率（video-params）优先于 demux 分辨率。
     final w = player.state.width;
@@ -185,15 +167,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       meta = meta.copyWith(width: w, height: h);
     }
     final dur = player.state.duration;
-    meta = meta.copyWith(duration: dur);
+    if (dur > Duration.zero) {
+      meta = meta.copyWith(duration: dur);
+    }
     if (entry.meta != meta) {
       entry.meta = meta;
       if (mounted) setState(() {});
     }
   }
 
-  /// 后台渐进探测所有视频元数据（纯 media_kit，不使用系统 ffprobe）。
-  /// 仅用单个无窗口的 [Player] 打开每个文件、读取容器层信息（编码/分辨率/帧率/时长），
+  /// 后台渐进探测所有视频元数据（基于 fvp 的 getMediaInfo，不依赖系统 ffprobe）。
+  /// 仅用临时 VideoPlayerController 打开每个文件、读取 MediaInfo（编码/分辨率/帧率/时长），
   /// 读不到的视频保持 N/A 而非崩溃。当前播放项优先探测。
   void _startMetadataProbe() {
     if (widget.playlist.entries.isEmpty) return;
@@ -210,7 +194,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 : 1);
       for (final e in ordered) {
         if (!mounted || gen != _probeGen) return;
-        final meta = await _probeOne(e.path);
+        final meta = await VideoMetadataService.probe(e.path);
         if (meta != null &&
             mounted &&
             gen == _probeGen &&
@@ -237,81 +221,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       _currentIndex < widget.playlist.entries.length &&
       widget.playlist.entries[_currentIndex] == e;
 
-  /// 从 track-list 中挑出真正的视频轨（跳过 media_kit 永远前置的
-  /// [VideoTrack.auto]/[VideoTrack.no] 占位轨，它们的 codec/分辨率/帧率都是 null）。
-  VideoTrack? _realVideoTrack(Player p) {
-    for (final t in p.state.tracks.video) {
-      if (t.codec != null && t.codec!.isNotEmpty) return t;
-    }
-    return null;
-  }
-
-  /// 从后台 Player 的当前状态读取轨道元数据。
-  /// track-list 的 [Track.codec] 是干净编码名（av1/h264/hevc 等，而非解码器名）。
-  VideoMeta _readMetaFromState(Player p) {
-    var meta = const VideoMeta();
-    final t = _realVideoTrack(p);
-    if (t != null) {
-      meta = meta.copyWith(
-        codec: t.codec,
-        width: t.w,
-        height: t.h,
-        fps: t.fps,
-      );
-    }
-    final dur = p.state.duration;
-    if (dur > Duration.zero) meta = meta.copyWith(duration: dur);
-    return meta;
-  }
-
-  /// 用后台（无窗口）[Player] 读取单个视频的容器层信息：编码/分辨率/帧率/时长。
-  /// 这些均来自 demuxer，无需解码画面，故不挂 [VideoController] 也能拿到。
-  Future<VideoMeta?> _probeOne(String path) async {
-    try {
-      if (_probePlayer == null) {
-        _initProbePlayer();
-        // media_kit 默认给无窗口 Player 设 --vid=no，需显式选上视频轨，
-        // 保证 track-list 解析出编码/分辨率/帧率。
-        await _probePlayer!.setVideoTrack(VideoTrack.auto());
-      }
-      final p = _probePlayer!;
-      await p.setVolume(0); // 探测期间不发声
-      final completer = Completer<void>();
-      late final StreamSubscription sub;
-      sub = p.stream.tracks.listen((t) {
-        // 必须等到真正的视频轨（有 codec）出现，而非 media_kit 前置的 auto/no 占位轨。
-        final hasReal = t.video.any((v) => v.codec != null && v.codec!.isNotEmpty);
-        if (hasReal && !completer.isCompleted) completer.complete();
-      });
-      await p.open(Media(path), play: false);
-      // 等待真正有编码的视频轨解析完成。
-      try {
-        await completer.future.timeout(const Duration(seconds: 5));
-      } catch (_) {}
-      await sub.cancel();
-      var meta = _readMetaFromState(p);
-      // 时长有时比 track-list 稍晚到达；若尚未拿到则补等一小段（最多约 3s）。
-      if (meta.duration == null || meta.duration == Duration.zero) {
-        for (var i = 0; i < 15; i++) {
-          await Future.delayed(const Duration(milliseconds: 200));
-          final m = _readMetaFromState(p);
-          if (m.duration != null && m.duration! > Duration.zero) {
-            meta = m;
-            break;
-          }
-        }
-      }
-      try {
-        await p.stop();
-      } catch (_) {}
-      return meta;
-    } catch (e) {
-      return null;
-    }
-  }
-
   void _onCompleted() {
-    // 过滤打开瞬间的误触发：media_kit 有时在 open 后会立刻发一次 completed，
+    // 过滤打开瞬间的误触发：播放器有时在 open 后会立刻发一次 completed，
     // 此时播放位置仍接近 0，并非真正播完。若据此自动下一集，会跳到错误的视频
     // （到列表末尾时还会回绕到第一个）。仅当打开已超过 1.5s 且确有播放进度时才视为有效。
     final justOpened = _lastOpenAt != null &&
@@ -406,7 +317,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _applyHwdec();
   }
 
-  /// 切换硬件/软件解码：mpv 的 hwdec 选项改变需重新载入文件才生效。
+  /// 切换硬件/软件解码：fvp 的解码器改变需重新载入文件才生效。
   /// 重新打开当前视频并以切换前的播放进度继续播放（保留播放/暂停状态），
   /// 不再从开头重播。
   Future<void> _applyHwdec() async {
@@ -419,12 +330,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     // 切换期间冻结进度条，避免 open 重置 position/duration 流使进度条跳到 0 再跳回。
     _switchingDecode = true;
     if (mounted) setState(() {});
-    await _setHwdecOption(_useHardwareDecode);
+    player.setHardwareDecode(_useHardwareDecode);
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
     // 先以暂停方式重新打开，待媒体可定位后 seek 到原进度，再恢复播放/暂停，
     // 避免 open(play:true) 后 seek 被载入过程吞掉而从开头重播。
-    await player.open(Media(entry.path), play: false);
+    await player.open(entry.path, play: false);
     if (pos > Duration.zero) {
       final deadline = DateTime.now().add(const Duration(seconds: 3));
       while (DateTime.now().isBefore(deadline)) {
@@ -564,7 +475,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       windowManager.setFullScreen(false);
     }
     _playlistScrollController.dispose();
-    _probePlayer?.dispose();
     player.dispose();
     super.dispose();
   }
@@ -700,6 +610,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 
   Widget _buildVideoArea() {
+    final c = player.controller;
     return GestureDetector(
       onTap: () {
         _togglePlay();
@@ -709,11 +620,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       child: Container(
         color: Colors.black,
         alignment: Alignment.center,
-        child: Video(
-          controller: controller,
-          fit: BoxFit.contain,
-          controls: null,
-        ),
+        child: player.isInitialized && c != null && c.value.size.width > 0
+            ? FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: c.value.size.width,
+                  height: c.value.size.height,
+                  child: VideoPlayer(c),
+                ),
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
@@ -943,7 +859,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  /// 进度条：独立 StatefulWidget，自身订阅 position 流。
+  /// 进度条：独立 StatefulWidget，自身订阅位置流。
   /// 拖拽时暂停外部流更新，避免父级频繁 setState 重建 Slider 导致拖拽中断/卡死。
   Widget _buildProgress(ColorScheme cs) {
     return _ProgressSlider(
@@ -1041,53 +957,54 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   Widget _buildAudioMenu(Color iconColor) {
     final tracks = player.state.tracks.audio;
-    return PopupMenuButton<AudioTrack>(
+    return PopupMenuButton<int?>(
       tooltip: Strings.t('audioTrack'),
       icon: Icon(Icons.audiotrack, color: iconColor),
       enabled: tracks.isNotEmpty,
       itemBuilder: (ctx) {
         return [
-          PopupMenuItem<AudioTrack>(
-            value: AudioTrack.auto(),
+          PopupMenuItem<int?>(
+            value: null,
             child: const Text('Auto'),
           ),
           ...tracks.map(
-            (t) => PopupMenuItem<AudioTrack>(
-              value: t,
-              child: Text(t.title ?? t.language ?? t.id),
+            (t) => PopupMenuItem<int?>(
+              value: t.index,
+              child: Text(t.label.isNotEmpty ? t.label : 'Track ${t.index}'),
             ),
           ),
         ];
       },
-      onSelected: (t) => player.setAudioTrack(t),
+      onSelected: (i) => player.setAudioTrackIndex(i),
     );
   }
 
   Widget _buildSubtitleMenu(Color iconColor) {
     final tracks = player.state.tracks.subtitle;
-    return PopupMenuButton<SubtitleTrack>(
+    return PopupMenuButton<int?>(
       tooltip: Strings.t('subtitle'),
       icon: Icon(Icons.subtitles, color: iconColor),
-      enabled: tracks.isNotEmpty,
+      enabled: tracks.isNotEmpty || true,
       itemBuilder: (ctx) {
         return [
-          PopupMenuItem<SubtitleTrack>(
-            value: SubtitleTrack.no(),
+          PopupMenuItem<int?>(
+            value: null,
             child: const Text('Off'),
           ),
-          PopupMenuItem<SubtitleTrack>(
-            value: SubtitleTrack.auto(),
-            child: const Text('Auto'),
-          ),
+          if (tracks.isNotEmpty)
+            PopupMenuItem<int?>(
+              value: tracks.first.index,
+              child: const Text('Auto'),
+            ),
           ...tracks.map(
-            (t) => PopupMenuItem<SubtitleTrack>(
-              value: t,
-              child: Text(t.title ?? t.language ?? t.id),
+            (t) => PopupMenuItem<int?>(
+              value: t.index,
+              child: Text(t.label.isNotEmpty ? t.label : 'Track ${t.index}'),
             ),
           ),
         ];
       },
-      onSelected: (t) => player.setSubtitleTrack(t),
+      onSelected: (i) => player.setSubtitleTrackIndex(i),
     );
   }
 
@@ -1421,7 +1338,7 @@ class _ResizeHandleState extends State<_ResizeHandle> {
 /// 进度条组件：独立状态，自身订阅播放位置流。
 /// 拖拽期间忽略外部流更新，避免父级重建打断拖拽手势导致进度条卡死。
 class _ProgressSlider extends StatefulWidget {
-  final Player player;
+  final FvpPlayer player;
   final ColorScheme cs;
   final bool showMilliseconds;
   final bool freeze;
@@ -1446,10 +1363,10 @@ class _ProgressSliderState extends State<_ProgressSlider> {
     super.initState();
     _position = widget.player.state.position;
     _duration = widget.player.state.duration;
-    _posSub = widget.player.stream.position.listen((p) {
+    _posSub = widget.player.positionStream.listen((p) {
       if (!_dragging && mounted && !widget.freeze) setState(() => _position = p);
     });
-    _durSub = widget.player.stream.duration.listen((d) {
+    _durSub = widget.player.durationStream.listen((d) {
       if (mounted && !widget.freeze) setState(() => _duration = d);
     });
   }
