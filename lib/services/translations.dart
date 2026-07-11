@@ -1683,6 +1683,86 @@ class Strings {
       AppLocale.ja: 'すべての動画',
     },
 
+    // ======== 音频播放器 ========
+    'audioPlayer': {
+      AppLocale.zhHans: '音频播放器',
+      AppLocale.zhHant: '音頻播放器',
+      AppLocale.en: 'Audio Player',
+      AppLocale.ja: 'オーディオプレーヤー',
+    },
+    'openProjectAudio': {
+      AppLocale.zhHans: '播放项目内音频',
+      AppLocale.zhHant: '播放項目內音頻',
+      AppLocale.en: 'Play Project Audio',
+      AppLocale.ja: 'プロジェクトの音声を再生',
+    },
+    'playAudio': {
+      AppLocale.zhHans: '播放音频',
+      AppLocale.zhHant: '播放音頻',
+      AppLocale.en: 'Play Audio',
+      AppLocale.ja: '音声を再生',
+    },
+    'noAudioFiles': {
+      AppLocale.zhHans: '该项目内没有找到音频文件',
+      AppLocale.zhHant: '該項目內沒有找到音頻文件',
+      AppLocale.en: 'No audio files found in this project',
+      AppLocale.ja: 'このプロジェクトに音声ファイルが見つかりません',
+    },
+    'artist': {
+      AppLocale.zhHans: '艺人',
+      AppLocale.zhHant: '藝人',
+      AppLocale.en: 'Artist',
+      AppLocale.ja: 'アーティスト',
+    },
+    'album': {
+      AppLocale.zhHans: '专辑',
+      AppLocale.zhHant: '專輯',
+      AppLocale.en: 'Album',
+      AppLocale.ja: 'アルバム',
+    },
+    'unknownArtist': {
+      AppLocale.zhHans: '未知艺人',
+      AppLocale.zhHant: '未知藝人',
+      AppLocale.en: 'Unknown Artist',
+      AppLocale.ja: '不明なアーティスト',
+    },
+    'unknownAlbum': {
+      AppLocale.zhHans: '未知专辑',
+      AppLocale.zhHant: '未知專輯',
+      AppLocale.en: 'Unknown Album',
+      AppLocale.ja: '不明なアルバム',
+    },
+    'unknownTitle': {
+      AppLocale.zhHans: '未知标题',
+      AppLocale.zhHant: '未知標題',
+      AppLocale.en: 'Unknown Title',
+      AppLocale.ja: '不明なタイトル',
+    },
+    'lyrics': {
+      AppLocale.zhHans: '歌词',
+      AppLocale.zhHant: '歌詞',
+      AppLocale.en: 'Lyrics',
+      AppLocale.ja: '歌詞',
+    },
+    'noLyrics': {
+      AppLocale.zhHans: '暂无歌词',
+      AppLocale.zhHant: '暫無歌詞',
+      AppLocale.en: 'No lyrics',
+      AppLocale.ja: '歌詞なし',
+    },
+    'showLyrics': {
+      AppLocale.zhHans: '显示歌词',
+      AppLocale.zhHant: '顯示歌詞',
+      AppLocale.en: 'Show Lyrics',
+      AppLocale.ja: '歌詞を表示',
+    },
+    'midiNoSound': {
+      AppLocale.zhHans: 'MIDI 可能需声音字体(soundfont)才能出声',
+      AppLocale.zhHant: 'MIDI 可能需聲音字體(soundfont)才能出聲',
+      AppLocale.en: 'MIDI may need a soundfont to produce sound',
+      AppLocale.ja: 'MIDI は音源(soundfont)が必要な場合があります',
+    },
+
     // ======== 图片/漫画阅读器 ========
     'comicReader': {
       AppLocale.zhHans: '图片阅读器',

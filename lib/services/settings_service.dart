@@ -488,6 +488,91 @@ class SettingsService {
     await AppDataService.setString(_playerMutedKey, v.toString());
   }
 
+  // --- Audio player settings ---
+
+  // 复用视频播放器的音量与静音持久化（音频与视频共用同一套音量偏好）。
+  static Future<double> loadAudioVolume() => loadPlayerVolume();
+  static Future<void> saveAudioVolume(double v) => savePlayerVolume(v);
+  static Future<bool> loadAudioMuted() => loadPlayerMuted();
+  static Future<void> saveAudioMuted(bool v) => savePlayerMuted(v);
+
+  // 播放列表面板显隐与宽度（默认显示）。
+  static const _audioShowPlaylistKey = 'audio_show_playlist';
+  static const _audioPlaylistWidthKey = 'audio_playlist_width';
+  static bool _cachedAudioShowPlaylist = true;
+  static double _cachedAudioPlaylistWidth = 340.0;
+
+  static bool loadAudioShowPlaylistSync() => _cachedAudioShowPlaylist;
+  static double loadAudioPlaylistWidthSync() => _cachedAudioPlaylistWidth;
+
+  static Future<bool> loadAudioShowPlaylist() async {
+    final val = await AppDataService.getString(_audioShowPlaylistKey);
+    _cachedAudioShowPlaylist = val == null || val == 'true';
+    return _cachedAudioShowPlaylist;
+  }
+
+  static Future<void> saveAudioShowPlaylist(bool v) async {
+    _cachedAudioShowPlaylist = v;
+    await AppDataService.setString(_audioShowPlaylistKey, v.toString());
+  }
+
+  static Future<double> loadAudioPlaylistWidth() async {
+    final val = await AppDataService.getString(_audioPlaylistWidthKey);
+    final w = double.tryParse(val ?? '');
+    _cachedAudioPlaylistWidth = w != null ? w.clamp(220.0, 640.0) : 340.0;
+    return _cachedAudioPlaylistWidth;
+  }
+
+  static Future<void> saveAudioPlaylistWidth(double w) async {
+    _cachedAudioPlaylistWidth = w;
+    await AppDataService.setString(_audioPlaylistWidthKey, w.toString());
+  }
+
+  // 播放模式：0=顺序(off) 1=列表循环(all) 2=单曲循环(one) 3=随机(shuffle)。
+  static const _audioRepeatKey = 'audio_repeat_mode';
+  static const int _defaultAudioRepeat = 1; // 默认列表循环
+
+  static Future<int> loadAudioRepeatMode() async {
+    final val = await AppDataService.getString(_audioRepeatKey);
+    final v = int.tryParse(val ?? '');
+    return v != null ? v.clamp(0, 3) : _defaultAudioRepeat;
+  }
+
+  static Future<void> saveAudioRepeatMode(int v) async {
+    await AppDataService.setString(_audioRepeatKey, v.toString());
+  }
+
+  // 播放倍速（0.5~2.0）。
+  static const _audioSpeedKey = 'audio_speed';
+  static const double _defaultAudioSpeed = 1.0;
+
+  static Future<double> loadAudioSpeed() async {
+    final val = await AppDataService.getString(_audioSpeedKey);
+    final v = double.tryParse(val ?? '');
+    return v != null ? v.clamp(0.5, 2.0) : _defaultAudioSpeed;
+  }
+
+  static Future<void> saveAudioSpeed(double v) async {
+    await AppDataService.setString(_audioSpeedKey, v.toString());
+  }
+
+  // 是否显示歌词面板（默认显示）。
+  static const _audioShowLyricsKey = 'audio_show_lyrics';
+  static bool _cachedAudioShowLyrics = true;
+
+  static bool loadAudioShowLyricsSync() => _cachedAudioShowLyrics;
+
+  static Future<bool> loadAudioShowLyrics() async {
+    final val = await AppDataService.getString(_audioShowLyricsKey);
+    _cachedAudioShowLyrics = val == null || val == 'true';
+    return _cachedAudioShowLyrics;
+  }
+
+  static Future<void> saveAudioShowLyrics(bool v) async {
+    _cachedAudioShowLyrics = v;
+    await AppDataService.setString(_audioShowLyricsKey, v.toString());
+  }
+
   // --- Comic reader settings ---
 
   static const _readerLayoutKey = 'reader_layout_mode';

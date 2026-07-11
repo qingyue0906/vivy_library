@@ -228,6 +228,7 @@ class GridArea extends StatefulWidget {
   final GridSettings gridSettings;
   final double middleOpacity;
   final void Function(LibraryItem item, {String? startPath}) onOpenVideoPlayer;
+  final void Function(LibraryItem item, {String? startPath}) onOpenAudioPlayer;
   final void Function(LibraryItem item, {String? startPath}) onOpenComicReader;
   final void Function(LibraryItem item, {String? startPath}) onOpenEbookReader;
 
@@ -249,6 +250,7 @@ class GridArea extends StatefulWidget {
     this.onCreateItem,
     this.onFileDrop,
     required     this.onOpenVideoPlayer,
+    required this.onOpenAudioPlayer,
     required this.onOpenComicReader,
     required this.onOpenEbookReader,
   });
@@ -432,6 +434,13 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                                   _panelItem!,
                                   startPath: path,
                                 ),
+                                onPlayAudioProject: () =>
+                                    widget.onOpenAudioPlayer(_panelItem!),
+                                onPlayAudioFile: (path) =>
+                                    widget.onOpenAudioPlayer(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
                                 onReadProject: () =>
                                     widget.onOpenComicReader(_panelItem!),
                                 onReadImageFile: (path) =>
@@ -601,6 +610,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                 final type = item.info.type.toLowerCase();
                 if (type == 'video' || type == 'anime') {
                   widget.onOpenVideoPlayer(item);
+                } else if (type == 'voice' || type == 'music') {
+                  widget.onOpenAudioPlayer(item);
                 } else if (type == 'comic' || type == 'picture') {
                   widget.onOpenComicReader(item);
                 } else if (type == 'novel' || type == 'book') {

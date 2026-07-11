@@ -14,6 +14,7 @@ import '../services/settings_service.dart';
 import '../services/translations.dart';
 import '../services/comic_playlist_service.dart';
 import '../services/ebook_service.dart';
+import '../services/audio_tag_service.dart';
 import 'exe_picker_dialog.dart';
 import 'file_properties_dialog.dart';
 import 'compact_level.dart';
@@ -30,6 +31,8 @@ class FileBrowserPanel extends StatefulWidget {
   final GifDisplayMode gifMode;
   final VoidCallback? onPlayProject;
   final void Function(String path)? onPlayVideoFile;
+  final VoidCallback? onPlayAudioProject;
+  final void Function(String path)? onPlayAudioFile;
   final VoidCallback? onReadProject;
   final void Function(String path)? onReadImageFile;
   final VoidCallback? onReadEbookProject;
@@ -45,6 +48,8 @@ class FileBrowserPanel extends StatefulWidget {
     this.gifMode = GifDisplayMode.hover,
     this.onPlayProject,
     this.onPlayVideoFile,
+    this.onPlayAudioProject,
+    this.onPlayAudioFile,
     this.onReadProject,
     this.onReadImageFile,
     this.onReadEbookProject,
@@ -196,6 +201,15 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               icon: Icons.menu_book,
               tooltip: Strings.t('openProjectEbook'),
               onTap: widget.onReadEbookProject ?? () {},
+            ),
+          if (widget.item.info.type.toLowerCase() == 'voice' ||
+              widget.item.info.type.toLowerCase() == 'music')
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.audiotrack,
+              tooltip: Strings.t('openProjectAudio'),
+              onTap: widget.onPlayAudioProject ?? () {},
             ),
           _headerIconButton(
             c: c,
@@ -362,12 +376,15 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
           'webm',
           'm4v',
         }.contains(ext);
+        final isAud = AudioTagService.isAudioFile(file.path);
         final itemType = widget.item.info.type.toLowerCase();
         if (EbookService.isReadableFile(file.path)) {
           // 电子书文件（txt/epub/pdf/md）双击直接用内置阅读器打开。
           widget.onReadEbookFile?.call(file.path);
         } else if ((itemType == 'video' || itemType == 'anime') && isVid) {
           widget.onPlayVideoFile?.call(file.path);
+        } else if ((itemType == 'voice' || itemType == 'music') && isAud) {
+          widget.onPlayAudioFile?.call(file.path);
         } else if ((itemType == 'comic' || itemType == 'picture') &&
             ComicPlaylistService.isReadableFile(file.path)) {
           widget.onReadImageFile?.call(file.path);
