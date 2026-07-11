@@ -819,7 +819,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildProgress(cs),
+            _buildProgress(cs, overlay: overlay),
             Row(
               children: [
                 IconButton(
@@ -897,10 +897,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   /// 进度条：独立 StatefulWidget，自身订阅位置流。
   /// 拖拽时暂停外部流更新，避免父级频繁 setState 重建 Slider 导致拖拽中断/卡死。
-  Widget _buildProgress(ColorScheme cs) {
+  Widget _buildProgress(ColorScheme cs, {bool overlay = false}) {
     return _ProgressSlider(
       player,
       cs,
+      overlay: overlay,
       showMilliseconds: _showMilliseconds,
       freeze: _switchingDecode,
     );
@@ -1378,9 +1379,12 @@ class _ProgressSlider extends StatefulWidget {
   final ColorScheme cs;
   final bool showMilliseconds;
   final bool freeze;
+  final bool overlay;
 
   const _ProgressSlider(this.player, this.cs,
-      {this.showMilliseconds = false, this.freeze = false});
+      {this.showMilliseconds = false,
+      this.freeze = false,
+      this.overlay = false});
 
   @override
   State<_ProgressSlider> createState() => _ProgressSliderState();
@@ -1423,13 +1427,15 @@ class _ProgressSliderState extends State<_ProgressSlider> {
     final value = max > 0
         ? position.inSeconds.toDouble().clamp(0, max).toDouble()
         : 0.0;
+    // 全屏浮层背景为深色 → 用白色；窗口模式跟随主题(surface)，用 onSurfaceVariant 保证亮色下可读。
+    final timeColor = widget.overlay ? Colors.white70 : widget.cs.onSurfaceVariant;
     return Row(
       children: [
         Text(
           widget.showMilliseconds
               ? VideoMeta.formatClock(position)
               : VideoMeta.formatDuration(position),
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          style: TextStyle(color: timeColor, fontSize: 11),
         ),
         Expanded(
           child: SliderTheme(
@@ -1455,7 +1461,7 @@ class _ProgressSliderState extends State<_ProgressSlider> {
           widget.showMilliseconds
               ? VideoMeta.formatClock(duration)
               : VideoMeta.formatDuration(duration),
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          style: TextStyle(color: timeColor, fontSize: 11),
         ),
       ],
     );
