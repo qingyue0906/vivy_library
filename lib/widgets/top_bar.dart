@@ -7,6 +7,7 @@ class TopBar extends StatelessWidget {
   final LibraryState state;
   final TextEditingController searchController;
   final VoidCallback onSettingsTap;
+  final VoidCallback? onGridDisplayTap;
   final double backgroundOpacity;
 
   const TopBar({
@@ -14,6 +15,7 @@ class TopBar extends StatelessWidget {
     required this.state,
     required this.searchController,
     required this.onSettingsTap,
+    this.onGridDisplayTap,
     this.backgroundOpacity = 1.0,
   });
 
@@ -42,6 +44,8 @@ class TopBar extends StatelessWidget {
           _buildSortOrderButton(c),
           SizedBox(width: 2 * c),
           _buildRefreshButton(c),
+          SizedBox(width: 2 * c),
+          _buildGridDisplayButton(c),
         ],
       ),
     );
@@ -193,6 +197,17 @@ class TopBar extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
       onPressed: () => state.rescan(),
+    );
+  }
+
+  Widget _buildGridDisplayButton(double c) {
+    if (onGridDisplayTap == null) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: Strings.t('gridDisplaySettings'),
+      icon: Icon(Icons.view_module, size: 14 * c),
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
+      onPressed: onGridDisplayTap,
     );
   }
 }

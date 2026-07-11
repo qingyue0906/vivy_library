@@ -19,6 +19,7 @@ class FileCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback onDoubleTap;
   final void Function(Offset globalPosition)? onRightClick;
+  final GridDisplayMode displayMode;
 
   const FileCard({
     super.key,
@@ -28,6 +29,7 @@ class FileCard extends StatefulWidget {
     this.onTap,
     required this.onDoubleTap,
     this.onRightClick,
+    this.displayMode = GridDisplayMode.loose,
   });
 
   @override
@@ -54,6 +56,9 @@ class _FileCardState extends State<FileCard> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
+    if (widget.displayMode == GridDisplayMode.list) {
+      return _buildListRow(c, cs);
+    }
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
     final hoverColor = cs.brightness == Brightness.light
@@ -149,5 +154,67 @@ class _FileCardState extends State<FileCard> {
     }
 
     return Icon(icon, size: 28 * c, color: color);
+  }
+
+  Widget _buildListRow(double c, ColorScheme cs) {
+    final hoverColor = cs.brightness == Brightness.light
+        ? const Color(0xFFB89AFF)
+        : const Color(0xFF7E8FA3);
+    final borderColor = widget.isSelected
+        ? cs.primary
+        : (_isHovered ? hoverColor : cs.outlineVariant);
+    final ext = widget.file.extension;
+    final isImage = previewExtensions.any((e) => e == '.$ext');
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: _handleTap,
+        onSecondaryTapUp: widget.onRightClick != null
+            ? (details) => widget.onRightClick!(details.globalPosition)
+            : null,
+        child: Container(
+          height: 44 * c,
+          padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 4 * c),
+          decoration: BoxDecoration(
+            color: widget.isSelected
+                ? cs.primaryContainer.withValues(alpha: 0.25)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4 * c),
+            border: Border.all(
+              color: borderColor,
+              width: widget.isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(width: 4 * c),
+              SizedBox(
+                width: 32 * c,
+                height: 32 * c,
+                child: isImage
+                    ? GifImage(
+                        file: File(widget.file.path),
+                        gifMode: GifDisplayMode.static,
+                        cacheWidth: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_) => _buildFileIcon(context, ext, c),
+                      )
+                    : _buildFileIcon(context, ext, c),
+              ),
+              SizedBox(width: 8 * c),
+              Expanded(
+                child: Text(
+                  widget.file.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12 * c, color: cs.onSurface),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

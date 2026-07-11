@@ -50,6 +50,7 @@ class _SectionGridDelegate extends SliverGridDelegate {
   final double headerExtent;
   final Set<int> headerIndices;
   final int childCount;
+  final List<double>? perChildExtents;
 
   const _SectionGridDelegate({
     required this.crossAxisCount,
@@ -59,6 +60,7 @@ class _SectionGridDelegate extends SliverGridDelegate {
     required this.headerExtent,
     required this.headerIndices,
     required this.childCount,
+    this.perChildExtents,
   });
 
   @override
@@ -72,6 +74,7 @@ class _SectionGridDelegate extends SliverGridDelegate {
       headerIndices: headerIndices,
       childCount: childCount,
       crossAxisExtent: constraints.crossAxisExtent,
+      perChildExtents: perChildExtents,
     );
   }
 
@@ -83,8 +86,19 @@ class _SectionGridDelegate extends SliverGridDelegate {
         old.mainAxisSpacing != mainAxisSpacing ||
         old.headerExtent != headerExtent ||
         old.headerIndices != headerIndices ||
-        old.childCount != childCount;
+        old.childCount != childCount ||
+        !_sameDoubleList(old.perChildExtents, perChildExtents);
   }
+}
+
+bool _sameDoubleList(List<double>? a, List<double>? b) {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if ((a[i] - b[i]).abs() > 0.01) return false;
+  }
+  return true;
 }
 
 /// 支持「整行标题 + 普通卡片格」混合布局的 SliverGridLayout。
@@ -100,6 +114,7 @@ class _SectionGridLayout extends SliverGridLayout {
     required this.headerIndices,
     required this.childCount,
     required this.crossAxisExtent,
+    this.perChildExtents,
   }) {
     _compute();
   }
@@ -112,12 +127,14 @@ class _SectionGridLayout extends SliverGridLayout {
   final Set<int> headerIndices;
   final int childCount;
   final double crossAxisExtent;
+  final List<double>? perChildExtents;
 
   late final double _tileWidth;
   late final List<double> _starts;
   late final List<double> _extents;
   late final List<double> _crossOffsets;
   late final double _maxScroll;
+  late final List<List<int>> _colItems;
 
   void _compute() {
     _tileWidth =
@@ -126,32 +143,43 @@ class _SectionGridLayout extends SliverGridLayout {
     _starts = List<double>.filled(childCount, 0);
     _extents = List<double>.filled(childCount, 0);
     _crossOffsets = List<double>.filled(childCount, 0);
-    var offset = 0.0;
-    var col = 0;
+    _colItems = List.generate(crossAxisCount, (_) => <int>[]);
+    final colHeights = List<double>.filled(crossAxisCount, 0);
+    final colStride = _tileWidth + crossAxisSpacing;
+
     for (var i = 0; i < childCount; i++) {
       if (headerIndices.contains(i)) {
-        // 标题前若本行有未填完的卡片，先换行，避免标题与上一组卡片同行。
-        if (col > 0) {
-          offset += mainAxisExtent + mainAxisSpacing;
-          col = 0;
-        }
-        _starts[i] = offset;
+        // 分组标题占满整行：先让所有列对齐到当前最高列，再放置标题，
+        // 之后所有列从该高度继续，保证标题下方的卡片不与上方残留错位。
+        final bottom = colHeights.reduce((a, b) => a > b ? a : b);
+        _starts[i] = bottom;
         _extents[i] = headerExtent;
         _crossOffsets[i] = 0;
-        offset += headerExtent + mainAxisSpacing;
-        col = 0;
-      } else {
-        _starts[i] = offset;
-        _extents[i] = mainAxisExtent;
-        _crossOffsets[i] = col * (_tileWidth + crossAxisSpacing);
-        col++;
-        if (col >= crossAxisCount) {
-          offset += mainAxisExtent + mainAxisSpacing;
-          col = 0;
+        final reset = bottom + headerExtent + mainAxisSpacing;
+        for (var c = 0; c < crossAxisCount; c++) {
+          colHeights[c] = reset;
         }
+      } else {
+        // 最短列贪心（Pinterest / SliverMasonryGrid 同款）：每张卡片放入
+        // 当前最矮的一列并更新其高度；等高卡片时退化为普通按行网格。
+        var col = 0;
+        for (var c = 1; c < crossAxisCount; c++) {
+          if (colHeights[c] < colHeights[col]) col = c;
+        }
+        final extent =
+            perChildExtents != null ? perChildExtents![i] : mainAxisExtent;
+        _starts[i] = colHeights[col];
+        _extents[i] = extent;
+        _crossOffsets[i] = col * colStride;
+        colHeights[col] += extent + mainAxisSpacing;
+        _colItems[col].add(i);
       }
     }
-    _maxScroll = col > 0 ? offset + mainAxisExtent : offset;
+    final maxH = childCount > 0
+        ? colHeights.reduce((a, b) => a > b ? a : b)
+        : 0.0;
+    // 去掉尾部多余的一格 mainAxisSpacing（最后一行卡片后无需额外间距）。
+    _maxScroll = maxH - (childCount > 0 ? mainAxisSpacing : 0);
   }
 
   @override
@@ -168,47 +196,63 @@ class _SectionGridLayout extends SliverGridLayout {
   @override
   double computeMaxScrollOffset(int childCount) => _maxScroll;
 
-  int _firstVisible(double scrollOffset) {
-    if (childCount == 0) return 0;
-    var lo = 0;
-    var hi = childCount - 1;
-    var ans = childCount - 1;
+  /// 单列内二分：首个 end > [scrollOffset] 的全局索引；整列都已滚过时返回该列
+  /// 最后一个（对全局最小可见索引无贡献）。
+  int _colFirstVisible(List<int> colItems, double scrollOffset) {
+    if (colItems.isEmpty) return childCount;
+    var lo = 0, hi = colItems.length - 1, ans = colItems.length - 1;
     while (lo <= hi) {
       final mid = (lo + hi) ~/ 2;
-      if (_starts[mid] + _extents[mid] > scrollOffset) {
+      final gi = colItems[mid];
+      if (_starts[gi] + _extents[gi] > scrollOffset) {
         ans = mid;
         hi = mid - 1;
       } else {
         lo = mid + 1;
       }
     }
-    return ans;
+    return colItems[ans];
   }
 
-  int _lastVisible(double scrollOffset) {
-    if (childCount == 0) return 0;
-    var lo = 0;
-    var hi = childCount - 1;
-    var ans = 0;
+  /// 单列内二分：末个 start ≤ [scrollOffset] 的全局索引；整列都未进入视口时
+  /// 返回该列第一个（对全局最大可见索引无贡献）。
+  int _colLastVisible(List<int> colItems, double scrollOffset) {
+    if (colItems.isEmpty) return -1;
+    var lo = 0, hi = colItems.length - 1, ans = 0;
     while (lo <= hi) {
       final mid = (lo + hi) ~/ 2;
-      if (_starts[mid] <= scrollOffset) {
+      final gi = colItems[mid];
+      if (_starts[gi] <= scrollOffset) {
         ans = mid;
         lo = mid + 1;
       } else {
         hi = mid - 1;
       }
     }
-    return ans;
+    return colItems[ans];
   }
 
   @override
-  int getMinChildIndexForScrollOffset(double scrollOffset) =>
-      _firstVisible(scrollOffset);
+  int getMinChildIndexForScrollOffset(double scrollOffset) {
+    if (childCount == 0) return 0;
+    var min = childCount;
+    for (var col = 0; col < crossAxisCount; col++) {
+      final gi = _colFirstVisible(_colItems[col], scrollOffset);
+      if (gi < min) min = gi;
+    }
+    return min < childCount ? min : childCount - 1;
+  }
 
   @override
-  int getMaxChildIndexForScrollOffset(double scrollOffset) =>
-      _lastVisible(scrollOffset);
+  int getMaxChildIndexForScrollOffset(double scrollOffset) {
+    if (childCount == 0) return 0;
+    var max = -1;
+    for (var col = 0; col < crossAxisCount; col++) {
+      final gi = _colLastVisible(_colItems[col], scrollOffset);
+      if (gi > max) max = gi;
+    }
+    return max >= 0 ? max : 0;
+  }
 }
 
 class GridArea extends StatefulWidget {
@@ -288,6 +332,11 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
   /// 避免拖入底部面板时外层网格区也触发一次复制。
   final GlobalKey _panelKey = GlobalKey();
+
+  /// 自适应模式下预览图的真实宽高比缓存（key=预览图路径）。
+  /// 尺寸未知时回退默认 aspectRatio，加载完成后触发重排实现砖石布局。
+  final Map<String, double> _previewAspectRatios = {};
+  final Set<String> _resolvingAspects = {};
 
   /// 底部文件面板进出场动画控制器：作为面板滑入/滑出与中间内容让位的唯一动画源。
   /// 同一进度 v 同时驱动内容让位、面板位移、FAB 位置，确保三者完全同步。
@@ -482,11 +531,19 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
 
   Widget _buildGrid(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
+    if (gridSettings.displayMode == GridDisplayMode.list) {
+      return _buildList(context, c, cs);
+    }
     final minCardWidth = gridSettings.minCardWidth;
     final maxCardWidth = gridSettings.maxCardWidth;
     final spacing = 8.0 * c;
     final fixedPerRow = gridSettings.itemsPerRow;
     final aspectRatio = gridSettings.aspectRatioValue;
+    final mode = gridSettings.displayMode;
+    final badges = gridSettings.badges;
+    final adaptive = mode == GridDisplayMode.adaptive;
+    final hasCaption =
+        mode != GridDisplayMode.compact && mode != GridDisplayMode.cover;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -513,13 +570,9 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           }
         }
 
-        // Fixed mainAxisExtent (known-good 24ff0a5 baseline). childAspectRatio
-        // made every SliverGrid's per-frame relayout far more expensive; with
-        // dozens of groups in grouped mode that multiplied into the drag
-        // stutter. mainAxisExtent yields identical card sizes but is cheap to
-        // relayout.
         final imgHeight = cardWidth / aspectRatio;
-        final itemMainAxisExtent = imgHeight + 38 * c;
+        final itemMainAxisExtent =
+            hasCaption ? (imgHeight + 38 * c) : imgHeight;
         final folderMainAxisExtent = cardWidth / aspectRatio * 0.5 + 50 * c;
         final fileMainAxisExtent = cardWidth / aspectRatio * 0.5 + 46 * c;
 
@@ -527,12 +580,11 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         final gItems = state.groupedItems;
         final gFiles = state.groupedFiles;
 
-        // --- Three-tier cache ---
+        // 自适应模式每次都重建（预览图尺寸缓存会触发重排），不走三级缓存。
+        final cacheEnabled = !adaptive;
         // delegateKey: captures everything affecting cardBuilder closures
-        //   (data refs, selection, settings, aspectRatio, c, gifMode).
-        //   Excludes layout params (crossAxisCount, spacing, cardWidth).
-        // fullKey: delegateKey + crossAxisCount — determines if we can
-        //   return the exact same widget (zero work).
+        //   (data refs, selection, settings, aspectRatio, c, gifMode,
+        //   displayMode, badges). Excludes layout params.
         final delegateKey =
             '${identityHashCode(gSubDirs)}|${identityHashCode(gItems)}|'
             '${identityHashCode(gFiles)}|${identityHashCode(items)}|'
@@ -542,16 +594,20 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             '${state.selectedFile?.path ?? ''}|'
             '${identityHashCode(gridSettings)}|'
             '${gridSettings.aspectRatioValue}|'
-            '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|$c|$cardWidth';
+            '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|'
+            '$mode|${badges.enabled.map((e) => e.name).join(',')}|$c|$cardWidth';
         final fullKey = '$delegateKey|$crossAxisCount';
 
-        // Tier 1: full cache hit — return same widget, zero work.
-        if (fullKey == _cachedFullKey && _cachedScrollContent != null) {
-          return _cachedScrollContent!;
+        if (cacheEnabled) {
+          // Tier 1: full cache hit — return same widget, zero work.
+          if (fullKey == _cachedFullKey && _cachedScrollContent != null) {
+            return _cachedScrollContent!;
+          }
         }
 
         // Determine whether to reuse cached delegates.
-        final delegateHit = delegateKey == _cachedDelegateKey &&
+        final delegateHit = cacheEnabled &&
+            delegateKey == _cachedDelegateKey &&
             _cachedFolderDelegate != null;
 
         SliverChildBuilderDelegate folderDelegate;
@@ -581,64 +637,26 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             gSubDirsUsed,
             c,
             cs,
-            (node) => FolderCard(
-              key: GlobalObjectKey(node.path),
-              node: node,
-              displayWidth: cardWidth,
-              isSelected: state.isFolderSelected(node.path),
-              onTap: () => state.setSelectedFolder(node),
-              onDoubleTap: () => state.setSelectedCategory(node.path),
-              onCtrlTap: () => state.toggleFolderSelection(node),
-              onShiftTap: () => state.selectFolderRange(node, subDirs),
-              onRightClick: (globalPos) =>
-                  _showFolderContextMenu(context, node, globalPos),
-            ),
+            (node) => _folderCard(node, cardWidth),
           );
           itemDelegate = _buildFlatDelegate(
             gItemsUsed,
             c,
             cs,
-            (item) => ItemCard(
-              key: GlobalObjectKey(item.path),
-              item: item,
-              effectiveInfo: state.effectiveInfo(item),
-              displayWidth: cardWidth,
-              displayHeight: imgHeight,
-              isSelected: state.isItemSelected(item.path),
-              onTap: () => state.setSelectedItem(item),
-              onCtrlTap: () => state.toggleItemSelection(item),
-              onShiftTap: () => state.selectRange(item, items),
-              onDoubleTap: () {
-                final type = state.effectiveInfo(item).type.toLowerCase();
-                if (type == 'video' || type == 'anime') {
-                  widget.onOpenVideoPlayer(item);
-                } else if (type == 'voice' || type == 'music') {
-                  widget.onOpenAudioPlayer(item);
-                } else if (type == 'comic' || type == 'picture') {
-                  widget.onOpenComicReader(item);
-                } else if (type == 'novel' || type == 'book') {
-                  widget.onOpenEbookReader(item);
-                }
-              },
-              onRightClick: (globalPos) =>
-                  _showContextMenu(context, item, globalPos),
-              gifMode: gridSettings.cardGifMode,
-            ),
+            (item) {
+              final aspect = adaptive
+                  ? (_previewAspectRatios[item.previewPath] ?? aspectRatio)
+                  : aspectRatio;
+              final ih = cardWidth / aspect;
+              if (adaptive) _maybeResolveAspect(item.previewPath);
+              return _itemCard(item, cardWidth, ih, mode, badges);
+            },
           );
           fileDelegate = _buildFlatDelegate(
             gFilesUsed,
             c,
             cs,
-            (file) => FileCard(
-              key: GlobalObjectKey(file.path),
-              file: file,
-              displayWidth: cardWidth,
-              isSelected: state.selectedFile?.path == file.path,
-              onTap: () => state.setSelectedFile(file),
-              onDoubleTap: () => _openFile(file.path),
-              onRightClick: (globalPos) =>
-                  _showFileContextMenu(context, file, globalPos),
-            ),
+            (file) => _fileCard(file, cardWidth),
           );
 
           _cachedFolderDelegate = folderDelegate;
@@ -650,11 +668,38 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           _cachedDelegateKey = delegateKey;
         }
 
+        // 自适应模式：提前为所有 item 解析预览图真实宽高比，使屏外卡片也能
+        // 拿到真实比例（而非默认比例），首屏即呈现完整砖石，而非只有可见行参差。
+        if (adaptive) {
+          for (final fe in gItemsUsed) {
+            if (!fe.isHeader) {
+              _maybeResolveAspect((fe.entry as LibraryItem).previewPath);
+            }
+          }
+        }
+
+        final headerExtent = 16 * c;
+
+        // 自适应下为每张 item 卡片计算独立高度（砖石布局）。
+        List<double>? itemPerExtents;
+        if (adaptive && gItemsUsed.isNotEmpty) {
+          itemPerExtents = [
+            for (final fe in gItemsUsed)
+              fe.isHeader
+                  ? headerExtent
+                  : (() {
+                      final item = fe.entry as LibraryItem;
+                      final aspect =
+                          _previewAspectRatios[item.previewPath] ?? aspectRatio;
+                      return cardWidth / aspect + (hasCaption ? 38 * c : 0);
+                    })(),
+          ];
+        }
+
         // Build slivers list using ONE SliverGrid per section. The grid itself
         // renders full-width group-header rows via _SectionGridDelegate, so
         // visual grouping is preserved while SliverGrid count stays ≤3
         // (the per-frame relayout cost no longer multiplies by group count).
-        final headerExtent = 16 * c;
         final folderHeaderIndices = _headerIndices(gSubDirsUsed);
         final itemHeaderIndices = _headerIndices(gItemsUsed);
         final fileHeaderIndices = _headerIndices(gFilesUsed);
@@ -685,6 +730,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                 spacing,
                 headerExtent,
                 itemHeaderIndices,
+                perChildExtents: itemPerExtents,
               ),
             );
         }
@@ -703,7 +749,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             );
         }
 
-        _cachedScrollContent = GestureDetector(
+        final content = GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => state.clearSelection(),
           child: SmoothScroll(
@@ -719,10 +765,169 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             ),
           ),
         );
-        _cachedFullKey = fullKey;
-
-        return _cachedScrollContent!;
+        if (cacheEnabled) {
+          _cachedScrollContent = content;
+          _cachedFullKey = fullKey;
+        }
+        return content;
       },
+    );
+  }
+
+  // ===== 列表模式 =====
+
+  Widget _buildList(BuildContext context, double c, ColorScheme cs) {
+    final gSubDirs = state.groupedSubDirs;
+    final gItems = state.groupedItems;
+    final gFiles = state.groupedFiles;
+    final thumb = 56 * c;
+    final slivers = <Widget>[];
+    if (gSubDirs.isNotEmpty) {
+      slivers.add(_sectionHeader(Strings.t('folderSection'), c, cs));
+      slivers.add(
+        _listSection(gSubDirs, c, cs, (node) => _folderCard(node, thumb)),
+      );
+    }
+    if (gItems.isNotEmpty) {
+      slivers.add(_sectionHeader(Strings.t('itemSection'), c, cs));
+      slivers.add(
+        _listSection(
+          gItems,
+          c,
+          cs,
+          (item) => _itemCard(
+            item,
+            thumb,
+            thumb,
+            GridDisplayMode.list,
+            gridSettings.badges,
+          ),
+        ),
+      );
+    }
+    if (gFiles.isNotEmpty) {
+      slivers.add(_sectionHeader(Strings.t('fileSection'), c, cs));
+      slivers.add(
+        _listSection(gFiles, c, cs, (file) => _fileCard(file, thumb)),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => state.clearSelection(),
+      child: SmoothScroll(
+        builder: (context, controller, physics) => CustomScrollView(
+          controller: controller,
+          physics: physics,
+          slivers: slivers,
+        ),
+      ),
+    );
+  }
+
+  SliverList _listSection<T>(
+    List<GroupedEntries<T>> groups,
+    double c,
+    ColorScheme cs,
+    Widget Function(T) cardBuilder,
+  ) {
+    final flat = _flatten(groups);
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final fe = flat[index];
+          if (fe.isHeader) return _groupHeader(fe.headerLabel!, c, cs);
+          return cardBuilder(fe.entry as T);
+        },
+        childCount: flat.length,
+      ),
+    );
+  }
+
+  Widget _itemCard(
+    LibraryItem item,
+    double cardWidth,
+    double imgHeight,
+    GridDisplayMode mode,
+    GridBadgeFlags badges,
+  ) {
+    return ItemCard(
+      key: GlobalObjectKey(item.path),
+      item: item,
+      effectiveInfo: state.effectiveInfo(item),
+      displayWidth: cardWidth,
+      displayHeight: imgHeight,
+      displayMode: mode,
+      badges: badges,
+      isSelected: state.isItemSelected(item.path),
+      onTap: () => state.setSelectedItem(item),
+      onCtrlTap: () => state.toggleItemSelection(item),
+      onShiftTap: () => state.selectRange(item, items),
+      onDoubleTap: () {
+        final type = state.effectiveInfo(item).type.toLowerCase();
+        if (type == 'video' || type == 'anime') {
+          widget.onOpenVideoPlayer(item);
+        } else if (type == 'voice' || type == 'music') {
+          widget.onOpenAudioPlayer(item);
+        } else if (type == 'comic' || type == 'picture') {
+          widget.onOpenComicReader(item);
+        } else if (type == 'novel' || type == 'book') {
+          widget.onOpenEbookReader(item);
+        }
+      },
+      onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),
+      gifMode: gridSettings.cardGifMode,
+    );
+  }
+
+  Widget _folderCard(CategoryNode node, double cardWidth) => FolderCard(
+        key: GlobalObjectKey(node.path),
+        node: node,
+        displayWidth: cardWidth,
+        displayMode: gridSettings.displayMode,
+        isSelected: state.isFolderSelected(node.path),
+        onTap: () => state.setSelectedFolder(node),
+        onDoubleTap: () => state.setSelectedCategory(node.path),
+        onCtrlTap: () => state.toggleFolderSelection(node),
+        onShiftTap: () => state.selectFolderRange(node, subDirs),
+        onRightClick: (globalPos) =>
+            _showFolderContextMenu(context, node, globalPos),
+      );
+
+  Widget _fileCard(DirectFile file, double cardWidth) => FileCard(
+        key: GlobalObjectKey(file.path),
+        file: file,
+        displayWidth: cardWidth,
+        displayMode: gridSettings.displayMode,
+        isSelected: state.selectedFile?.path == file.path,
+        onTap: () => state.setSelectedFile(file),
+        onDoubleTap: () => _openFile(file.path),
+        onRightClick: (globalPos) =>
+            _showFileContextMenu(context, file, globalPos),
+      );
+
+  /// 自适应模式：异步解析预览图真实宽高比，加载完成后触发重排实现砖石布局。
+  void _maybeResolveAspect(String? path) {
+    if (path == null ||
+        _previewAspectRatios.containsKey(path) ||
+        _resolvingAspects.contains(path)) {
+      return;
+    }
+    _resolvingAspects.add(path);
+    final image = FileImage(File(path));
+    image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener(
+        (info, _) {
+          _resolvingAspects.remove(path);
+          final w = info.image.width.toDouble();
+          final h = info.image.height.toDouble();
+          if (w > 0 && h > 0 && mounted) {
+            setState(() => _previewAspectRatios[path] = w / h);
+          }
+        },
+        onError: (Object error, StackTrace? stack) {
+          _resolvingAspects.remove(path);
+        },
+      ),
     );
   }
 
@@ -801,8 +1006,9 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     double mainAxisExtent,
     double spacing,
     double headerExtent,
-    Set<int> headerIndices,
-  ) {
+    Set<int> headerIndices, {
+    List<double>? perChildExtents,
+  }) {
     return SliverGrid(
       gridDelegate: _SectionGridDelegate(
         crossAxisCount: crossAxisCount,
@@ -812,6 +1018,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         headerExtent: headerExtent,
         headerIndices: headerIndices,
         childCount: delegate.childCount ?? 0,
+        perChildExtents: perChildExtents,
       ),
       delegate: delegate,
     );

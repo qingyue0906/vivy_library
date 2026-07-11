@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/category_node.dart';
+import '../services/settings_service.dart';
 import 'compact_level.dart';
 
 /// 文件夹卡片，模仿 Windows 资源管理器大图标风格。
@@ -17,6 +18,7 @@ class FolderCard extends StatefulWidget {
   final VoidCallback onCtrlTap;
   final VoidCallback onShiftTap;
   final void Function(Offset globalPosition) onRightClick;
+  final GridDisplayMode displayMode;
 
   const FolderCard({
     super.key,
@@ -28,6 +30,7 @@ class FolderCard extends StatefulWidget {
     required this.onCtrlTap,
     required this.onShiftTap,
     required this.onRightClick,
+    this.displayMode = GridDisplayMode.loose,
   });
 
   @override
@@ -65,6 +68,9 @@ class _FolderCardState extends State<FolderCard> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
+    if (widget.displayMode == GridDisplayMode.list) {
+      return _buildListRow(c, cs);
+    }
     final selectedColor = cs.brightness == Brightness.light
         ? const Color(0xFF7B49E0)
         : cs.primary;
@@ -111,6 +117,64 @@ class _FolderCardState extends State<FolderCard> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListRow(double c, ColorScheme cs) {
+    final selectedColor = cs.brightness == Brightness.light
+        ? const Color(0xFF7B49E0)
+        : cs.primary;
+    final hoverColor = cs.brightness == Brightness.light
+        ? const Color(0xFFB89AFF)
+        : const Color(0xFF7E8FA3);
+    final borderColor = widget.isSelected
+        ? selectedColor
+        : (_isHovered ? hoverColor : cs.outlineVariant);
+    return GestureDetector(
+      onSecondaryTapUp: (details) => widget.onRightClick(details.globalPosition),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: InkWell(
+          onTap: _handleTap,
+          borderRadius: BorderRadius.circular(4 * c),
+          splashColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          child: Container(
+            height: 44 * c,
+            padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 4 * c),
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? cs.primaryContainer.withValues(alpha: 0.25)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(4 * c),
+              border: Border.all(
+                color: borderColor,
+                width: widget.isSelected ? 1.5 : 1.0,
+              ),
+            ),
+            child: Row(
+              children: [
+                SizedBox(width: 4 * c),
+                Icon(Icons.folder, size: 32 * c, color: Colors.amber.shade400),
+                SizedBox(width: 8 * c),
+                Expanded(
+                  child: Text(
+                    widget.node.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12 * c,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

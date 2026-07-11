@@ -116,6 +116,8 @@ class _VivyAppState extends State<VivyApp> {
 
   void _onGridSettingsChanged(GridSettings settings) {
     setState(() => _gridSettings = settings);
+    // 实时落盘，使新建的快捷面板每次改动立即持久化（不再依赖设置页"应用"）。
+    SettingsService.saveGridSettings(settings);
   }
 
   void _onBackgroundChanged(BackgroundSettings settings) {

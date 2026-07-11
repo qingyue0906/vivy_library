@@ -14,6 +14,7 @@ import 'category_panel.dart';
 import 'detail_panel.dart';
 import 'grid_area.dart';
 import 'top_bar.dart';
+import 'grid_display_settings_panel.dart';
 import 'edit_dialog.dart';
 import 'create_item_dialog.dart';
 import '../services/library_root_service.dart';
@@ -152,6 +153,16 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           onSearchScopeChanged: _state.setSearchScope,
           searchScope: _state.searchScope,
         ),
+      ),
+    );
+  }
+
+  void _openGridDisplaySettings() {
+    showDialog(
+      context: context,
+      builder: (_) => GridDisplaySettingsPanel(
+        initial: widget.gridSettings,
+        onChanged: widget.onGridSettingsChanged,
       ),
     );
   }
@@ -368,6 +379,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           state: _state,
           searchController: _searchController,
           onSettingsTap: _openSettings,
+          onGridDisplayTap: _openGridDisplaySettings,
           backgroundOpacity: widget.backgroundSettings.path != null
               ? widget.backgroundSettings.middleOpacity
               : 1.0,

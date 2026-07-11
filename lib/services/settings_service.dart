@@ -110,6 +110,50 @@ class WindowState {
 
 enum GifDisplayMode { unlimited, hover, static }
 
+/// 网格显示模式。
+enum GridDisplayMode { loose, compact, list, cover, adaptive }
+
+/// 可切换显示的小图标徽章。新增徽章只需在此枚举加项，并在 [GridBadgeFlags]
+/// 与设置面板中补充映射即可扩展（如后续加文件数量/浏览次数）。
+enum GridBadge { star, type, rating }
+
+/// 控制各徽章是否显示的开关集合（默认全开）。
+class GridBadgeFlags {
+  final Set<GridBadge> enabled;
+
+  const GridBadgeFlags({
+    this.enabled = const {GridBadge.star, GridBadge.type, GridBadge.rating},
+  });
+
+  bool isEnabled(GridBadge b) => enabled.contains(b);
+
+  GridBadgeFlags copyWith({Set<GridBadge>? enabled}) =>
+      GridBadgeFlags(enabled: enabled ?? this.enabled);
+
+  GridBadgeFlags toggle(GridBadge b, bool value) {
+    final next = Set<GridBadge>.from(enabled);
+    if (value) {
+      next.add(b);
+    } else {
+      next.remove(b);
+    }
+    return GridBadgeFlags(enabled: next);
+  }
+
+  Map<String, dynamic> toMap() => {
+        for (final b in GridBadge.values) b.name: enabled.contains(b),
+      };
+
+  factory GridBadgeFlags.fromMap(Map<String, dynamic> map) {
+    final enabled = <GridBadge>{};
+    for (final b in GridBadge.values) {
+      if (map[b.name] == true) enabled.add(b);
+    }
+    if (enabled.isEmpty) return const GridBadgeFlags();
+    return GridBadgeFlags(enabled: enabled);
+  }
+}
+
 /// 漫画阅读器页面布局：单页 / 双页 / 垂直滚动(webtoon)。
 enum ComicLayoutMode { single, double, vertical }
 
@@ -133,6 +177,8 @@ class GridSettings {
   final double compactLevel; // 0.5~2.0, 1.0 = current baseline
   final GifDisplayMode cardGifMode;
   final GifDisplayMode fileGifMode;
+  final GridDisplayMode displayMode;
+  final GridBadgeFlags badges;
 
   double get aspectRatioValue {
     final parts = aspectRatio.split(':');
@@ -152,6 +198,8 @@ class GridSettings {
     this.compactLevel = 1.0,
     this.cardGifMode = GifDisplayMode.hover,
     this.fileGifMode = GifDisplayMode.hover,
+    this.displayMode = GridDisplayMode.loose,
+    this.badges = const GridBadgeFlags(),
   });
 
   GridSettings copyWith({
@@ -162,6 +210,8 @@ class GridSettings {
     double? compactLevel,
     GifDisplayMode? cardGifMode,
     GifDisplayMode? fileGifMode,
+    GridDisplayMode? displayMode,
+    GridBadgeFlags? badges,
   }) {
     return GridSettings(
       minCardWidth: minCardWidth ?? this.minCardWidth,
@@ -171,6 +221,8 @@ class GridSettings {
       compactLevel: compactLevel ?? this.compactLevel,
       cardGifMode: cardGifMode ?? this.cardGifMode,
       fileGifMode: fileGifMode ?? this.fileGifMode,
+      displayMode: displayMode ?? this.displayMode,
+      badges: badges ?? this.badges,
     );
   }
 
@@ -182,23 +234,36 @@ class GridSettings {
         'compactLevel': compactLevel,
         'cardGifMode': cardGifMode.name,
         'fileGifMode': fileGifMode.name,
+        'displayMode': displayMode.name,
+        'badges': badges.toMap(),
       };
 
-  factory GridSettings.fromMap(Map<String, dynamic> map) => GridSettings(
-        minCardWidth: (map['minCardWidth'] ?? 120).toDouble(),
-        maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
-        aspectRatio: map['aspectRatio'] ?? '4:3',
-        itemsPerRow: map['itemsPerRow'] ?? 0,
-        compactLevel: (map['compactLevel'] ?? 1.0).toDouble(),
-        cardGifMode: GifDisplayMode.values.firstWhere(
-          (e) => e.name == map['cardGifMode'],
-          orElse: () => GifDisplayMode.hover,
-        ),
-        fileGifMode: GifDisplayMode.values.firstWhere(
-          (e) => e.name == map['fileGifMode'],
-          orElse: () => GifDisplayMode.hover,
-        ),
-      );
+  factory GridSettings.fromMap(Map<String, dynamic> map) {
+    final raw = map['badges'];
+    final badges = raw is Map
+        ? GridBadgeFlags.fromMap(Map<String, dynamic>.from(raw))
+        : const GridBadgeFlags();
+    return GridSettings(
+      minCardWidth: (map['minCardWidth'] ?? 120).toDouble(),
+      maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
+      aspectRatio: map['aspectRatio'] ?? '4:3',
+      itemsPerRow: map['itemsPerRow'] ?? 0,
+      compactLevel: (map['compactLevel'] ?? 1.0).toDouble(),
+      cardGifMode: GifDisplayMode.values.firstWhere(
+        (e) => e.name == map['cardGifMode'],
+        orElse: () => GifDisplayMode.hover,
+      ),
+      fileGifMode: GifDisplayMode.values.firstWhere(
+        (e) => e.name == map['fileGifMode'],
+        orElse: () => GifDisplayMode.hover,
+      ),
+      displayMode: GridDisplayMode.values.firstWhere(
+        (e) => e.name == map['displayMode'],
+        orElse: () => GridDisplayMode.loose,
+      ),
+      badges: badges,
+    );
+  }
 }
 
 class BackgroundSettings {
