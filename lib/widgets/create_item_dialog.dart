@@ -55,6 +55,10 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
   final _cropperKey = GlobalKey<ImageCropperState>();
   final List<String> _importedPaths = [];
 
+  /// 拖拽悬停高亮状态：导入文件区 / 预览图区。
+  bool _importDragOver = false;
+  bool _previewDragOver = false;
+
   @override
   void initState() {
     super.initState();
@@ -359,9 +363,10 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
           child: Text(Strings.t('importFiles'), style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
         ),
         DropTarget(
-          onDragEntered: (_) {},
-          onDragExited: (_) {},
+          onDragEntered: (_) => setState(() => _importDragOver = true),
+          onDragExited: (_) => setState(() => _importDragOver = false),
           onDragDone: (detail) {
+            setState(() => _importDragOver = false);
             final paths = detail.files.map((f) => f.path).toList();
             for (final p in paths) {
               if (!_importedPaths.contains(p)) {
@@ -373,7 +378,14 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
             width: double.infinity,
             padding: EdgeInsets.all(8 * c),
             decoration: BoxDecoration(
-              border: Border.all(color: cs.outlineVariant, style: BorderStyle.solid),
+              color: _importDragOver
+                  ? cs.primary.withValues(alpha: 0.08)
+                  : null,
+              border: Border.all(
+                color: _importDragOver ? cs.primary : cs.outlineVariant,
+                width: _importDragOver ? 2 : 1,
+                style: BorderStyle.solid,
+              ),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Column(
@@ -470,9 +482,10 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
           )
         else
           DropTarget(
-            onDragEntered: (_) {},
-            onDragExited: (_) {},
+            onDragEntered: (_) => setState(() => _previewDragOver = true),
+            onDragExited: (_) => setState(() => _previewDragOver = false),
             onDragDone: (detail) {
+              setState(() => _previewDragOver = false);
               final paths = detail.files.map((f) => f.path).toList();
               if (paths.isNotEmpty) {
                 final path = paths.first;
@@ -487,7 +500,14 @@ class _CreateItemDialogState extends State<CreateItemDialog> {
                 width: double.infinity,
                 height: 100 * c,
                 decoration: BoxDecoration(
-                  border: Border.all(color: cs.outlineVariant, style: BorderStyle.solid),
+                  color: _previewDragOver
+                      ? cs.primary.withValues(alpha: 0.08)
+                      : null,
+                  border: Border.all(
+                    color: _previewDragOver ? cs.primary : cs.outlineVariant,
+                    width: _previewDragOver ? 2 : 1,
+                    style: BorderStyle.solid,
+                  ),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Center(

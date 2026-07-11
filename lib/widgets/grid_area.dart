@@ -361,6 +361,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
       child: _DropHighlight(
         onFilesDropped: (paths) => onFileDrop?.call(paths),
         excludeKey: _panelKey,
+        modalDropActive: state.modalDropActive,
         bottomInset: visible ? filePanelHeight + 4 : 0,
         child: AnimatedBuilder(
           animation: _panelAnim,
@@ -1314,12 +1315,16 @@ class _DropHighlight extends StatefulWidget {
   final double bottomInset;
   /// 需排除其命中区域的内层 widget key（拖入该区域时本层不触发）。
   final GlobalKey? excludeKey;
+  /// 是否有带自身 DropTarget 的模态对话框（如创建项目对话框）打开。
+  /// 打开时本层不显示高亮、也不接收拖放，避免与模态层叠加误亮/误复制。
+  final bool modalDropActive;
 
   const _DropHighlight({
     required this.child,
     this.onFilesDropped,
     this.bottomInset = 0,
     this.excludeKey,
+    this.modalDropActive = false,
   });
 
   @override
@@ -1352,13 +1357,24 @@ class _DropHighlightState extends State<_DropHighlight> {
     return DropTarget(
       // 进入/移动时若落在被排除区域（底部面板）则不点亮本层高亮，
       // 让“拖到哪个区域哪个区域才高亮”的语义成立。
-      onDragEntered: (details) =>
-          _setOver(!_isExcluded(details.globalPosition)),
-      onDragUpdated: (details) =>
-          _setOver(!_isExcluded(details.globalPosition)),
+      onDragEntered: (details) {
+        if (widget.modalDropActive) {
+          _setOver(false);
+          return;
+        }
+        _setOver(!_isExcluded(details.globalPosition));
+      },
+      onDragUpdated: (details) {
+        if (widget.modalDropActive) {
+          _setOver(false);
+          return;
+        }
+        _setOver(!_isExcluded(details.globalPosition));
+      },
       onDragExited: (_) => _setOver(false),
       onDragDone: (detail) {
         _setOver(false);
+        if (widget.modalDropActive) return;
         if (_isExcluded(detail.globalPosition)) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {

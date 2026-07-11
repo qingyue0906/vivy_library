@@ -468,17 +468,22 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 onCreateItem: () {
                   if (_createDialogShowing) return;
                   _createDialogShowing = true;
+                  _state.setModalDropActive(true);
                   showDialog(
                     context: context,
                     builder: (_) => CreateItemDialog(
                       state: _state,
                       defaultParentPath: _state.selectedCategoryPath,
                     ),
-                  ).whenComplete(() => _createDialogShowing = false);
+                  ).whenComplete(() {
+                    _createDialogShowing = false;
+                    _state.setModalDropActive(false);
+                  });
                 },
                 onFileDrop: (paths) {
                   if (_createDialogShowing) return;
                   _createDialogShowing = true;
+                  _state.setModalDropActive(true);
                   final first = paths.first.replaceAll('\\', '/').split('/').last;
                   final title = first.contains('.') ? first.substring(0, first.lastIndexOf('.')) : first;
                   showDialog(
@@ -489,7 +494,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       prefilledTitle: title,
                       prefilledImportPaths: paths,
                     ),
-                  ).whenComplete(() => _createDialogShowing = false);
+                  ).whenComplete(() {
+                    _createDialogShowing = false;
+                    _state.setModalDropActive(false);
+                  });
                 },
                 onOpenVideoPlayer: _openVideoPlayer,
                 onOpenAudioPlayer: _openAudioPlayer,

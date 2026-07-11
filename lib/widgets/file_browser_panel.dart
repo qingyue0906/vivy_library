@@ -327,10 +327,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   /// 用 DropTarget 包裹：拖入文件即复制到 item.path。
   Widget _buildDropTarget(double c, Widget child, List<String> visiblePaths) {
     return DropTarget(
-      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragEntered: (_) {
+        if (widget.state.modalDropActive) return;
+        setState(() => _isDragOver = true);
+      },
       onDragExited: (_) => setState(() => _isDragOver = false),
       onDragDone: (detail) {
         setState(() => _isDragOver = false);
+        if (widget.state.modalDropActive) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
           widget.state.copyFilesToDirectory(paths, widget.item.path);

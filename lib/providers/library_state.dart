@@ -56,6 +56,18 @@ class LibraryState extends ChangeNotifier {
   double _copyProgress = -1;
   String _copyStatus = '';
 
+  /// 是否有带自身 DropTarget 的模态对话框（如创建项目对话框）正处于打开状态。
+  /// 打开时，底层的网格区/底部文件面板不应再显示拖放高亮或接收拖放。
+  bool get modalDropActive => _modalDropActive;
+  void setModalDropActive(bool value) {
+    if (_modalDropActive == value) return;
+    _modalDropActive = value;
+    notifyListeners();
+  }
+  /// 是否有带自身 DropTarget 的模态对话框（如创建项目对话框）正处于打开状态。
+  /// 打开时，底层的网格区/底部文件面板不应再显示拖放高亮或接收拖放，避免叠加误亮/误复制。
+  bool _modalDropActive = false;
+
   final Set<String> _selectedPaths = {};
   String? _selectionAnchorPath;
 
