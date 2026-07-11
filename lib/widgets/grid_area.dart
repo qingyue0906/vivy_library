@@ -338,6 +338,12 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   final Map<String, double> _previewAspectRatios = {};
   final Set<String> _resolvingAspects = {};
 
+  /// 待解析宽高比的预览图路径集合。build 阶段只登记、不解析，待本帧 build
+  /// 结束后再解析，避免 image.resolve().addListener() 在 build 期同步触发
+  /// Image 控件 setState 而抛出断言。
+  final Set<String> _pendingAspectPaths = {};
+  bool _aspectResolveScheduled = false;
+
   /// 底部文件面板进出场动画控制器：作为面板滑入/滑出与中间内容让位的唯一动画源。
   /// 同一进度 v 同时驱动内容让位、面板位移、FAB 位置，确保三者完全同步。
   late final AnimationController _panelAnim;
@@ -648,7 +654,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                   ? (_previewAspectRatios[item.previewPath] ?? aspectRatio)
                   : aspectRatio;
               final ih = cardWidth / aspect;
-              if (adaptive) _maybeResolveAspect(item.previewPath);
+              if (adaptive) _requestAspectResolution(item.previewPath);
               return _itemCard(item, cardWidth, ih, mode, badges);
             },
           );
@@ -673,7 +679,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         if (adaptive) {
           for (final fe in gItemsUsed) {
             if (!fe.isHeader) {
-              _maybeResolveAspect((fe.entry as LibraryItem).previewPath);
+              _requestAspectResolution((fe.entry as LibraryItem).previewPath);
             }
           }
         }
@@ -839,6 +845,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           return cardBuilder(fe.entry as T);
         },
         childCount: flat.length,
+        addAutomaticKeepAlives: false,
+        addRepaintBoundaries: false,
       ),
     );
   }
@@ -931,6 +939,28 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     );
   }
 
+  /// build 阶段调用：登记需要解析宽高比的预览图，待本帧 build 结束（post-frame）
+  /// 后再真正解析，从而避免在 LayoutBuilder/Image 构建过程中同步触发 setState。
+  void _requestAspectResolution(String? path) {
+    if (path == null) return;
+    if (_previewAspectRatios.containsKey(path) ||
+        _resolvingAspects.contains(path)) {
+      return;
+    }
+    if (_pendingAspectPaths.add(path) && !_aspectResolveScheduled) {
+      _aspectResolveScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _aspectResolveScheduled = false;
+        if (!mounted) return;
+        final paths = _pendingAspectPaths.toList();
+        _pendingAspectPaths.clear();
+        for (final p in paths) {
+          _maybeResolveAspect(p);
+        }
+      });
+    }
+  }
+
   Widget _sectionHeader(
     String title,
     double c,
@@ -994,6 +1024,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         return cardBuilder(fe.entry as T);
       },
       childCount: flat.length,
+      addAutomaticKeepAlives: false,
+      addRepaintBoundaries: false,
     );
   }
 
