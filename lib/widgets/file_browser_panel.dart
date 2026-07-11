@@ -131,6 +131,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   Widget _buildHeader(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     final selectedCount = widget.state.selectedBrowserPaths.length;
+    final itemType =
+        widget.state.effectiveInfo(widget.item).type.toLowerCase();
     return Container(
       height: 30 * c,
       padding: EdgeInsets.symmetric(horizontal: 8 * c),
@@ -175,8 +177,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
                 : Strings.t('showInfo'),
             onTap: widget.state.toggleSystemFiles,
           ),
-          if (widget.item.info.type.toLowerCase() == 'video' ||
-              widget.item.info.type.toLowerCase() == 'anime')
+          if (itemType == 'video' || itemType == 'anime')
             _headerIconButton(
               c: c,
               cs: cs,
@@ -184,8 +185,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               tooltip: Strings.t('openProjectVideos'),
               onTap: widget.onPlayProject ?? () {},
             ),
-          if (widget.item.info.type.toLowerCase() == 'comic' ||
-              widget.item.info.type.toLowerCase() == 'picture')
+          if (itemType == 'comic' || itemType == 'picture')
             _headerIconButton(
               c: c,
               cs: cs,
@@ -193,8 +193,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               tooltip: Strings.t('openProjectComic'),
               onTap: widget.onReadProject ?? () {},
             ),
-          if (widget.item.info.type.toLowerCase() == 'novel' ||
-              widget.item.info.type.toLowerCase() == 'book')
+          if (itemType == 'novel' || itemType == 'book')
             _headerIconButton(
               c: c,
               cs: cs,
@@ -202,8 +201,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               tooltip: Strings.t('openProjectEbook'),
               onTap: widget.onReadEbookProject ?? () {},
             ),
-          if (widget.item.info.type.toLowerCase() == 'voice' ||
-              widget.item.info.type.toLowerCase() == 'music')
+          if (itemType == 'voice' || itemType == 'music')
             _headerIconButton(
               c: c,
               cs: cs,
@@ -377,7 +375,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
           'm4v',
         }.contains(ext);
         final isAud = AudioTagService.isAudioFile(file.path);
-        final itemType = widget.item.info.type.toLowerCase();
+        final itemType =
+            widget.state.effectiveInfo(widget.item).type.toLowerCase();
         if (EbookService.isReadableFile(file.path)) {
           // 电子书文件（txt/epub/pdf/md）双击直接用内置阅读器打开。
           widget.onReadEbookFile?.call(file.path);

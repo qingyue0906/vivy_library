@@ -435,7 +435,7 @@ class LibraryState extends ChangeNotifier {
 
   List<String> get uniqueTypes {
     return _itemsInSelectedCategory
-        .map((e) => e.info.type)
+        .map((e) => effectiveInfo(e).type)
         .where((t) => t.isNotEmpty)
         .toSet()
         .toList()

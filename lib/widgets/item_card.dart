@@ -2,12 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/library_item.dart';
+import '../models/item_info.dart';
 import '../services/settings_service.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
 
 class ItemCard extends StatefulWidget {
   final LibraryItem item;
+  final ItemInfo effectiveInfo;
   final double displayWidth;
   final double displayHeight;
   final bool isSelected;
@@ -21,6 +23,7 @@ class ItemCard extends StatefulWidget {
   const ItemCard({
     super.key,
     required this.item,
+    required this.effectiveInfo,
     this.displayWidth = 150,
     this.displayHeight = 112.5,
     required this.isSelected,
@@ -135,7 +138,7 @@ class _ItemCardState extends State<ItemCard> {
   }
 
   Widget _buildTypeBadge(double c) {
-    final type = widget.item.info.type.toLowerCase();
+    final type = widget.effectiveInfo.type.toLowerCase();
     if (type.isEmpty || type == 'default') return const SizedBox.shrink();
     return Positioned(
       top: 2 * c,

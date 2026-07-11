@@ -600,6 +600,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             (item) => ItemCard(
               key: GlobalObjectKey(item.path),
               item: item,
+              effectiveInfo: state.effectiveInfo(item),
               displayWidth: cardWidth,
               displayHeight: imgHeight,
               isSelected: state.isItemSelected(item.path),
@@ -607,7 +608,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
               onCtrlTap: () => state.toggleItemSelection(item),
               onShiftTap: () => state.selectRange(item, items),
               onDoubleTap: () {
-                final type = item.info.type.toLowerCase();
+                final type = state.effectiveInfo(item).type.toLowerCase();
                 if (type == 'video' || type == 'anime') {
                   widget.onOpenVideoPlayer(item);
                 } else if (type == 'voice' || type == 'music') {
