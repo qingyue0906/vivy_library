@@ -157,6 +157,20 @@ class LyricParser {
       if (b.time == null) return -1;
       return a.time!.compareTo(b.time!);
     });
-    return out;
+    // 合并相同时间戳的相邻行（常见「原文 + 翻译」双语歌词）：
+    // 让它们作为整体一起高亮、一起滚动，而非只高亮最后一行（翻译）。
+    final merged = <LyricLine>[];
+    for (final line in out) {
+      if (merged.isNotEmpty) {
+        final prev = merged.last;
+        if (prev.time != null && line.time != null && prev.time == line.time) {
+          merged[merged.length - 1] =
+              LyricLine(prev.time, '${prev.text}\n${line.text}');
+          continue;
+        }
+      }
+      merged.add(line);
+    }
+    return merged;
   }
 }
