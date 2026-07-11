@@ -70,6 +70,10 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
 
   DateTime? _lastOpenAt;
 
+  /// 是否已启动媒体初始化。用于把 open/元数据探测推迟到入场动画结束后，
+  /// 且保证只触发一次。
+  bool _mediaStarted = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,7 +91,6 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }
     _initPlayer();
     _initPlayback();
-    _startMetaProbe();
     if (widget.initialPlaylistWidth != null) {
       _playlistWidth = widget.initialPlaylistWidth!;
     } else {
@@ -113,10 +116,42 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     player.durationStream.listen((_) => _refreshCurrentMetaFromState());
   }
 
+  /// 真正的媒体初始化（open + 元数据探测）推迟到本页入场转场动画【完全结束】后，
+  /// 避免缩放动画期间执行 c.initialize() 等重原生调用阻塞主线程导致掉帧。
   Future<void> _initPlayback() async {
     if (!mounted) return;
     setState(() {});
-    _openCurrent();
+    _startMediaAfterEnter();
+  }
+
+  /// 等待本页入场转场动画结束后再真正初始化媒体，
+  /// 让缩放动画期间主线程/GPU 不被解码初始化抢占，保证动画流畅。
+  void _startMediaAfterEnter() {
+    if (_mediaStarted) return;
+    // 首帧后再访问 ModalRoute（此时依赖已就绪），并根据入场动画状态决定时机。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_mediaStarted || !mounted) return;
+      final anim = ModalRoute.of(context)?.animation;
+      void run() {
+        if (_mediaStarted || !mounted) return;
+        _mediaStarted = true;
+        _openCurrent();
+        _startMetaProbe();
+      }
+
+      if (anim == null || anim.status == AnimationStatus.completed) {
+        run();
+        return;
+      }
+      void listener(AnimationStatus status) {
+        if (status == AnimationStatus.completed) {
+          anim.removeStatusListener(listener);
+          run();
+        }
+      }
+
+      anim.addStatusListener(listener);
+    });
   }
 
   void _openCurrent() {

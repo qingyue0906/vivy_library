@@ -71,6 +71,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   /// 是否使用硬件解码。默认开启；切换时重新载入当前视频以生效。
   bool _useHardwareDecode = true;
 
+  /// 是否已启动媒体初始化。用于把 open/元数据探测推迟到入场动画结束后，
+  /// 且保证只触发一次。
+  bool _mediaStarted = false;
+
   /// 播放列表滚动控制器（配合 SmoothScroll 与 Scrollbar 实现平滑滚动）。
   final ScrollController _playlistScrollController = ScrollController();
 
@@ -96,7 +100,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     _initPlayer();
     _initPlayback();
-    _startMetadataProbe();
     if (widget.initialPlaylistWidth != null) {
       _playlistWidth = widget.initialPlaylistWidth!;
     } else {
@@ -125,12 +128,45 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   /// 先读取硬件解码偏好并写入 fvp 的解码设置，再打开当前视频，
   /// 保证解码方式从首次播放起即生效（解码器改变需重新载入文件）。
+  /// 真正的媒体初始化（open + 元数据探测）推迟到本页入场转场动画【完全结束】后，
+  /// 避免缩放动画期间执行 c.initialize() 等重原生调用阻塞主线程导致掉帧。
   Future<void> _initPlayback() async {
     _useHardwareDecode = await SettingsService.loadPlayerHardwareDecode();
     player.setHardwareDecode(_useHardwareDecode);
     if (!mounted) return;
     setState(() {});
-    _openCurrent();
+    _startMediaAfterEnter();
+  }
+
+  /// 等待本页入场转场动画结束后再真正初始化媒体，
+  /// 让缩放动画期间主线程/GPU 不被视频解码初始化抢占，保证动画流畅。
+  void _startMediaAfterEnter() {
+    if (_mediaStarted) return;
+    // 首帧后再访问 ModalRoute（此时依赖已就绪），并根据入场动画状态决定时机。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_mediaStarted || !mounted) return;
+      final anim = ModalRoute.of(context)?.animation;
+      void run() {
+        if (_mediaStarted || !mounted) return;
+        _mediaStarted = true;
+        _openCurrent();
+        _startMetadataProbe();
+      }
+
+      if (anim == null || anim.status == AnimationStatus.completed) {
+        // 无转场动画或已进入完成态：立即执行（兜底）。
+        run();
+        return;
+      }
+      void listener(AnimationStatus status) {
+        if (status == AnimationStatus.completed) {
+          anim.removeStatusListener(listener);
+          run();
+        }
+      }
+
+      anim.addStatusListener(listener);
+    });
   }
 
   void _openCurrent() {
