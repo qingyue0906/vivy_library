@@ -693,29 +693,33 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
         ),
       );
     }
-    return ListView.builder(
+    return SmoothScroll(
       controller: _lyricScrollController,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      itemCount: _lyrics.length,
-      itemBuilder: (ctx, i) {
-        final line = _lyrics[i];
-        final active = i == _lyricIndex;
-        return Container(
-          key: _lyricKeys[i],
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            line.text.isEmpty ? '♪' : line.text,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: active ? 17 : 14,
-              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-              color: active
-                  ? cs.primary
-                  : cs.onSurface.withValues(alpha: active ? 1.0 : 0.5),
+      builder: (context, controller, physics) => ListView.builder(
+        controller: controller,
+        physics: physics,
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        itemCount: _lyrics.length,
+        itemBuilder: (ctx, i) {
+          final line = _lyrics[i];
+          final active = i == _lyricIndex;
+          return Container(
+            key: _lyricKeys[i],
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              line.text.isEmpty ? '♪' : line.text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: active ? 17 : 14,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                color: active
+                    ? cs.primary
+                    : cs.onSurface.withValues(alpha: active ? 1.0 : 0.5),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
