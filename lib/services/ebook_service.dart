@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'package:pdfx/pdfx.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:path/path.dart' as p;
 import '../models/ebook_book.dart';
 import '../models/library_item.dart';
@@ -209,7 +209,7 @@ class EbookService {
   static Future<EbookBook> _loadPdf(String path, String name) async {
     final doc = await PdfDocument.openFile(path);
     final chapters = <EbookChapter>[];
-    for (var i = 1; i <= doc.pagesCount; i++) {
+    for (var i = 1; i <= doc.pages.length; i++) {
       chapters.add(EbookChapter(title: 'Page $i', pdfPage: i));
     }
     return EbookBook(

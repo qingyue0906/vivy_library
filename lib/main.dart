@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
 import 'services/script_service.dart';
@@ -11,6 +12,9 @@ import 'widgets/shell_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // pdfrx 在任何 pdfrx 控件/引擎 API 使用前初始化 PDFium native assets（Windows 需开发者模式）。
+  await pdfrxFlutterInitialize();
+
 
   MediaKit.ensureInitialized();
 

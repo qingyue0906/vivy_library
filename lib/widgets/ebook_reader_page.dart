@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_html/flutter_html.dart';
-import 'package:pdfx/pdfx.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:path/path.dart' as p;
 import '../models/ebook_book.dart';
 import '../services/ebook_service.dart';
@@ -80,9 +79,6 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     for (final c in node.children) _collectTreePaths(c);
   }
 
-  // pdf 页面图片缓存
-  final Map<int, Uint8List> _pdfCache = {};
-
   bool _isFullscreen = false;
   bool _isMaximized = false;
   bool _showTop = false;
@@ -126,7 +122,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     final doc = _book?.pdfDoc;
     if (doc != null) {
       try {
-        doc.close();
+        doc.dispose();
       } catch (_) {}
     }
     _contentScrollController.dispose();
@@ -141,7 +137,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
     final prevDoc = _book?.pdfDoc;
     if (prevDoc != null) {
       try {
-        await prevDoc.close();
+        await prevDoc.dispose();
       } catch (_) {}
     }
     setState(() {
@@ -156,13 +152,12 @@ class _EbookReaderPageState extends State<EbookReaderPage>
       _results = [];
       _chapterKeys.clear();
       _itemHeights.clear();
-      _pdfCache.clear();
     });
     try {
       final book = await EbookService.loadBook(widget.playlist.entries[index]);
       if (!mounted) {
         try {
-          await book.pdfDoc?.close();
+          await book.pdfDoc?.dispose();
         } catch (_) {}
         return;
       }
@@ -568,46 +563,20 @@ class _EbookReaderPageState extends State<EbookReaderPage>
 
   // ===== pdf 页面图片 =====
 
-  Future<Uint8List?> _pdfPageBytes(int pageNumber, double width) async {
-    if (_pdfCache.containsKey(pageNumber)) return _pdfCache[pageNumber];
-    try {
-      final doc = _book!.pdfDoc as PdfDocument;
-      final page = await doc.getPage(pageNumber);
-      final pw = page.width;
-      final ph = page.height;
-      final h = pw > 0 ? width * (ph / pw) : width * 1.4;
-      final img = await page.render(
-        width: width,
-        height: h,
-        backgroundColor: '#FFFFFF',
-      );
-      final bytes = img?.bytes;
-      if (bytes != null) _pdfCache[pageNumber] = bytes;
-      return bytes;
-    } catch (_) {
-      return null;
-    }
-  }
+
 
   Widget _pdfImage(int pageNumber, double width) {
-    return FutureBuilder<Uint8List?>(
-      future: _pdfPageBytes(pageNumber, width * 2),
-      builder: (c, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          );
-        }
-        final bytes = snap.data;
-        if (bytes == null) {
-          return const Icon(Icons.broken_image, size: 40);
-        }
-        return InteractiveViewer(
-          child: Image.memory(bytes, fit: BoxFit.contain),
-        );
-      },
+    final doc = _book!.pdfDoc as PdfDocument;
+    // pdfrx 的 PdfPageView 按给定宽度渲染整页（自动处理 dpr 与内部位图缓存），
+    // 外层 InteractiveViewer 提供缩放/平移；无需手动 render 字节。
+    return InteractiveViewer(
+      child: SizedBox(
+        width: width,
+        child: PdfPageView(
+          document: doc,
+          pageNumber: pageNumber,
+        ),
+      ),
     );
   }
 
