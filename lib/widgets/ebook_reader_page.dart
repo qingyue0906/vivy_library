@@ -65,6 +65,9 @@ class _EbookReaderPageState extends State<EbookReaderPage>
 
   // 滚动模式章节定位
   final Map<int, GlobalKey> _chapterKeys = {};
+  // 滚动模式性能优化：缓存已构建章节/页面的实际高度，用于跳转时估算偏移（避免一次性构建全部内容）
+  final Map<int, double> _itemHeights = {};
+  double _avgItemHeight = 600.0;
   final ScrollController _contentScrollController = ScrollController();
   final ScrollController _tocScrollController = ScrollController();
   final ScrollController _treeScrollController = ScrollController();
@@ -152,6 +155,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
       _query = '';
       _results = [];
       _chapterKeys.clear();
+      _itemHeights.clear();
       _pdfCache.clear();
     });
     try {
@@ -288,15 +292,46 @@ class _EbookReaderPageState extends State<EbookReaderPage>
       _pageIndex = page;
     });
     if (_mode == EbookReadMode.scroll) {
+      final controller = _contentScrollController;
+      if (!controller.hasClients) return;
       final key = _chapterKeys[clamped];
       if (key?.currentContext != null) {
+        // 目标项已构建：直接对齐
         Scrollable.ensureVisible(
           key!.currentContext!,
           duration: const Duration(milliseconds: 300),
           alignment: 0.0,
         );
+        return;
       }
+      // 懒加载列表：目标项尚未构建，先用（缓存高度估算的）偏移跳转，
+      // 触发其构建后在下一帧精确对齐。避免一次性构建全部内容导致卡死。
+      final offset = _estimateOffset(clamped);
+      controller.jumpTo(offset.clamp(0, controller.position.maxScrollExtent));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!controller.hasClients) return;
+        final k = _chapterKeys[clamped];
+        if (k?.currentContext != null) {
+          final size = k!.currentContext!.size;
+          if (size != null) _itemHeights[clamped] = size.height;
+          Scrollable.ensureVisible(
+            k.currentContext!,
+            duration: const Duration(milliseconds: 200),
+            alignment: 0.0,
+          );
+        }
+      });
     }
+  }
+
+  /// 按章节索引估算其在滚动列表中的纵向偏移（未构建项用平均高度近似）。
+  double _estimateOffset(int index) {
+    double h = 0;
+    for (var k = 0; k < index; k++) {
+      h += _itemHeights[k] ?? _avgItemHeight;
+    }
+    h += index * 24.0; // 各项之间的垂直间距近似
+    return h;
   }
 
   void _first() => _jumpToChapter(0);
@@ -686,23 +721,30 @@ class _EbookReaderPageState extends State<EbookReaderPage>
       );
     }
     if (_book == null) return Container(color: _bgColor);
+    late final Widget content;
     switch (_book!.format) {
       case 'txt':
-        return _mode == EbookReadMode.paginated
+        content = _mode == EbookReadMode.paginated
             ? _buildTxtPaginated(cs)
             : _buildTxtScroll(cs);
       case 'md':
       case 'epub':
-        return _mode == EbookReadMode.paginated
+        content = _mode == EbookReadMode.paginated
             ? _buildRichPaginated(cs)
             : _buildRichScroll(cs);
       case 'pdf':
-        return _mode == EbookReadMode.paginated
+        content = _mode == EbookReadMode.paginated
             ? _buildPdfPage(cs)
             : _buildPdfScroll(cs);
       default:
         return Container(color: _bgColor);
     }
+    // 右键阅读区任意位置直接退出阅读器（与漫画/视频阅读器一致）；文字选中功能由内部 SelectionArea 保留。
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: (_) => _close(),
+      child: content,
+    );
   }
 
   // ----- TXT 翻页 -----
@@ -754,23 +796,19 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   // ----- TXT 滚动 -----
 
   Widget _buildTxtScroll(ColorScheme cs) {
+    final chapters = _book!.chapters;
     return SelectionArea(
       child: Scrollbar(
         controller: _contentScrollController,
         child: SmoothScroll(
           controller: _contentScrollController,
-          builder: (context, controller, physics) => SingleChildScrollView(
+          builder: (context, controller, physics) => ListView.builder(
             controller: controller,
             physics: physics,
             padding:
                 EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < _book!.chapters.length; i++)
-                  _txtChapterBlock(i),
-              ],
-            ),
+            itemCount: chapters.length,
+            itemBuilder: (context, i) => _txtChapterBlock(i),
           ),
         ),
       ),
@@ -867,23 +905,19 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   // ----- MD / EPUB 滚动 -----
 
   Widget _buildRichScroll(ColorScheme cs) {
+    final chapters = _book!.chapters;
     return SelectionArea(
       child: Scrollbar(
         controller: _contentScrollController,
         child: SmoothScroll(
           controller: _contentScrollController,
-          builder: (context, controller, physics) => SingleChildScrollView(
+          builder: (context, controller, physics) => ListView.builder(
             controller: controller,
             physics: physics,
             padding:
                 EdgeInsets.symmetric(horizontal: _pageMargin, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < _book!.chapters.length; i++)
-                  _richChapterBlock(i),
-              ],
-            ),
+            itemCount: chapters.length,
+            itemBuilder: (context, i) => _richChapterBlock(i),
           ),
         ),
       ),
@@ -941,23 +975,19 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   }
 
   Widget _buildPdfScroll(ColorScheme cs) {
+    final chapters = _book!.chapters;
     return Scrollbar(
       controller: _contentScrollController,
       child: SmoothScroll(
         controller: _contentScrollController,
-        builder: (context, controller, physics) => SingleChildScrollView(
+        builder: (context, controller, physics) => ListView.builder(
           controller: controller,
           physics: physics,
           padding: const EdgeInsets.all(8),
-          child: Column(
-            children: [
-              for (var i = 0; i < _book!.chapters.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child:
-                      Center(child: _pdfImage(_book!.chapters[i].pdfPage!, 600)),
-                ),
-            ],
+          itemCount: chapters.length,
+          itemBuilder: (context, i) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Center(child: _pdfImage(chapters[i].pdfPage!, 600)),
           ),
         ),
       ),
