@@ -144,12 +144,15 @@ class GridBadgeFlags {
         for (final b in GridBadge.values) b.name: enabled.contains(b),
       };
 
-  factory GridBadgeFlags.fromMap(Map<String, dynamic> map) {
+  /// [map] 为 null 表示从未保存过徽章配置，回退默认全开；
+  /// 非空（即便所有徽章都为 false，即用户明确全关）则如实返回，
+  /// 避免"关闭全部徽章"的状态被回退成默认全开而丢失持久化。
+  factory GridBadgeFlags.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const GridBadgeFlags();
     final enabled = <GridBadge>{};
     for (final b in GridBadge.values) {
       if (map[b.name] == true) enabled.add(b);
     }
-    if (enabled.isEmpty) return const GridBadgeFlags();
     return GridBadgeFlags(enabled: enabled);
   }
 }
@@ -240,9 +243,9 @@ class GridSettings {
 
   factory GridSettings.fromMap(Map<String, dynamic> map) {
     final raw = map['badges'];
-    final badges = raw is Map
-        ? GridBadgeFlags.fromMap(Map<String, dynamic>.from(raw))
-        : const GridBadgeFlags();
+    final badges = GridBadgeFlags.fromMap(
+      raw is Map ? Map<String, dynamic>.from(raw) : null,
+    );
     return GridSettings(
       minCardWidth: (map['minCardWidth'] ?? 120).toDouble(),
       maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
@@ -397,6 +400,8 @@ class SettingsService {
       'compactLevel': data['${_gridPrefix}compactLevel'],
       'cardGifMode': data['${_gridPrefix}cardGifMode'],
       'fileGifMode': data['${_gridPrefix}fileGifMode'],
+      'displayMode': data['${_gridPrefix}displayMode'],
+      'badges': data['${_gridPrefix}badges'],
     });
   }
 
