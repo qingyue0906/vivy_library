@@ -19,6 +19,8 @@ import '../models/exe_record.dart';
 import '../services/script_service.dart';
 import 'class_nav_bar.dart';
 import 'package:flutter/services.dart';
+import 'package:image_size_getter/image_size_getter.dart';
+import 'package:image_size_getter/file_input.dart';
 import 'compact_level.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
@@ -338,11 +340,45 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   final Map<String, double> _previewAspectRatios = {};
   final Set<String> _resolvingAspects = {};
 
-  /// 待解析宽高比的预览图路径集合。build 阶段只登记、不解析，待本帧 build
+  /// 待解析宽高比的预览图路径队列。build 阶段只登记、不解析，待本帧 build
   /// 结束后再解析，避免 image.resolve().addListener() 在 build 期同步触发
-  /// Image 控件 setState 而抛出断言。
-  final Set<String> _pendingAspectPaths = {};
+  /// Image 控件 setState 而抛出断言。用 List+Set 维护顺序 + 去重。
+  final List<String> _pendingAspectPaths = [];
+  final Set<String> _queuedAspectPaths = {};
   bool _aspectResolveScheduled = false;
+
+  /// 宽高比探测的并发上限：只对"文件头解析失败、需要回退真实解码"的极少数
+  /// 文件生效，避免这部分兜底解码一次性甩出太多任务抢占 CPU/GPU。
+  static const int _maxConcurrentAspectResolves = 8;
+  int _activeAspectResolves = 0;
+
+  /// 兜底解码尺寸：仅当文件头解析失败（极少数损坏/非常规文件）时才会走到
+  /// 这条路径，此时才需要真的解码一次小图。
+  static const int _aspectProbeWidth = 48;
+
+  /// 自适应模式（方案 D：恢复三级缓存）：只在"真的有新的宽高比被解析出来"
+  /// 时才递增，而不是每次 setState/rebuild 都变。把它纳入 delegateKey/
+  /// fullKey 后，面板动画、hover、选中态变化等与宽高比无关的 rebuild 依旧能
+  /// 命中一二级缓存；只有宽高比真正更新、需要重排砖石布局时才会失效重建。
+  int _aspectVersion = 0;
+
+  /// 宽高比解析结果批量刷新：探测大多走"读文件头，不解码"的快速路径，
+  /// 短时间内可能连续解析出成百上千张的宽高比。若每解析出一张就调用一次
+  /// setState/触发一次重排（包括三级缓存里 tier2/tier3 的重新 flatten +
+  /// 重建 delegate），条目一多，等价于短时间内做几百上千次全量重建——这才是
+  /// "项目很多时改善不明显"的真正原因。这里把结果先写入 map，实际的
+  /// setState 用一个短防抖定时器合并，同一批集中触发一次重排。
+  bool _aspectFlushScheduled = false;
+  Timer? _aspectFlushTimer;
+
+  void _scheduleAspectFlush() {
+    if (_aspectFlushScheduled) return;
+    _aspectFlushScheduled = true;
+    _aspectFlushTimer = Timer(const Duration(milliseconds: 120), () {
+      _aspectFlushScheduled = false;
+      if (mounted) setState(() => _aspectVersion++);
+    });
+  }
 
   /// 底部文件面板进出场动画控制器：作为面板滑入/滑出与中间内容让位的唯一动画源。
   /// 同一进度 v 同时驱动内容让位、面板位移、FAB 位置，确保三者完全同步。
@@ -367,6 +403,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     _panelAnim.dispose();
+    _aspectFlushTimer?.cancel();
     super.dispose();
   }
 
@@ -586,8 +623,12 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         final gItems = state.groupedItems;
         final gFiles = state.groupedFiles;
 
-        // 自适应模式每次都重建（预览图尺寸缓存会触发重排），不走三级缓存。
-        final cacheEnabled = !adaptive;
+        // 三级缓存对所有模式（含自适应）统一启用。自适应模式下宽高比的变化
+        // 通过 _aspectVersion 纳入下面的 key 来驱动失效，而不是像之前那样
+        // 直接对整个自适应模式关闭缓存——后者导致面板动画、hover、选中态
+        // 变化等与宽高比完全无关的 rebuild，也会触发全量重新 flatten + 重建
+        // delegate，在条目很多时是显著的 CPU/GC 开销来源。
+        const cacheEnabled = true;
         // delegateKey: captures everything affecting cardBuilder closures
         //   (data refs, selection, settings, aspectRatio, c, gifMode,
         //   displayMode, badges). Excludes layout params.
@@ -601,7 +642,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             '${identityHashCode(gridSettings)}|'
             '${gridSettings.aspectRatioValue}|'
             '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|'
-            '$mode|${badges.enabled.map((e) => e.name).join(',')}|$c|$cardWidth';
+            '$mode|${badges.enabled.map((e) => e.name).join(',')}|$c|$cardWidth|'
+            '${adaptive ? _aspectVersion : 0}';
         final fullKey = '$delegateKey|$crossAxisCount';
 
         if (cacheEnabled) {
@@ -674,12 +716,22 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           _cachedDelegateKey = delegateKey;
         }
 
-        // 自适应模式：提前为所有 item 解析预览图真实宽高比，使屏外卡片也能
-        // 拿到真实比例（而非默认比例），首屏即呈现完整砖石，而非只有可见行参差。
+        // 自适应模式（方案 B：范围预取）：只提前为"首屏可见行 + 若干向下缓冲行"
+        // 解析预览图真实宽高比，而不是整个分类的全部条目。这样首屏能立即呈现
+        // 完整砖石布局；缓冲行之外的条目则依赖下面 itemDelegate 的 builder
+        // （懒加载，随 Sliver 实际构建到该行时才触发）逐步解析——理论上滚动越
+        // 快、超出缓冲区的行就可能先以默认 aspectRatio 短暂出现，等真实比例
+        // 解析完成后再重排到正确高度。
+        // bufferRows：首屏行数(1) + 向下额外缓冲的行数，可按需调整。
         if (adaptive) {
+          const bufferRows = 6;
+          final prefetchCount = crossAxisCount * bufferRows;
+          var resolved = 0;
           for (final fe in gItemsUsed) {
+            if (resolved >= prefetchCount) break;
             if (!fe.isHeader) {
               _requestAspectResolution((fe.entry as LibraryItem).previewPath);
+              resolved++;
             }
           }
         }
@@ -913,50 +965,111 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             _showFileContextMenu(context, file, globalPos),
       );
 
-  /// 自适应模式：异步解析预览图真实宽高比，加载完成后触发重排实现砖石布局。
-  void _maybeResolveAspect(String? path) {
-    if (path == null ||
-        _previewAspectRatios.containsKey(path) ||
-        _resolvingAspects.contains(path)) {
+  /// 自适应模式：解析预览图真实宽高比。
+  ///
+  /// 优先走「读文件头」的快速路径：借助 [image_size_getter] 只读取文件头部
+  /// 元数据（JPEG/PNG/GIF/WebP/BMP 等），完全不解码像素、不占用 Flutter 全局
+  /// ImageCache 的任何一个 slot，且内部按格式规范只读取真正需要的那几个字节
+  /// 范围，比固定读 64KB 更轻。EXIF 方向（JPEG 竖拍）通过 [Size.needRotate]
+  /// 自动交换宽高，不会出现手写解析把竖图读反的问题。
+  ///
+  /// 这是相对"探测图缩小到 48px 再解码"的关键升级：即使探测图很小，
+  /// ResizeImage(...).resolve() 仍然是一次真实解码，且会在 ImageCache 里
+  /// 占据和"卡片实际显示用的 cacheWidth 解码结果"不同的一条缓存记录——
+  /// 两条记录叠加，在 ImageCache 默认 1000 张/100MB 的上限下，"项目很多"
+  /// 时很容易把缓存撑爆、不停淘汰又重新解码，这才是内存/CPU 持续偏高、
+  /// 且缩小探测图后仍然改善不明显的真正原因。
+  ///
+  /// 只有包不支持的格式（如 HEIC/AVIF）或解析失败时，才回退到小尺寸解码兜底，
+  /// 且这条兜底路径受并发上限保护。
+  Future<void> _maybeResolveAspect(String path) async {
+    _activeAspectResolves++;
+    double? aspect;
+    try {
+      final r = ImageSizeGetter.getSizeResult(FileInput(File(path)));
+      var w = r.size.width;
+      var h = r.size.height;
+      if (r.size.needRotate) {
+        final t = w;
+        w = h;
+        h = t;
+      }
+      if (w > 0 && h > 0) aspect = w / h;
+    } catch (_) {
+      aspect = null;
+    }
+
+    if (aspect != null) {
+      _resolvingAspects.remove(path);
+      _activeAspectResolves--;
+      _previewAspectRatios[path] = aspect;
+      _scheduleAspectFlush();
+      _drainAspectQueue();
       return;
     }
-    _resolvingAspects.add(path);
-    final image = FileImage(File(path));
+
+    // 兜底：包不支持的格式或解析失败，走小尺寸解码（仍计入同一并发上限）。
+    final image = ResizeImage(FileImage(File(path)), width: _aspectProbeWidth);
     image.resolve(const ImageConfiguration()).addListener(
       ImageStreamListener(
         (info, _) {
           _resolvingAspects.remove(path);
+          _activeAspectResolves--;
           final w = info.image.width.toDouble();
           final h = info.image.height.toDouble();
-          if (w > 0 && h > 0 && mounted) {
-            setState(() => _previewAspectRatios[path] = w / h);
+          if (w > 0 && h > 0) {
+            _previewAspectRatios[path] = w / h;
+            _scheduleAspectFlush();
           }
+          _drainAspectQueue();
         },
         onError: (Object error, StackTrace? stack) {
           _resolvingAspects.remove(path);
+          _activeAspectResolves--;
+          _drainAspectQueue();
         },
       ),
     );
   }
 
+  /// 从排队队列里取出待解析路径，按 [_maxConcurrentAspectResolves] 的并发
+  /// 上限逐个派发，避免"项目很多"时一次性甩出成百上千个解码任务同时抢占
+  /// CPU/GPU，造成瞬时资源峰值。解码工作会被自然摊薄到多帧完成。
+  void _drainAspectQueue() {
+    while (_activeAspectResolves < _maxConcurrentAspectResolves &&
+        _pendingAspectPaths.isNotEmpty) {
+      final path = _pendingAspectPaths.removeAt(0);
+      _queuedAspectPaths.remove(path);
+      if (_previewAspectRatios.containsKey(path) ||
+          _resolvingAspects.contains(path)) {
+        continue;
+      }
+      _resolvingAspects.add(path);
+      _maybeResolveAspect(path);
+    }
+  }
+
   /// build 阶段调用：登记需要解析宽高比的预览图，待本帧 build 结束（post-frame）
-  /// 后再真正解析，从而避免在 LayoutBuilder/Image 构建过程中同步触发 setState。
+  /// 后再真正入队，从而避免在 LayoutBuilder/Image 构建过程中同步触发 setState。
+  /// 这里刻意保留"为全部条目登记"的行为（而非只登记首屏可见项）：因为经过
+  /// 上面的小尺寸解码 + 并发限流，全量登记的成本已经很低，且能保持"首屏乃至
+  /// 滚动到任意位置都是完整砖石布局"的效果，不会像"只登记可见窗口"那样在
+  /// 向下滚动到未预取区域时出现高度从默认值跳变到真实值的重排闪烁。
   void _requestAspectResolution(String? path) {
     if (path == null) return;
     if (_previewAspectRatios.containsKey(path) ||
-        _resolvingAspects.contains(path)) {
+        _resolvingAspects.contains(path) ||
+        _queuedAspectPaths.contains(path)) {
       return;
     }
-    if (_pendingAspectPaths.add(path) && !_aspectResolveScheduled) {
+    _queuedAspectPaths.add(path);
+    _pendingAspectPaths.add(path);
+    if (!_aspectResolveScheduled) {
       _aspectResolveScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _aspectResolveScheduled = false;
         if (!mounted) return;
-        final paths = _pendingAspectPaths.toList();
-        _pendingAspectPaths.clear();
-        for (final p in paths) {
-          _maybeResolveAspect(p);
-        }
+        _drainAspectQueue();
       });
     }
   }
@@ -1643,3 +1756,5 @@ class _DropHighlightState extends State<_DropHighlight> {
     );
   }
 }
+
+

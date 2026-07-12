@@ -46,6 +46,7 @@ dependencies:
   pdfrx: ^2.4.7
   video_player: ^2.10.0
   fvp: ^0.37.0
+  image_size_getter: ^2.4.1
 
 dev_dependencies:
   flutter_test:
