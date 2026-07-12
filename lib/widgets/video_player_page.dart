@@ -84,7 +84,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     windowManager.addListener(this);
     player = FvpPlayer();
     if (widget.playlist.entries.isNotEmpty) {
-      // 预热一次，使 fvp 后端就绪（与 registerWith 配合）。
+      // 预热一次，使 fvp 后端就绪。
+      // 注意：不要在此处把 maxWidth/maxHeight 设成当前窗口物理尺寸。
+      // initState 时窗口仍是 main.dart 的默认 1280x720，会把 fvp 的
+      // 纹理上限钉死在 1280x720；之后即便全屏/最大化，纹理也不会再变大，
+      // 导致「视频最大只显示到 1280x720」。不传 options 时 fvp 用视频
+      // 真实分辨率建纹理，画面可随窗口放大铺满。
       fvp.registerWith();
     }
     _currentIndex = widget.initialIndex.clamp(
@@ -657,13 +662,23 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         color: Colors.black,
         alignment: Alignment.center,
         child: player.isInitialized && c != null && c.value.size.width > 0
-            ? FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: c.value.size.width,
-                  height: c.value.size.height,
-                  child: VideoPlayer(c),
-                ),
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  final vw = c.value.size.width;
+                  final vh = c.value.size.height;
+                  // 按 contain 把视频等比放大到容器可容纳的最大尺寸，
+                  // 让 fvp 用真实分辨率建的纹理被真正按窗口尺寸显示出来，
+                  // 从而随全屏/最大化清晰铺满（比例不符时上下/左右黑边属正常留白）。
+                  final scale = min(
+                    constraints.maxWidth / vw,
+                    constraints.maxHeight / vh,
+                  );
+                  return SizedBox(
+                    width: vw * scale,
+                    height: vh * scale,
+                    child: VideoPlayer(c),
+                  );
+                },
               )
             : const SizedBox.shrink(),
       ),
