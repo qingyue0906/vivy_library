@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import 'app_data_service.dart';
 import 'translations.dart';
 
@@ -891,6 +893,44 @@ class SettingsService {
 
   static Future<void> saveGroupingEnabled(bool v) async {
     await AppDataService.setString('grouping_enabled', v.toString());
+  }
+
+  // --- Appearance settings (强调色 / 圆角 / 密度 / 字号 / 动效 / 毛玻璃) ---
+
+  static const _appAccentKey = 'appearance_accent';
+  static const _appRadiusKey = 'appearance_radius_scale';
+  static const _appFontKey = 'appearance_font_scale';
+  static const _appDensityKey = 'appearance_density';
+  static const _appMotionKey = 'appearance_motion';
+  static const _appGlassKey = 'appearance_glass';
+  static const _appGlassBlurKey = 'appearance_glass_blur';
+
+  static Future<AppearanceSettings> loadAppearanceSettings() async {
+    final data = await AppDataService.loadSettings();
+    final accentRaw = data[_appAccentKey];
+    final accent = accentRaw is int ? Color(accentRaw) : kDefaultAccent;
+    return AppearanceSettings(
+      accent: accent,
+      radiusScale: (data[_appRadiusKey] as num?)?.toDouble().clamp(0.0, 1.6) ?? 1.0,
+      fontScale: (data[_appFontKey] as num?)?.toDouble().clamp(0.85, 1.3) ?? 1.0,
+      density: (data[_appDensityKey] as num?)?.toDouble().clamp(-2.0, 2.0) ?? 0.0,
+      motionLevel: MotionLevelLabel.fromKey(data[_appMotionKey] as String?),
+      glass: data[_appGlassKey] == true || data[_appGlassKey] == 'true',
+      glassBlur: (data[_appGlassBlurKey] as num?)?.toDouble().clamp(0.0, 30.0) ?? 18.0,
+    );
+  }
+
+  static Future<void> saveAppearanceSettings(AppearanceSettings s) async {
+    final data = await AppDataService.loadSettings();
+    // ignore: deprecated_member_use - 存储 ARGB int，跨版本稳定。
+    data[_appAccentKey] = s.accent.value;
+    data[_appRadiusKey] = s.radiusScale;
+    data[_appFontKey] = s.fontScale;
+    data[_appDensityKey] = s.density;
+    data[_appMotionKey] = s.motionLevel.key;
+    data[_appGlassKey] = s.glass;
+    data[_appGlassBlurKey] = s.glassBlur;
+    await AppDataService.saveSettings(data);
   }
 
   // --- Background settings ---

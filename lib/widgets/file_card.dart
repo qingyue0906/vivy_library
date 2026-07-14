@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/direct_file.dart';
 import '../services/settings_service.dart';
 import '../services/library_scanner.dart' show previewExtensions;
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import 'gif_image.dart';
 import 'compact_level.dart';
 
@@ -61,9 +63,8 @@ class _FileCardState extends State<FileCard> {
     }
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
+    final metrics = context.metrics;
+    final hoverColor = cs.primary.withValues(alpha: 0.5);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -73,9 +74,10 @@ class _FileCardState extends State<FileCard> {
         onSecondaryTapUp: widget.onRightClick != null
             ? (details) => widget.onRightClick!(details.globalPosition)
             : null,
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppMotion.durFast,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6 * c),
+            borderRadius: metrics.brSmall,
             border: widget.isSelected
                 ? Border.all(color: cs.primary, width: 1.5 * c)
                 : (_isHovered
@@ -83,7 +85,9 @@ class _FileCardState extends State<FileCard> {
                       : null),
             color: widget.isSelected
                 ? cs.primaryContainer.withValues(alpha: 0.25)
-                : Colors.transparent,
+                : (_isHovered
+                    ? cs.onSurface.withValues(alpha: 0.05)
+                    : Colors.transparent),
           ),
           padding: EdgeInsets.all(4 * c),
           child: Column(

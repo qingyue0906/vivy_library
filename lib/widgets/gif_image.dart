@@ -2,6 +2,24 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../theme/app_animations.dart';
+
+/// 图片首帧淡入：仅在异步解码（非缓存命中）时淡入，避免 hover 冻结/播放
+/// 切换时重复淡入闪烁。
+Widget _fadeInFrame(
+  BuildContext context,
+  Widget child,
+  int? frame,
+  bool wasSynchronouslyLoaded,
+) {
+  if (wasSynchronouslyLoaded) return child;
+  return AnimatedOpacity(
+    opacity: frame == null ? 0 : 1,
+    duration: AppMotion.durNormal,
+    curve: AppMotion.emphasized,
+    child: child,
+  );
+}
 
 class GifImage extends StatefulWidget {
   final File file;
@@ -130,6 +148,7 @@ class _GifImageState extends State<GifImage> {
       widget.file,
       cacheWidth: widget.cacheWidth,
       fit: widget.fit,
+      frameBuilder: _fadeInFrame,
       errorBuilder: (_, __, ___) =>
           widget.errorBuilder?.call(context) ?? const SizedBox.shrink(),
     );
@@ -148,6 +167,7 @@ class _GifImageState extends State<GifImage> {
         widget.file,
         cacheWidth: widget.cacheWidth,
         fit: widget.fit,
+        frameBuilder: _fadeInFrame,
         errorBuilder: (_, __, ___) =>
             widget.errorBuilder?.call(context) ?? const SizedBox.shrink(),
       ),

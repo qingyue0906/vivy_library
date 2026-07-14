@@ -234,6 +234,78 @@ class Strings {
       AppLocale.en: 'Theme',
       AppLocale.ja: 'テーマ',
     },
+    'appearanceSection': {
+      AppLocale.zhHans: '外观',
+      AppLocale.zhHant: '外觀',
+      AppLocale.en: 'Appearance',
+      AppLocale.ja: '外観',
+    },
+    'accentColor': {
+      AppLocale.zhHans: '强调色',
+      AppLocale.zhHant: '強調色',
+      AppLocale.en: 'Accent Color',
+      AppLocale.ja: 'アクセントカラー',
+    },
+    'radiusScale': {
+      AppLocale.zhHans: '圆角',
+      AppLocale.zhHant: '圓角',
+      AppLocale.en: 'Corner Radius',
+      AppLocale.ja: '角丸',
+    },
+    'density': {
+      AppLocale.zhHans: '密度',
+      AppLocale.zhHant: '密度',
+      AppLocale.en: 'Density',
+      AppLocale.ja: '密度',
+    },
+    'fontScale': {
+      AppLocale.zhHans: '字号',
+      AppLocale.zhHant: '字號',
+      AppLocale.en: 'Font Size',
+      AppLocale.ja: '文字サイズ',
+    },
+    'glassEffect': {
+      AppLocale.zhHans: '毛玻璃',
+      AppLocale.zhHant: '毛玻璃',
+      AppLocale.en: 'Frosted Glass',
+      AppLocale.ja: 'すりガラス',
+    },
+    'glassBlur': {
+      AppLocale.zhHans: '模糊强度',
+      AppLocale.zhHant: '模糊強度',
+      AppLocale.en: 'Blur Strength',
+      AppLocale.ja: 'ぼかし強度',
+    },
+    'motionLevel': {
+      AppLocale.zhHans: '动效强度',
+      AppLocale.zhHant: '動效強度',
+      AppLocale.en: 'Motion Intensity',
+      AppLocale.ja: 'モーション強度',
+    },
+    'motionOff': {
+      AppLocale.zhHans: '关闭',
+      AppLocale.zhHant: '關閉',
+      AppLocale.en: 'Off',
+      AppLocale.ja: 'オフ',
+    },
+    'motionReduced': {
+      AppLocale.zhHans: '减弱',
+      AppLocale.zhHant: '減弱',
+      AppLocale.en: 'Reduced',
+      AppLocale.ja: '軽減',
+    },
+    'motionNormal': {
+      AppLocale.zhHans: '标准',
+      AppLocale.zhHant: '標準',
+      AppLocale.en: 'Normal',
+      AppLocale.ja: '標準',
+    },
+    'motionExpressive': {
+      AppLocale.zhHans: '增强',
+      AppLocale.zhHant: '增強',
+      AppLocale.en: 'Expressive',
+      AppLocale.ja: '表現力',
+    },
     'followSystem': {
       AppLocale.zhHans: '跟随系统',
       AppLocale.zhHant: '跟隨系統',
@@ -1211,6 +1283,18 @@ class Strings {
       AppLocale.zhHant: '關聯項目',
       AppLocale.en: 'Related Items',
       AppLocale.ja: '関連項目',
+    },
+    'noRelated': {
+      AppLocale.zhHans: '暂无关联项目',
+      AppLocale.zhHant: '暫無關聯項目',
+      AppLocale.en: 'No related items',
+      AppLocale.ja: '関連項目はありません',
+    },
+    'copied': {
+      AppLocale.zhHans: '已复制到剪贴板',
+      AppLocale.zhHant: '已複製到剪貼板',
+      AppLocale.en: 'Copied to clipboard',
+      AppLocale.ja: 'クリップボードにコピーしました',
     },
 
     // ======== top_bar ========

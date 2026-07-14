@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -589,7 +590,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               duration: const Duration(milliseconds: 200),
               child: IgnorePointer(
                 ignoring: !_showBottom,
-                child: _buildControlBar(cs, overlay: true),
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: _buildControlBar(cs, overlay: true),
+                  ),
+                ),
               ),
             ),
           ),

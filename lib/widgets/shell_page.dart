@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
@@ -20,6 +21,8 @@ import 'create_item_dialog.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
@@ -35,6 +38,8 @@ class ShellPage extends StatefulWidget {
   final BackgroundSettings backgroundSettings;
   final void Function(BackgroundSettings settings) onBackgroundChanged;
   final void Function(AppLocale locale) onLocaleChanged;
+  final AppearanceSettings appearance;
+  final void Function(AppearanceSettings settings) onAppearanceChanged;
 
   const ShellPage({
     super.key,
@@ -45,6 +50,8 @@ class ShellPage extends StatefulWidget {
     required this.backgroundSettings,
     required this.onBackgroundChanged,
     required this.onLocaleChanged,
+    required this.appearance,
+    required this.onAppearanceChanged,
   });
 
   @override
@@ -138,6 +145,28 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     await _state.scan(path);
   }
 
+  /// 播放器/阅读器进入转场：淡入 + 微缩放，时长跟随全局动效档位
+  /// （关闭档时为 0，等价瞬时切换）。功能逻辑不受影响。
+  PageRouteBuilder<dynamic> _playerRoute(Widget page) {
+    return PageRouteBuilder<dynamic>(
+      fullscreenDialog: true,
+      transitionDuration: AppMotion.durSlow,
+      reverseTransitionDuration: AppMotion.durSlow,
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(
+              CurvedAnimation(parent: animation, curve: AppMotion.emphasized),
+            ),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   void _openSettings() {
     Navigator.push(
       context,
@@ -152,6 +181,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           onLocaleChanged: widget.onLocaleChanged,
           onSearchScopeChanged: _state.setSearchScope,
           searchScope: _state.searchScope,
+          initialAppearance: widget.appearance,
+          onAppearanceChanged: widget.onAppearanceChanged,
         ),
       ),
     );
@@ -281,9 +312,31 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
 
   Widget _buildTitleBar(ColorScheme cs) {
     final c = CompactLevel.of(context);
-    return Container(
+    final metrics = context.metrics;
+    final glass = metrics.glass;
+    // 毛玻璃开启时标题栏半透明并模糊其后的背景图；否则用不透明的表面色。
+    final barColor = glass
+        ? cs.surfaceContainerHigh.withValues(alpha: 0.72)
+        : cs.surfaceContainerHigh;
+
+    Widget bar = Container(
       height: 30 * c,
-      color: cs.surfaceContainerHigh,
+      decoration: BoxDecoration(
+        color: barColor,
+        border: Border(
+          bottom: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.7),
+            width: 0.8,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: glass ? 0.18 : 0.10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Expanded(
@@ -294,13 +347,15 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 padding: EdgeInsets.only(left: 12 * c),
                 child: Row(
                   children: [
-                    Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
-                    SizedBox(width: 6 * c),
+                    Icon(Icons.menu_book_rounded, size: 15 * c, color: cs.primary),
+                    SizedBox(width: 7 * c),
                     Text(
                       'Vivy Library',
                       style: TextStyle(
                         fontSize: 12 * c,
                         color: cs.onSurface,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ],
@@ -314,7 +369,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
             compactLevel: c,
           ),
           _CaptionButton(
-            icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+            icon: _isMaximized ? Icons.filter_none : Icons.crop_square,
             onTap: () {
               if (_isMaximized) {
                 windowManager.unmaximize();
@@ -333,6 +388,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ],
       ),
     );
+
+    if (glass) {
+      bar = ClipRect(
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: metrics.glassBlur,
+            sigmaY: metrics.glassBlur,
+          ),
+          child: bar,
+        ),
+      );
+    }
+    return bar;
   }
 
   Widget _buildBody() {
@@ -380,6 +448,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           searchController: _searchController,
           onSettingsTap: _openSettings,
           onGridDisplayTap: _openGridDisplaySettings,
+          gridSettings: widget.gridSettings,
+          onDisplayModeChanged: (mode) => widget.onGridSettingsChanged(
+            widget.gridSettings.copyWith(displayMode: mode),
+          ),
           backgroundOpacity: widget.backgroundSettings.path != null
               ? widget.backgroundSettings.middleOpacity
               : 1.0,
@@ -568,18 +640,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     required void Function(double) onDrag,
     VoidCallback? onDragEnd,
   }) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanUpdate: (details) => onDrag(details.delta.dx),
-        onPanEnd: (_) => onDragEnd?.call(),
-        child: Container(
-          width: 5,
-          color: Colors.transparent,
-        ),
-      ),
-    );
+    return _DragHandle(onDrag: onDrag, onDragEnd: onDragEnd);
   }
 
   void _resizeLeftPanel(double dx) {
@@ -627,9 +688,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ? playlist.entries.indexWhere((e) => e.path == startPath)
         : 0;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => VideoPlayerPage(
+      _playerRoute(
+        VideoPlayerPage(
           playlist: playlist,
           initialIndex: startIndex < 0 ? 0 : startIndex,
           title: item.info.title,
@@ -661,13 +721,13 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ? playlist.entries.indexWhere((e) => e.path == startPath)
         : 0;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => AudioPlayerPage(
+      _playerRoute(
+        AudioPlayerPage(
           playlist: playlist,
           initialIndex: startIndex < 0 ? 0 : startIndex,
           title: item.info.title,
           initialPlaylistWidth: playlistWidth,
+          heroTag: item.path,
         ),
       ),
     );
@@ -702,9 +762,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       if (startIndex < 0) startIndex = 0;
     }
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => ComicReaderPage(
+      _playerRoute(
+        ComicReaderPage(
           playlist: playlist,
           initialIndex: startIndex,
           title: item.info.title,
@@ -746,9 +805,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       if (startIndex < 0) startIndex = 0;
     }
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => EbookReaderPage(
+      _playerRoute(
+        EbookReaderPage(
           playlist: playlist,
           initialIndex: startIndex,
           title: item.info.title,
@@ -758,7 +816,68 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   }
 }
 
-class _CaptionButton extends StatelessWidget {
+/// 可拖拽分隔条：hover / 拖拽时高亮一条强调色竖线，提升可发现性与手感。
+class _DragHandle extends StatefulWidget {
+  final void Function(double) onDrag;
+  final VoidCallback? onDragEnd;
+
+  const _DragHandle({required this.onDrag, this.onDragEnd});
+
+  @override
+  State<_DragHandle> createState() => _DragHandleState();
+}
+
+class _DragHandleState extends State<_DragHandle> {
+  bool _hover = false;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final active = _hover || _dragging;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanStart: (_) => setState(() => _dragging = true),
+        onPanUpdate: (details) => widget.onDrag(details.delta.dx),
+        onPanEnd: (_) {
+          setState(() => _dragging = false);
+          widget.onDragEnd?.call();
+        },
+        child: SizedBox(
+          width: 6,
+          child: Center(
+            child: AnimatedContainer(
+              duration: AppMotion.durFast,
+              curve: AppMotion.standard,
+              width: active ? 2.5 : 1,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: active
+                    ? cs.primary
+                    : cs.outlineVariant.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: cs.primary.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CaptionButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool isClose;
@@ -772,17 +891,35 @@ class _CaptionButton extends StatelessWidget {
   });
 
   @override
+  State<_CaptionButton> createState() => _CaptionButtonState();
+}
+
+class _CaptionButtonState extends State<_CaptionButton> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 46 * compactLevel,
-      height: 30 * compactLevel,
+    final c = widget.compactLevel;
+    final Color hoverBg = widget.isClose
+        ? const Color(0xFFE81123)
+        : cs.onSurface.withValues(alpha: 0.10);
+    final Color iconColor = _hover
+        ? (widget.isClose ? Colors.white : cs.onSurface)
+        : (widget.isClose ? cs.onSurfaceVariant : cs.onSurfaceVariant);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          color: Colors.transparent,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: AppMotion.durFast,
+          curve: AppMotion.standard,
+          width: 46 * c,
+          height: 30 * c,
+          color: _hover ? hoverBg : Colors.transparent,
           child: Center(
-            child: Icon(icon, size: 12 * compactLevel, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+            child: Icon(widget.icon, size: 13 * c, color: iconColor),
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -20,6 +21,7 @@ class AudioPlayerPage extends StatefulWidget {
   final int initialIndex;
   final String title;
   final double? initialPlaylistWidth;
+  final String? heroTag;
 
   const AudioPlayerPage({
     super.key,
@@ -27,6 +29,7 @@ class AudioPlayerPage extends StatefulWidget {
     this.initialIndex = 0,
     required this.title,
     this.initialPlaylistWidth,
+    this.heroTag,
   });
 
   @override
@@ -532,7 +535,12 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
               duration: const Duration(milliseconds: 200),
               child: IgnorePointer(
                 ignoring: !_showBottom,
-                child: _buildControlBar(cs, overlay: true),
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: _buildControlBar(cs, overlay: true),
+                  ),
+                ),
               ),
             ),
           ),
@@ -645,7 +653,12 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: cover != null
-                        ? Image.memory(cover, fit: BoxFit.cover)
+                        ? (widget.heroTag != null
+                            ? Hero(
+                                tag: widget.heroTag!,
+                                child: Image.memory(cover, fit: BoxFit.cover),
+                              )
+                            : Image.memory(cover, fit: BoxFit.cover))
                         : Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(

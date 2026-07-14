@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/category_node.dart';
 import '../services/settings_service.dart';
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import 'compact_level.dart';
 
 /// 文件夹卡片，模仿 Windows 资源管理器大图标风格。
@@ -71,39 +73,48 @@ class _FolderCardState extends State<FolderCard> {
     if (widget.displayMode == GridDisplayMode.list) {
       return _buildListRow(c, cs);
     }
-    final selectedColor = cs.brightness == Brightness.light
-        ? const Color(0xFF7B49E0)
-        : cs.primary;
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
+    final metrics = context.metrics;
+    final folderColor = context.vivy.typeFolder;
+    final selectedColor = cs.primary;
+    final hoverColor = cs.primary.withValues(alpha: 0.5);
     final borderColor = widget.isSelected
         ? selectedColor
         : (_isHovered ? hoverColor : Colors.transparent);
-    final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 1.5);
+    final borderWidth = widget.isSelected ? 1.6 : (_isHovered ? 1.2 : 1.5);
+    final active = _isHovered || widget.isSelected;
     return GestureDetector(
       onSecondaryTapUp: (details) =>
           widget.onRightClick(details.globalPosition),
       child: InkWell(
         onTap: _handleTap,
         onHover: (v) => setState(() => _isHovered = v),
-        borderRadius: BorderRadius.circular(4 * c),
+        borderRadius: metrics.br,
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         hoverColor: Colors.transparent,
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppMotion.durNormal,
+          curve: AppMotion.emphasized,
+          transform: Matrix4.translationValues(
+            0,
+            active ? -2.5 * AppMotion.amplitude : 0,
+            0,
+          ),
+          transformAlignment: Alignment.center,
           padding: EdgeInsets.symmetric(vertical: 6 * c, horizontal: 4 * c),
           decoration: BoxDecoration(
             color: widget.isSelected
                 ? cs.primaryContainer.withValues(alpha: 0.4)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4 * c),
+                : (_isHovered
+                    ? cs.onSurface.withValues(alpha: 0.05)
+                    : Colors.transparent),
+            borderRadius: metrics.br,
             border: Border.all(color: borderColor, width: borderWidth),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
+              Icon(Icons.folder_rounded, size: 48 * c, color: folderColor),
               SizedBox(height: 4 * c),
               Text(
                 widget.node.name,
@@ -124,15 +135,13 @@ class _FolderCardState extends State<FolderCard> {
   }
 
   Widget _buildListRow(double c, ColorScheme cs) {
-    final selectedColor = cs.brightness == Brightness.light
-        ? const Color(0xFF7B49E0)
-        : cs.primary;
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
+    final metrics = context.metrics;
+    final folderColor = context.vivy.typeFolder;
+    final selectedColor = cs.primary;
+    final hoverColor = cs.primary.withValues(alpha: 0.5);
     final borderColor = widget.isSelected
         ? selectedColor
-        : (_isHovered ? hoverColor : cs.outlineVariant);
+        : (_isHovered ? hoverColor : cs.outlineVariant.withValues(alpha: 0.5));
     return GestureDetector(
       onSecondaryTapUp: (details) => widget.onRightClick(details.globalPosition),
       child: MouseRegion(
@@ -140,17 +149,20 @@ class _FolderCardState extends State<FolderCard> {
         onExit: (_) => setState(() => _isHovered = false),
         child: InkWell(
           onTap: _handleTap,
-          borderRadius: BorderRadius.circular(4 * c),
+          borderRadius: metrics.brSmall,
           splashColor: Colors.transparent,
           hoverColor: Colors.transparent,
-          child: Container(
+          child: AnimatedContainer(
+            duration: AppMotion.durFast,
             height: 44 * c,
             padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 4 * c),
             decoration: BoxDecoration(
               color: widget.isSelected
                   ? cs.primaryContainer.withValues(alpha: 0.25)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4 * c),
+                  : (_isHovered
+                      ? cs.onSurface.withValues(alpha: 0.05)
+                      : Colors.transparent),
+              borderRadius: metrics.brSmall,
               border: Border.all(
                 color: borderColor,
                 width: widget.isSelected ? 1.5 : 1.0,
@@ -159,7 +171,7 @@ class _FolderCardState extends State<FolderCard> {
             child: Row(
               children: [
                 SizedBox(width: 4 * c),
-                Icon(Icons.folder, size: 32 * c, color: Colors.amber.shade400),
+                Icon(Icons.folder_rounded, size: 32 * c, color: folderColor),
                 SizedBox(width: 8 * c),
                 Expanded(
                   child: Text(

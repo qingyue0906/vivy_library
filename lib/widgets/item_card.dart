@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../models/library_item.dart';
 import '../models/item_info.dart';
 import '../services/settings_service.dart';
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
 
@@ -72,17 +74,14 @@ class _ItemCardState extends State<ItemCard> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    final selectedColor = cs.brightness == Brightness.light
-        ? const Color(0xFF7B49E0)
-        : cs.primary;
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
-    final radius = BorderRadius.circular(4 * c);
+    final metrics = context.metrics;
+    final selectedColor = cs.primary;
+    final hoverColor = cs.primary.withValues(alpha: 0.55);
+    final radius = metrics.br;
     final borderColor = widget.isSelected
         ? selectedColor
-        : (_isHovered ? hoverColor : cs.outlineVariant);
-    final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 0.5);
+        : (_isHovered ? hoverColor : cs.outlineVariant.withValues(alpha: 0.5));
+    final borderWidth = widget.isSelected ? 2.0 : (_isHovered ? 1.4 : 0.8);
 
     // 预览图 + 徽章叠加（不含点击手势，由调用方包裹后复用）。
     final preview = ClipRRect(
@@ -94,10 +93,15 @@ class _ItemCardState extends State<ItemCard> {
         child: MouseRegion(
           onEnter: (_) => setState(() => _isHovered = true),
           onExit: (_) => setState(() => _isHovered = false),
-          child: Container(
+          child: AnimatedContainer(
+            duration: AppMotion.durFast,
+            curve: AppMotion.standard,
             height: widget.displayHeight,
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(borderRadius: radius),
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+            ),
             foregroundDecoration: BoxDecoration(
               borderRadius: radius,
               border: Border.all(color: borderColor, width: borderWidth),
@@ -115,17 +119,48 @@ class _ItemCardState extends State<ItemCard> {
       return _buildListRow(c, cs, selectedColor, hoverColor);
     }
     if (widget.displayMode == GridDisplayMode.cover) {
-      return preview;
+      return _elevate(preview, radius, cs);
     }
     // loose / compact / adaptive
     return Column(
       mainAxisSize: MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        preview,
+        _elevate(preview, radius, cs),
         if (widget.displayMode != GridDisplayMode.compact)
           Expanded(child: _buildInfo(c)),
       ],
+    );
+  }
+
+  /// hover / 选中时抬起：轻微上移 + 阴影（选中用强调色光晕）。
+  Widget _elevate(Widget child, BorderRadius radius, ColorScheme cs) {
+    final lifted = _isHovered || widget.isSelected;
+    return AnimatedContainer(
+      duration: AppMotion.durNormal,
+      curve: AppMotion.emphasized,
+      transform: Matrix4.translationValues(
+        0,
+        lifted ? -3.0 * AppMotion.amplitude : 0,
+        0,
+      ),
+      transformAlignment: Alignment.topCenter,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: lifted
+            ? [
+                BoxShadow(
+                  color: widget.isSelected
+                      ? cs.primary.withValues(alpha: 0.42)
+                      : Colors.black.withValues(alpha: 0.28),
+                  blurRadius: widget.isSelected ? 16 : 12,
+                  spreadRadius: widget.isSelected ? 0.5 : 0,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: child,
     );
   }
 
@@ -271,7 +306,7 @@ class _ItemCardState extends State<ItemCard> {
             color: Colors.black.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(10 * c),
           ),
-          child: Icon(Icons.star, size: 14 * c, color: Colors.amber),
+          child: Icon(Icons.star, size: 14 * c, color: context.vivy.star),
         ),
       );
 
@@ -412,7 +447,7 @@ class _ItemCardState extends State<ItemCard> {
       }
     }
     if (widget.item.info.star && widget.badges.isEnabled(GridBadge.star)) {
-      children.add(Icon(Icons.star, size: 14 * c, color: Colors.amber));
+      children.add(Icon(Icons.star, size: 14 * c, color: context.vivy.star));
     }
     final rating = widget.effectiveInfo.contentRating;
     if (rating.isNotEmpty && widget.badges.isEnabled(GridBadge.rating)) {

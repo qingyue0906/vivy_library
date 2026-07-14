@@ -24,6 +24,7 @@ import 'package:image_size_getter/file_input.dart';
 import 'compact_level.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
+import '../theme/app_animations.dart';
 
 /// 分组扁平化后的单元：要么是一张普通卡片（[isHeader]=false），要么是一个
 /// 占满整行的分组标题（[isHeader]=true）。单个 SliverGrid 按此顺序排版，
@@ -482,7 +483,28 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                           : Padding(
                               padding: EdgeInsets.all(8 * c)
                                   .copyWith(bottom: 8 * c + reserved),
-                              child: _buildGrid(context, c),
+                              child: AnimatedSwitcher(
+                                duration: AppMotion.durNormal,
+                                switchInCurve: AppMotion.emphasized,
+                                switchOutCurve: AppMotion.standard,
+                                transitionBuilder:
+                                    (child, animation) => FadeTransition(
+                                  opacity: animation,
+                                  child: ScaleTransition(
+                                    scale: Tween<double>(
+                                      begin: 0.98,
+                                      end: 1.0,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                                child: KeyedSubtree(
+                                  key: ValueKey<GridDisplayMode>(
+                                    gridSettings.displayMode,
+                                  ),
+                                  child: _buildGrid(context, c),
+                                ),
+                              ),
                             ),
                     ),
                   ],

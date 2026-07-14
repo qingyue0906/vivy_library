@@ -9,6 +9,8 @@ import '../services/app_data_service.dart';
 import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../theme/app_animations.dart';
+import '../theme/app_theme.dart';
 import '../utils/app_quit.dart';
 import 'smooth_scroll.dart';
 
@@ -22,6 +24,8 @@ class SettingsPage extends StatefulWidget {
   final ScriptService scriptService;
   final void Function(SearchScope scope) onSearchScopeChanged;
   final SearchScope searchScope;
+  final AppearanceSettings initialAppearance;
+  final void Function(AppearanceSettings appearance) onAppearanceChanged;
 
   const SettingsPage({
     super.key,
@@ -34,6 +38,8 @@ class SettingsPage extends StatefulWidget {
     required this.scriptService,
     required this.onSearchScopeChanged,
     required this.searchScope,
+    this.initialAppearance = const AppearanceSettings(),
+    required this.onAppearanceChanged,
   });
 
   @override
@@ -50,6 +56,7 @@ class _SettingsPageState extends State<SettingsPage>
   late AppLocale _locale;
   late SearchScope _searchScope;
   bool _searchScopeExpanded = true;
+  AppearanceSettings _appearance = const AppearanceSettings();
 
   @override
   void initState() {
@@ -58,16 +65,24 @@ class _SettingsPageState extends State<SettingsPage>
     _bgSettings = widget.backgroundSettings;
     _locale = Strings.currentLocale;
     _searchScope = widget.searchScope;
+    _appearance = widget.initialAppearance;
     _load();
   }
 
   Future<void> _load() async {
     final theme = await SettingsService.loadThemeMode();
     final grid = await SettingsService.loadGridSettings();
+    final appearance = await SettingsService.loadAppearanceSettings();
     setState(() {
       _themeMode = theme;
       _gridSettings = grid;
+      _appearance = appearance;
     });
+  }
+
+  void _saveAppearance() {
+    SettingsService.saveAppearanceSettings(_appearance);
+    widget.onAppearanceChanged(_appearance);
   }
 
   @override
@@ -299,6 +314,10 @@ class _SettingsPageState extends State<SettingsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(Strings.t('appearanceSection'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _buildAppearanceSection(),
+            const SizedBox(height: 24),
             Text(Strings.t('themeSection'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
@@ -350,6 +369,197 @@ class _SettingsPageState extends State<SettingsPage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAppearanceSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel(Strings.t('accentColor')),
+        const SizedBox(height: 8),
+        _buildAccentPicker(),
+        const SizedBox(height: 16),
+        _buildDoubleSlider(
+          Strings.t('radiusScale'),
+          _appearance.radiusScale,
+          0.6, 1.6, 20,
+          (v) {
+            _appearance = _appearance.copyWith(radiusScale: v);
+            setState(() {});
+            _saveAppearance();
+          },
+          format: (v) => '${v.toStringAsFixed(2)}×',
+        ),
+        const SizedBox(height: 16),
+        _buildDoubleSlider(
+          Strings.t('fontScale'),
+          _appearance.fontScale,
+          0.85, 1.30, 9,
+          (v) {
+            _appearance = _appearance.copyWith(fontScale: v);
+            setState(() {});
+            _saveAppearance();
+          },
+          format: (v) => '${(v * 100).round()}%',
+        ),
+        const SizedBox(height: 16),
+        _buildDoubleSlider(
+          Strings.t('density'),
+          _appearance.density,
+          -2, 2, 16,
+          (v) {
+            _appearance = _appearance.copyWith(density: v);
+            setState(() {});
+            _saveAppearance();
+          },
+          format: (v) => v.toStringAsFixed(1),
+        ),
+        const SizedBox(height: 16),
+        _buildGlassToggle(),
+        const SizedBox(height: 16),
+        _buildSectionLabel(Strings.t('motionLevel')),
+        const SizedBox(height: 8),
+        _buildMotionSelector(),
+      ],
+    );
+  }
+
+  Widget _buildSectionLabel(String text) =>
+      Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF616161)));
+
+  Widget _buildAccentPicker() {
+    final cs = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: kAccentPresets.map((color) {
+        final selected = _appearance.accent == color;
+        final luminance = color.computeLuminance();
+        return InkWell(
+          onTap: () {
+            setState(() => _appearance = _appearance.copyWith(accent: color));
+            _saveAppearance();
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? cs.onSurface : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: selected
+                ? Icon(Icons.check,
+                    size: 16,
+                    color: luminance > 0.5 ? Colors.black : Colors.white)
+                : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildDoubleSlider(
+    String label,
+    double value,
+    double min,
+    double max,
+    int divisions,
+    ValueChanged<double> onChanged, {
+    String Function(double)? format,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _buildSectionLabel(label),
+            const SizedBox(width: 8),
+            Text(format?.call(value) ?? value.toStringAsFixed(2),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlassToggle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildSectionLabel(Strings.t('glassEffect'))),
+            Transform.scale(
+              scale: 0.8,
+              child: Switch(
+                value: _appearance.glass,
+                onChanged: (v) {
+                  setState(() => _appearance = _appearance.copyWith(glass: v));
+                  _saveAppearance();
+                },
+              ),
+            ),
+          ],
+        ),
+        if (_appearance.glass)
+          _buildDoubleSlider(
+            Strings.t('glassBlur'),
+            _appearance.glassBlur,
+            0, 30, 30,
+            (v) {
+              _appearance = _appearance.copyWith(glassBlur: v);
+              setState(() {});
+              _saveAppearance();
+            },
+            format: (v) => '${v.round()}',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMotionSelector() {
+    final levels = [
+      (MotionLevel.off, Strings.t('motionOff')),
+      (MotionLevel.reduced, Strings.t('motionReduced')),
+      (MotionLevel.normal, Strings.t('motionNormal')),
+      (MotionLevel.expressive, Strings.t('motionExpressive')),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: levels.map((e) {
+        final selected = _appearance.motionLevel == e.$1;
+        return ChoiceChip(
+          label: Text(e.$2, style: const TextStyle(fontSize: 12)),
+          selected: selected,
+          onSelected: (_) {
+            setState(() => _appearance = _appearance.copyWith(motionLevel: e.$1));
+            _saveAppearance();
+          },
+          visualDensity: VisualDensity.compact,
+        );
+      }).toList(),
     );
   }
 

@@ -8,6 +8,8 @@ import 'services/app_data_service.dart';
 import 'services/script_service.dart';
 import 'services/settings_service.dart';
 import 'services/translations.dart';
+import 'theme/app_animations.dart';
+import 'theme/app_theme.dart';
 import 'utils/app_quit.dart';
 import 'widgets/shell_page.dart';
 
@@ -22,6 +24,9 @@ void main() async {
   await AppDataService.migrateIfNeeded();
 
   final savedTheme = await SettingsService.loadThemeMode();
+  final savedAppearance = await SettingsService.loadAppearanceSettings();
+  // 动效档位是全局静态单一真源，需在构建任何界面前写入。
+  AppMotion.level = savedAppearance.motionLevel;
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -48,7 +53,11 @@ void main() async {
   final scriptService = ScriptService();
   await scriptService.init();
   runApp(ExcludeSemantics(
-    child: VivyApp(initialThemeMode: savedTheme, scriptService: scriptService),
+    child: VivyApp(
+      initialThemeMode: savedTheme,
+      initialAppearance: savedAppearance,
+      scriptService: scriptService,
+    ),
   ));
 
   // fvp 注册时会把 libmdk 日志设为 "all"，解码/打开媒体时产生大量原生→Dart 日志
@@ -68,9 +77,15 @@ class _WindowStateListener with WindowListener {
 
 class VivyApp extends StatefulWidget {
   final ThemeMode initialThemeMode;
+  final AppearanceSettings initialAppearance;
   final ScriptService scriptService;
 
-  const VivyApp({super.key, required this.initialThemeMode, required this.scriptService});
+  const VivyApp({
+    super.key,
+    required this.initialThemeMode,
+    required this.initialAppearance,
+    required this.scriptService,
+  });
 
   @override
   State<VivyApp> createState() => _VivyAppState();
@@ -78,6 +93,7 @@ class VivyApp extends StatefulWidget {
 
 class _VivyAppState extends State<VivyApp> {
   late ThemeMode _themeMode;
+  late AppearanceSettings _appearance;
   late GridSettings _gridSettings;
   BackgroundSettings _backgroundSettings = const BackgroundSettings();
   // ignore: unused_field - triggers rebuild on locale change
@@ -87,6 +103,7 @@ class _VivyAppState extends State<VivyApp> {
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
+    _appearance = widget.initialAppearance;
     _gridSettings = const GridSettings();
     _locale = AppLocale.system;
     _loadGridSettings();
@@ -114,6 +131,13 @@ class _VivyAppState extends State<VivyApp> {
     setState(() => _themeMode = mode);
   }
 
+  void _onAppearanceChanged(AppearanceSettings settings) {
+    // 动效档位是全局静态单一真源，随外观一并更新。
+    AppMotion.level = settings.motionLevel;
+    setState(() => _appearance = settings);
+    SettingsService.saveAppearanceSettings(settings);
+  }
+
   void _onGridSettingsChanged(GridSettings settings) {
     setState(() => _gridSettings = settings);
     // 实时落盘，使新建的快捷面板每次改动立即持久化（不再依赖设置页"应用"）。
@@ -130,43 +154,29 @@ class _VivyAppState extends State<VivyApp> {
     setState(() => _locale = locale);
   }
 
-  // VS Code 暗色配色
-  static const _vscodeDarkSurface = Color(0xFF1E1E1E);
-  static const _vscodeDarkSidebar = Color(0xFF252526);
-  static const _vscodeDarkInactiveTab = Color(0xFF2D2D2D);
-  static const _vscodeDarkActivityBar = Color(0xFF333333);
-  static const _vscodeDarkBorder = Color(0xFF3C3C3C);
-  static const _vscodeDarkText = Color(0xFFCCCCCC);
-  static const _vscodeBlue = Color(0xFF007ACC);
-  static const _vscodeSelection = Color(0xFF264F78);
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Vivy Library',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+      theme: buildAppTheme(
+        brightness: Brightness.light,
+        appearance: _appearance,
       ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.dark(
-          primary: _vscodeBlue,
-          surface: _vscodeDarkSurface,
-          onSurface: _vscodeDarkText,
-          surfaceContainerLow: _vscodeDarkSidebar,
-          surfaceContainer: _vscodeDarkInactiveTab,
-          surfaceContainerHigh: _vscodeDarkActivityBar,
-          surfaceContainerHighest: _vscodeDarkBorder,
-          primaryContainer: _vscodeSelection,
-          onPrimaryContainer: _vscodeDarkText,
-          secondaryContainer: _vscodeDarkActivityBar,
-          outline: _vscodeDarkBorder,
-          outlineVariant: _vscodeDarkBorder,
-        ),
-        scaffoldBackgroundColor: _vscodeDarkSurface,
+      darkTheme: buildAppTheme(
+        brightness: Brightness.dark,
+        appearance: _appearance,
       ),
       themeMode: _themeMode,
+      // 全局字号缩放：零侵入地作用于所有文本，无需逐处改 fontSize。
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: TextScaler.linear(_appearance.fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: ShellPage(
         scriptService: widget.scriptService,
         onThemeChanged: _onThemeChanged,
@@ -175,6 +185,8 @@ class _VivyAppState extends State<VivyApp> {
         backgroundSettings: _backgroundSettings,
         onBackgroundChanged: _onBackgroundChanged,
         onLocaleChanged: _onLocaleChanged,
+        appearance: _appearance,
+        onAppearanceChanged: _onAppearanceChanged,
       ),
     );
   }
