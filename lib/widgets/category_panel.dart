@@ -63,7 +63,10 @@ class _CategoryPanelState extends State<CategoryPanel> {
               onTap: () => widget.onCategorySelected(widget.root.path),
             ),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10 * c, vertical: 4 * c),
+              padding: EdgeInsets.symmetric(
+                horizontal: 10 * c,
+                vertical: 4 * c,
+              ),
               child: Divider(
                 height: 1,
                 thickness: 1,
@@ -71,14 +74,21 @@ class _CategoryPanelState extends State<CategoryPanel> {
               ),
             ),
             // Part 2: 根级直接文件夹展开树
-            ...widget.root.subDirs.map((node) => _buildNode(context, c, node, 0)),
+            ...widget.root.subDirs.map(
+              (node) => _buildNode(context, c, node, 0),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNode(BuildContext context, double c, CategoryNode node, int depth) {
+  Widget _buildNode(
+    BuildContext context,
+    double c,
+    CategoryNode node,
+    int depth,
+  ) {
     final hasSubDirs = node.subDirs.isNotEmpty;
     final isExpanded = widget.expandedPaths.contains(node.path);
     return Column(
@@ -95,8 +105,9 @@ class _CategoryPanelState extends State<CategoryPanel> {
           hasSubDirs: hasSubDirs,
           isExpanded: isExpanded,
           onTap: () => widget.onCategorySelected(node.path),
-          onToggleExpand:
-              hasSubDirs ? () => widget.onToggleExpand(node.path) : null,
+          onToggleExpand: hasSubDirs
+              ? () => widget.onToggleExpand(node.path)
+              : null,
         ),
         // 展开/收起用 AnimatedSize 做平滑高度过渡。
         AnimatedSize(
@@ -159,8 +170,9 @@ class _CategoryTileState extends State<_CategoryTile> {
         ? cs.primaryContainer.withValues(alpha: 0.9)
         : (_hover ? cs.onSurface.withValues(alpha: 0.06) : Colors.transparent);
     final Color fg = selected ? cs.onPrimaryContainer : cs.onSurface;
-    final Color iconColor =
-        selected ? cs.onPrimaryContainer : cs.onSurfaceVariant;
+    final Color iconColor = selected
+        ? cs.onPrimaryContainer
+        : cs.onSurfaceVariant;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 6 * c, vertical: 1 * c),
@@ -174,72 +186,64 @@ class _CategoryTileState extends State<_CategoryTile> {
             duration: AppMotion.durFast,
             curve: AppMotion.standard,
             height: 30 * c,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: metrics.brSmall,
-            ),
-            child: Stack(
-              children: [
-                // 选中时左侧强调条
-                if (selected)
-                  Positioned(
-                    left: 0,
-                    top: 6 * c,
-                    bottom: 6 * c,
-                    child: Container(
+            decoration: BoxDecoration(color: bg, borderRadius: metrics.brSmall),
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 8 * c + widget.depth * 12 * c,
+                right: 8 * c,
+              ),
+              child: Row(
+                children: [
+                  // 选中时左侧强调条：作为 Row 首个元素，跟随内容起点对齐，
+                  // 不再随 depth 缩进而脱节
+                  if (selected)
+                    Container(
                       width: 3,
+                      height: 18 * c,
+                      margin: EdgeInsets.only(right: 4 * c),
                       decoration: BoxDecoration(
                         color: cs.primary,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                  ),
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: 8 * c + widget.depth * 12 * c,
-                    right: 8 * c,
-                  ),
-                  child: Row(
-                    children: [
-                      if (widget.hasSubDirs)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: widget.onToggleExpand,
-                          child: Padding(
-                            padding: EdgeInsets.all(1 * c),
-                            child: AnimatedRotation(
-                              turns: widget.isExpanded ? 0.25 : 0.0,
-                              duration: AppMotion.durFast,
-                              curve: AppMotion.standard,
-                              child: Icon(
-                                Icons.chevron_right,
-                                size: 15 * c,
-                                color: iconColor,
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        SizedBox(width: 17 * c),
-                      Icon(widget.icon, size: 14 * c, color: iconColor),
-                      SizedBox(width: 6 * c),
-                      Expanded(
-                        child: Text(
-                          widget.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12 * c,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.w400,
-                            color: fg,
+                  if (widget.hasSubDirs)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.onToggleExpand,
+                      child: Padding(
+                        padding: EdgeInsets.all(1 * c),
+                        child: AnimatedRotation(
+                          turns: widget.isExpanded ? 0.25 : 0.0,
+                          duration: AppMotion.durFast,
+                          curve: AppMotion.standard,
+                          child: Icon(
+                            Icons.chevron_right,
+                            size: 15 * c,
+                            color: iconColor,
                           ),
                         ),
                       ),
-                    ],
+                    )
+                  else
+                    SizedBox(width: 17 * c),
+                  Icon(widget.icon, size: 14 * c, color: iconColor),
+                  SizedBox(width: 6 * c),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12 * c,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        color: fg,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
