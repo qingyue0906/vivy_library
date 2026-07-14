@@ -933,7 +933,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     GridBadgeFlags badges,
   ) {
     return ItemCard(
-      key: GlobalObjectKey(item.path),
+      key: GlobalObjectKey('${mode.name}:${item.path}'),
       item: item,
       effectiveInfo: state.effectiveInfo(item),
       displayWidth: cardWidth,
@@ -962,7 +962,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   }
 
   Widget _folderCard(CategoryNode node, double cardWidth) => FolderCard(
-        key: GlobalObjectKey(node.path),
+        key: GlobalObjectKey('${gridSettings.displayMode.name}:${node.path}'),
         node: node,
         displayWidth: cardWidth,
         displayMode: gridSettings.displayMode,
@@ -976,7 +976,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
       );
 
   Widget _fileCard(DirectFile file, double cardWidth) => FileCard(
-        key: GlobalObjectKey(file.path),
+        key: GlobalObjectKey('${gridSettings.displayMode.name}:${file.path}'),
         file: file,
         displayWidth: cardWidth,
         displayMode: gridSettings.displayMode,
@@ -1161,6 +1161,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
       childCount: flat.length,
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: false,
+      addSemanticIndexes: false,
     );
   }
 
@@ -1425,7 +1426,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     state.locateInTree(item.categoryPath);
     // 切换分类后，下一帧将对应项目滚动到可见区域
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final key = GlobalObjectKey(item.path);
+      final key =
+          GlobalObjectKey('${gridSettings.displayMode.name}:${item.path}');
       final ctx = key.currentContext;
       if (ctx != null) {
         Scrollable.ensureVisible(

@@ -40,8 +40,10 @@ class FolderCard extends StatefulWidget {
 }
 
 class _FolderCardState extends State<FolderCard> {
-  DateTime? _lastTapTime;
   bool _isHovered = false;
+
+  /// 按 path 外置的上一次点击时间，避免 State 重建导致双击检测丢失。
+  static final Map<String, DateTime> _lastTapByPath = {};
 
   void _handleTap() {
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
@@ -56,12 +58,13 @@ class _FolderCardState extends State<FolderCard> {
     }
 
     final now = DateTime.now();
-    if (_lastTapTime != null &&
-        now.difference(_lastTapTime!).inMilliseconds < 300) {
-      _lastTapTime = null;
+    final key = '${widget.displayMode.name}:${widget.node.path}';
+    final last = _lastTapByPath[key];
+    if (last != null && now.difference(last).inMilliseconds < 300) {
+      _lastTapByPath.remove(key);
       widget.onDoubleTap();
     } else {
-      _lastTapTime = now;
+      _lastTapByPath[key] = now;
       widget.onTap();
     }
   }

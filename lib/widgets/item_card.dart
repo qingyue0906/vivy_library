@@ -47,18 +47,22 @@ class ItemCard extends StatefulWidget {
 
 class _ItemCardState extends State<ItemCard> {
   bool _isHovered = false;
-  DateTime? _lastTapTime;
+
+  /// 按 path 外置的上一次点击时间，避免卡片 State 在两次点击之间被重建
+  /// （单击触发 state 变化 -> 网格重建 -> element 重置）导致双击检测丢失。
+  static final Map<String, DateTime> _lastTapByPath = {};
 
   /// 手动双击判定：300ms 内二次点击触发 [onDoubleTap]，单击立即响应无延迟。
   void _handleTap() {
     final now = DateTime.now();
-    if (_lastTapTime != null &&
-        now.difference(_lastTapTime!).inMilliseconds < 300) {
-      _lastTapTime = null;
+    final key = '${widget.displayMode.name}:${widget.item.path}';
+    final last = _lastTapByPath[key];
+    if (last != null && now.difference(last).inMilliseconds < 300) {
+      _lastTapByPath.remove(key);
       widget.onDoubleTap?.call();
       return;
     }
-    _lastTapTime = now;
+    _lastTapByPath[key] = now;
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
     if (isShift) {
