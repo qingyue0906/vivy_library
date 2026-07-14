@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/library_item.dart';
 import '../models/item_info.dart';
 import '../services/settings_service.dart';
+import '../theme/design_tokens.dart';
 import 'compact_level.dart';
 import 'gif_image.dart';
 
@@ -72,17 +73,15 @@ class _ItemCardState extends State<ItemCard> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    final selectedColor = cs.brightness == Brightness.light
-        ? const Color(0xFF7B49E0)
-        : cs.primary;
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
-    final radius = BorderRadius.circular(4 * c);
-    final borderColor = widget.isSelected
-        ? selectedColor
-        : (_isHovered ? hoverColor : cs.outlineVariant);
-    final borderWidth = widget.isSelected ? 1.5 : (_isHovered ? 1.0 : 0.5);
+    final tokens = AppDesignTokens.of(context);
+    final radius = BorderRadius.circular(tokens.cardRadius * c);
+
+    final isSel = widget.isSelected;
+    final isHov = _isHovered;
+    final borderColor = isSel
+        ? cs.primary
+        : (isHov ? cs.primary.withValues(alpha: 0.6) : cs.outlineVariant.withValues(alpha: 0.5));
+    final borderWidth = isSel ? 2.0 * c : (isHov ? 1.5 * c : 1.0 * c);
 
     // 预览图 + 徽章叠加（不含点击手势，由调用方包裹后复用）。
     final preview = ClipRRect(
@@ -94,10 +93,31 @@ class _ItemCardState extends State<ItemCard> {
         child: MouseRegion(
           onEnter: (_) => setState(() => _isHovered = true),
           onExit: (_) => setState(() => _isHovered = false),
-          child: Container(
+          child: AnimatedContainer(
+            duration: tokens.duration(MotionDurations.fast),
+            curve: MotionCurves.standard,
             height: widget.displayHeight,
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(borderRadius: radius),
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              boxShadow: isSel
+                  ? [
+                      BoxShadow(
+                        color: cs.primary.withValues(alpha: 0.35),
+                        blurRadius: 10 * c,
+                        spreadRadius: 0,
+                      ),
+                    ]
+                  : (isHov
+                      ? [
+                          BoxShadow(
+                            color: cs.shadow.withValues(alpha: cs.brightness == Brightness.dark ? 0.5 : 0.2),
+                            blurRadius: 8 * c,
+                            offset: Offset(0, 2 * c),
+                          ),
+                        ]
+                      : const []),
+            ),
             foregroundDecoration: BoxDecoration(
               borderRadius: radius,
               border: Border.all(color: borderColor, width: borderWidth),
@@ -112,7 +132,7 @@ class _ItemCardState extends State<ItemCard> {
     );
 
     if (widget.displayMode == GridDisplayMode.list) {
-      return _buildListRow(c, cs, selectedColor, hoverColor);
+      return _buildListRow(c, cs, tokens);
     }
     if (widget.displayMode == GridDisplayMode.cover) {
       return preview;
@@ -133,13 +153,14 @@ class _ItemCardState extends State<ItemCard> {
     final type = widget.effectiveInfo.type.toLowerCase();
     if (type.isEmpty || type == 'default') return const SizedBox.shrink();
     return Positioned(
-      top: 2 * c,
-      left: 2 * c,
+      top: 4 * c,
+      left: 4 * c,
       child: Container(
-        padding: EdgeInsets.all(2 * c),
+        padding: EdgeInsets.all(4 * c),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(10 * c),
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(8 * c),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         ),
         child: Icon(
           _typeIcon(type),
@@ -232,13 +253,17 @@ class _ItemCardState extends State<ItemCard> {
 
   Widget _buildInfo(double c) {
     return Padding(
-      padding: EdgeInsets.only(top: 4 * c, left: 2 * c, right: 2 * c),
+      padding: EdgeInsets.only(top: 5 * c, left: 2 * c, right: 2 * c),
       child: Text(
         widget.item.info.title,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 11 * c),
+        style: TextStyle(
+          fontSize: 12 * c,
+          height: 1.25,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }
@@ -263,35 +288,37 @@ class _ItemCardState extends State<ItemCard> {
   }
 
   Widget _buildStarBadge(double c) => Positioned(
-        top: 2 * c,
-        right: 2 * c,
+        top: 4 * c,
+        right: 4 * c,
         child: Container(
-          padding: EdgeInsets.all(2 * c),
+          padding: EdgeInsets.all(4 * c),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(10 * c),
+            color: Colors.black.withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(8 * c),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
           ),
           child: Icon(Icons.star, size: 14 * c, color: Colors.amber),
         ),
       );
 
   Widget _buildRatingBadge(double c, String rating) => Positioned(
-        bottom: widget.displayMode == GridDisplayMode.compact ? 20 * c : 2 * c,
-        right: 2 * c,
+        bottom: widget.displayMode == GridDisplayMode.compact ? 22 * c : 4 * c,
+        right: 4 * c,
         child: Container(
-          constraints: BoxConstraints(minWidth: 18 * c, minHeight: 18 * c),
+          constraints: BoxConstraints(minWidth: 20 * c, minHeight: 20 * c),
           alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: 5 * c),
+          padding: EdgeInsets.symmetric(horizontal: 6 * c, vertical: 1 * c),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(9 * c),
+            color: Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(6 * c),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
           ),
           child: Text(
             rating,
             style: TextStyle(
               fontSize: 11 * c,
               color: _ratingColor(rating),
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -303,14 +330,14 @@ class _ItemCardState extends State<ItemCard> {
         right: 0,
         bottom: 0,
         child: Container(
-          padding: EdgeInsets.symmetric(vertical: 2 * c, horizontal: 4 * c),
+          padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 6 * c),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
               colors: [
-                Colors.black.withValues(alpha: 0.75),
-                Colors.transparent,
+                Colors.black.withValues(alpha: 0.8),
+                Colors.black.withValues(alpha: 0.0),
               ],
             ),
           ),
@@ -319,7 +346,11 @@ class _ItemCardState extends State<ItemCard> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 10 * c, color: Colors.white),
+            style: TextStyle(
+              fontSize: 11 * c,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       );
@@ -336,43 +367,47 @@ class _ItemCardState extends State<ItemCard> {
   Widget _buildListRow(
     double c,
     ColorScheme cs,
-    Color selectedColor,
-    Color hoverColor,
+    AppDesignTokens tokens,
   ) {
-    final borderColor = widget.isSelected
-        ? selectedColor
-        : (_isHovered ? hoverColor : cs.outlineVariant);
+    final radius = BorderRadius.circular(tokens.buttonRadius * c);
+    final isSel = widget.isSelected;
+    final isHov = _isHovered;
     return GestureDetector(
       onSecondaryTapUp: (details) =>
           widget.onRightClick(details.globalPosition),
       child: MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
-        child: InkWell(
-          onTap: _handleTap,
-          borderRadius: BorderRadius.circular(4 * c),
-          splashColor: Colors.transparent,
-          hoverColor: Colors.transparent,
-          child: Container(
-            height: widget.displayHeight + 10 * c,
-            padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 4 * c),
-            decoration: BoxDecoration(
-              color: widget.isSelected
-                  ? cs.primaryContainer.withValues(alpha: 0.25)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4 * c),
-              border: Border.all(
-                color: borderColor,
-                width: widget.isSelected ? 1.5 : 1.0,
-              ),
+        child: AnimatedContainer(
+          duration: tokens.duration(MotionDurations.fast),
+          curve: MotionCurves.standard,
+          height: widget.displayHeight + 12 * c,
+          padding: EdgeInsets.symmetric(vertical: 5 * c, horizontal: 6 * c),
+          decoration: BoxDecoration(
+            color: isSel
+                ? cs.primaryContainer.withValues(alpha: 0.35)
+                : (isHov ? cs.primary.withValues(alpha: 0.06) : Colors.transparent),
+            borderRadius: radius,
+            border: Border.all(
+              color: isSel
+                  ? cs.primary
+                  : (isHov ? cs.primary.withValues(alpha: 0.4) : Colors.transparent),
+              width: isSel ? 1.5 * c : 1.0 * c,
             ),
+          ),
+          child: InkWell(
+            onTap: _handleTap,
+            borderRadius: radius,
+            splashColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
             child: Row(
               children: [
                 SizedBox(
                   width: widget.displayHeight,
                   height: widget.displayHeight,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4 * c),
+                    borderRadius: BorderRadius.circular(tokens.cardRadius * 0.7 * c),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -381,13 +416,17 @@ class _ItemCardState extends State<ItemCard> {
                     ),
                   ),
                 ),
-                SizedBox(width: 8 * c),
+                SizedBox(width: 10 * c),
                 Expanded(
                   child: Text(
                     widget.item.info.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12 * c),
+                    style: TextStyle(
+                      fontSize: 12.5 * c,
+                      color: cs.onSurface,
+                      fontWeight: isSel ? FontWeight.w600 : FontWeight.normal,
+                    ),
                   ),
                 ),
                 SizedBox(width: 8 * c),

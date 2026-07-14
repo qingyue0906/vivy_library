@@ -8,6 +8,7 @@ import '../models/direct_file.dart';
 import '../models/goto_entry.dart';
 import '../services/library_scanner.dart' show previewExtensions;
 import '../services/translations.dart';
+import '../theme/design_tokens.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -51,16 +52,31 @@ class DetailPanel extends StatelessWidget {
   Widget _buildEmpty(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     return Center(
-      child: Text(
-        Strings.t('selectHint'),
-        textAlign: TextAlign.center,
-        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12 * c),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.touch_app_outlined,
+            size: 44 * c,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+          ),
+          SizedBox(height: 10 * c),
+          Text(
+            Strings.t('selectHint'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+              fontSize: 12.5 * c,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildItemDetail(BuildContext context, double c, LibraryItem item) {
     final info = effectiveInfo ?? item.info;
+    final tokens = AppDesignTokens.of(context);
     return SmoothScroll(
       builder: (context, controller, physics) => ListView(
         controller: controller,
@@ -69,7 +85,7 @@ class DetailPanel extends StatelessWidget {
         children: [
         if (item.previewPath != null)
           ClipRRect(
-            borderRadius: BorderRadius.circular(4 * c),
+            borderRadius: BorderRadius.circular(tokens.cardRadius * c),
             child: Image.file(
               File(item.previewPath!),
               fit: BoxFit.cover,
@@ -80,30 +96,45 @@ class DetailPanel extends StatelessWidget {
         Center(
           child: SelectableText(
             info.title,
-            style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 15 * c, fontWeight: FontWeight.w600, height: 1.3),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(height: 10 * c),
+        Divider(height: 1 * c),
+        SizedBox(height: 8 * c),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(10 * c),
+            child: Column(
+              children: [
+                _buildDescriptionRow(context, c, Strings.t('description'), info.description),
+                _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
+                _buildRow(context, c, Strings.t('type'), info.type),
+                _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
+                _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
+                _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
+                _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
+                _buildRow(context, c, Strings.t('folderLabel'), item.category),
+              ],
+            ),
           ),
         ),
         SizedBox(height: 8 * c),
-        Divider(height: 1 * c),
-        SizedBox(height: 6 * c),
-        _buildDescriptionRow(context, c, Strings.t('description'), info.description),
-        _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
-        _buildRow(context, c, Strings.t('type'), info.type),
-        _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
-        _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
-        _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
-        _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
-        _buildRow(context, c, Strings.t('folderLabel'), item.category),
-        SizedBox(height: 6 * c),
-        Divider(height: 1 * c),
-        SizedBox(height: 6 * c),
-        _buildRow(context, c, Strings.t('size'), _formatSize(item.sizeInBytes)),
-        _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(item.modifiedTime)),
-        _buildRow(context, c, Strings.t('path'), item.path),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(10 * c),
+            child: Column(
+              children: [
+                _buildRow(context, c, Strings.t('size'), _formatSize(item.sizeInBytes)),
+                _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(item.modifiedTime)),
+                _buildRow(context, c, Strings.t('path'), item.path),
+              ],
+            ),
+          ),
+        ),
         if (info.goto.isNotEmpty) ...[
-          SizedBox(height: 8 * c),
-          Divider(height: 1 * c),
-          SizedBox(height: 6 * c),
+          SizedBox(height: 10 * c),
           _buildGotoSection(context, c, info.goto),
         ],
       ],
@@ -112,6 +143,7 @@ class DetailPanel extends StatelessWidget {
   }
 
   Widget _buildFolderDetail(BuildContext context, double c, CategoryNode folder) {
+    final cs = Theme.of(context).colorScheme;
     final info = folder.info;
     final hasInfo = info != null;
     return SmoothScroll(
@@ -120,33 +152,48 @@ class DetailPanel extends StatelessWidget {
         physics: physics,
         padding: EdgeInsets.all(12 * c),
         children: [
-          Icon(Icons.folder, size: 48 * c, color: Colors.amber.shade400),
+          Icon(Icons.folder, size: 48 * c, color: cs.tertiary),
         SizedBox(height: 8 * c),
         Center(
           child: SelectableText(
             hasInfo ? info.title : folder.name,
-            style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 15 * c, fontWeight: FontWeight.w600, height: 1.3),
+            textAlign: TextAlign.center,
           ),
         ),
-        SizedBox(height: 8 * c),
-        Divider(height: 1 * c),
-        SizedBox(height: 6 * c),
+        SizedBox(height: 10 * c),
         if (hasInfo) ...[
-          _buildDescriptionRow(context, c, Strings.t('description'), info.description),
-          _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
-          _buildRow(context, c, Strings.t('type'), info.type),
-          _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
-          _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
-          _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
-          _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
-          SizedBox(height: 6 * c),
-          Divider(height: 1 * c),
-          SizedBox(height: 6 * c),
+          Card(
+            child: Padding(
+              padding: EdgeInsets.all(10 * c),
+              child: Column(
+                children: [
+                  _buildDescriptionRow(context, c, Strings.t('description'), info.description),
+                  _buildRow(context, c, Strings.t('creator'), info.creator ?? ''),
+                  _buildRow(context, c, Strings.t('type'), info.type),
+                  _buildRow(context, c, Strings.t('contentRating'), info.contentRating),
+                  _buildRow(context, c, Strings.t('rating'), '${info.rating / 2} / 5'),
+                  _buildRow(context, c, Strings.t('classLabel'), info.classes.join('、'), valueWidget: _chipText(context, c, info.classes, 'class')),
+                  _buildRow(context, c, Strings.t('tags'), info.tags.join('、'), valueWidget: _chipText(context, c, info.tags, 'tags')),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: 8 * c),
         ],
-        _buildRow(context, c, Strings.t('path'), folder.path),
-        _buildRow(context, c, Strings.t('size'), _formatSize(folder.sizeInBytes)),
-        _buildRow(context, c, Strings.t('subfolderCount'), '${folder.subDirs.length}'),
-        _buildRow(context, c, Strings.t('directItemCount'), '${folder.items.length}'),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(10 * c),
+            child: Column(
+              children: [
+                _buildRow(context, c, Strings.t('path'), folder.path),
+                _buildRow(context, c, Strings.t('size'), _formatSize(folder.sizeInBytes)),
+                _buildRow(context, c, Strings.t('subfolderCount'), '${folder.subDirs.length}'),
+                _buildRow(context, c, Strings.t('directItemCount'), '${folder.items.length}'),
+              ],
+            ),
+          ),
+        ),
       ],
       ),
     );
@@ -155,6 +202,7 @@ class DetailPanel extends StatelessWidget {
   Widget _buildFileDetail(BuildContext context, double c, DirectFile file) {
     final ext = file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
+    final tokens = AppDesignTokens.of(context);
 
     return SmoothScroll(
       builder: (context, controller, physics) => ListView(
@@ -164,7 +212,7 @@ class DetailPanel extends StatelessWidget {
         children: [
           if (isImage)
             ClipRRect(
-              borderRadius: BorderRadius.circular(4 * c),
+              borderRadius: BorderRadius.circular(tokens.cardRadius * c),
               child: Image.file(
                 File(file.path),
                 fit: BoxFit.cover,
@@ -179,19 +227,24 @@ class DetailPanel extends StatelessWidget {
           Center(
             child: SelectableText(
               file.name,
-              style: TextStyle(fontSize: 13 * c, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 15 * c, fontWeight: FontWeight.w600, height: 1.3),
+              textAlign: TextAlign.center,
             ),
           ),
-          SizedBox(height: 8 * c),
-          Divider(height: 1 * c),
-          SizedBox(height: 6 * c),
-          _buildRow(context, c, Strings.t('extension'), ext.isNotEmpty ? '.$ext' : Strings.t('noExt')),
-          _buildRow(context, c, Strings.t('size'), _formatSize(file.sizeInBytes)),
-          _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(file.modifiedTime)),
-          SizedBox(height: 6 * c),
-          Divider(height: 1 * c),
-          SizedBox(height: 6 * c),
-          _buildRow(context, c, Strings.t('path'), file.path),
+          SizedBox(height: 10 * c),
+          Card(
+            child: Padding(
+              padding: EdgeInsets.all(10 * c),
+              child: Column(
+                children: [
+                  _buildRow(context, c, Strings.t('extension'), ext.isNotEmpty ? '.$ext' : Strings.t('noExt')),
+                  _buildRow(context, c, Strings.t('size'), _formatSize(file.sizeInBytes)),
+                  _buildRow(context, c, Strings.t('modifiedTime'), _formatDate(file.modifiedTime)),
+                  _buildRow(context, c, Strings.t('path'), file.path),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -268,8 +321,14 @@ class DetailPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 56 * c,
-            child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
+            width: 64 * c,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5 * c,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
           ),
           Expanded(child: _buildUrlText(context, c, text)),
         ],
@@ -312,16 +371,25 @@ class DetailPanel extends StatelessWidget {
   Widget _buildRow(BuildContext context, double c, String label, String value, {Widget? valueWidget}) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.only(bottom: 5 * c),
+      padding: EdgeInsets.only(bottom: 6 * c),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 56 * c,
-            child: Text(label, style: TextStyle(fontSize: 11 * c, color: cs.onSurfaceVariant)),
+            width: 64 * c,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5 * c,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
           ),
           Expanded(
-            child: valueWidget ?? SelectableText(value, style: TextStyle(fontSize: 11 * c, color: cs.onSurface)),
+            child: valueWidget ?? SelectableText(
+              value,
+              style: TextStyle(fontSize: 11.5 * c, color: cs.onSurface, height: 1.35),
+            ),
           ),
         ],
       ),

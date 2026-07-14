@@ -24,6 +24,7 @@ import 'package:image_size_getter/file_input.dart';
 import 'compact_level.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
+import '../theme/design_tokens.dart';
 
 /// 分组扁平化后的单元：要么是一张普通卡片（[isHeader]=false），要么是一个
 /// 占满整行的分组标题（[isHeader]=true）。单个 SliverGrid 按此顺序排版，
@@ -392,7 +393,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     super.initState();
     _panelAnim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: MotionDurations.medium,
     );
     if (state.fileBrowserVisible && state.selectedItem != null) {
       _panelAnim.value = 1;
@@ -458,7 +459,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         child: AnimatedBuilder(
           animation: _panelAnim,
           builder: (context, _) {
-            final v = _panelAnim.value;
+            final v = MotionCurves.decelerate.transform(_panelAnim.value);
             final panelTotal = filePanelHeight + 4;
             final reserved = panelTotal * v;
             return Stack(
@@ -469,14 +470,29 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                     Expanded(
                       child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
                           ? Center(
-                              child: Text(
-                                Strings.t('noItems'),
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                  fontSize: 12 * c,
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.inbox_outlined,
+                                    size: 48 * c,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
+                                        .withValues(alpha: 0.4),
+                                  ),
+                                  SizedBox(height: 10 * c),
+                                  Text(
+                                    Strings.t('noItems'),
+                                    style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withValues(alpha: 0.7),
+                                      fontSize: 13 * c,
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           : Padding(
@@ -560,6 +576,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                   bottom: panelTotal * v + 16 * c,
                   child: FloatingActionButton.small(
                     heroTag: 'createItem',
+                    tooltip: Strings.t('createItem'),
                     onPressed: onCreateItem,
                     child: const Icon(Icons.add),
                   ),
@@ -1083,17 +1100,31 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.only(
-          top: top ? 8 * c : 0,
-          bottom: 4 * c,
+          top: top ? 10 * c : 2 * c,
+          bottom: 6 * c,
           left: 2 * c,
         ),
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: 11 * c,
-            fontWeight: FontWeight.normal,
-            color: cs.onSurfaceVariant,
-          ),
+        child: Row(
+          children: [
+            Container(
+              width: 3 * c,
+              height: 13 * c,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(2 * c),
+              ),
+            ),
+            SizedBox(width: 6 * c),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12 * c,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1172,17 +1203,18 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   /// 分组标题：占满整行的一行小标题（与原每分组单独 SliverGrid 前的标题一致）。
   Widget _groupHeader(String label, double c, ColorScheme cs) {
     return SizedBox(
-      height: 16 * c,
+      height: 18 * c,
       child: Align(
         alignment: Alignment.centerLeft,
         child: Padding(
-          padding: EdgeInsets.only(left: 2 * c),
+          padding: EdgeInsets.only(left: 2 * c, top: 2 * c),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 10 * c,
-              fontWeight: FontWeight.normal,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.85),
+              fontSize: 10.5 * c,
+              fontWeight: FontWeight.w600,
+              color: cs.primary.withValues(alpha: 0.8),
+              letterSpacing: 0.3,
             ),
           ),
         ),
@@ -1705,10 +1737,11 @@ class _DropHighlightState extends State<_DropHighlight> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(8);
+    final tokens = AppDesignTokens.of(context);
+    final radius = BorderRadius.circular(tokens.cardRadius);
     return DropTarget(
       // 进入/移动时若落在被排除区域（底部面板）则不点亮本层高亮，
-      // 让“拖到哪个区域哪个区域才高亮”的语义成立。
+      // 让"拖到哪个区域哪个区域才高亮"的语义成立。
       onDragEntered: (details) {
         if (widget.modalDropActive) {
           _setOver(false);
@@ -1736,21 +1769,35 @@ class _DropHighlightState extends State<_DropHighlight> {
       child: Stack(
         children: [
           widget.child,
-          if (_isDragOver)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: widget.bottomInset,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border.all(color: cs.primary, width: 2),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: widget.bottomInset,
+            child: IgnorePointer(
+              child: AnimatedContainer(
+                duration: tokens.duration(MotionDurations.fast),
+                curve: MotionCurves.standard,
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(
+                    color: cs.primary.withValues(alpha: _isDragOver ? 1.0 : 0.0),
+                    width: 2.5,
                   ),
+                  color: cs.primary.withValues(alpha: _isDragOver ? 0.06 : 0.0),
+                  boxShadow: _isDragOver
+                      ? [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.18),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : const [],
                 ),
               ),
             ),
+          ),
         ],
       ),
     );

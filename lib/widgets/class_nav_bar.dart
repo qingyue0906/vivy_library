@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../theme/design_tokens.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
 
@@ -15,6 +16,7 @@ class ClassNavBar extends StatelessWidget {
     final c = CompactLevel.of(context);
     final options = state.classNavOptions;
     final cs = Theme.of(context).colorScheme;
+    final tokens = AppDesignTokens.of(context);
 
     return GestureDetector(
       onSecondaryTapUp: (details) => _showSourceMenu(context, details.globalPosition),
@@ -35,7 +37,7 @@ class ClassNavBar extends StatelessWidget {
               spacing: 4 * c,
               runSpacing: 4 * c,
               children: options
-                  .map((entry) => _buildChip(entry.key, entry.value, cs, c))
+                  .map((entry) => _buildChip(entry.key, entry.value, cs, c, tokens))
                   .toList(),
             ),
           ),
@@ -81,36 +83,51 @@ class ClassNavBar extends StatelessWidget {
     }
   }
 
-  Widget _buildChip(String label, int count, ColorScheme cs, double c) {
+  Widget _buildChip(String label, int count, ColorScheme cs, double c, AppDesignTokens tokens) {
     final isSelected = state.selectedClass == label;
     final displayLabel = switch (label) {
       LibraryState.kAllClass => Strings.t('allClass'),
       LibraryState.kUnclassified => Strings.t('unclassified'),
       _ => label,
     };
-    final chipBg = isSelected
-        ? cs.primary
-        : (cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer);
 
-    return InkWell(
-      onTap: () => state.setSelectedClass(label),
-      borderRadius: BorderRadius.circular(3 * c),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
-        decoration: BoxDecoration(
-          color: chipBg,
-          borderRadius: BorderRadius.circular(3 * c),
-          border: Border.all(
-            color: isSelected ? cs.primary : cs.outlineVariant,
-            width: 0.5,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => state.setSelectedClass(label),
+        child: AnimatedContainer(
+          duration: tokens.duration(MotionDurations.fast),
+          curve: MotionCurves.standard,
+          padding: EdgeInsets.symmetric(horizontal: 12 * c, vertical: 5 * c),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? cs.primary
+                : (cs.brightness == Brightness.light
+                    ? Colors.white.withValues(alpha: 0.8)
+                    : cs.surfaceContainerHighest.withValues(alpha: 0.7)),
+            borderRadius: BorderRadius.circular(20 * c),
+            border: Border.all(
+              color: isSelected
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.3),
+                      blurRadius: 6 * c,
+                    ),
+                  ]
+                : const [],
           ),
-        ),
-        child: Text(
-          '$displayLabel ($count)',
-          style: TextStyle(
-            fontSize: 10 * c,
-            color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          child: Text(
+            '$displayLabel ($count)',
+            style: TextStyle(
+              fontSize: 11 * c,
+              color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
         ),
       ),

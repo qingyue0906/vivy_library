@@ -258,6 +258,36 @@ class Strings {
       AppLocale.en: 'Custom Background',
       AppLocale.ja: 'カスタム背景',
     },
+    'appearance': {
+      AppLocale.zhHans: '外观',
+      AppLocale.zhHant: '外觀',
+      AppLocale.en: 'Appearance',
+      AppLocale.ja: '外観',
+    },
+    'accentColor': {
+      AppLocale.zhHans: '强调色',
+      AppLocale.zhHant: '強調色',
+      AppLocale.en: 'Accent Color',
+      AppLocale.ja: 'アクセントカラー',
+    },
+    'radiusScale': {
+      AppLocale.zhHans: '圆角',
+      AppLocale.zhHant: '圓角',
+      AppLocale.en: 'Corner Radius',
+      AppLocale.ja: '角の丸み',
+    },
+    'motionEnabled': {
+      AppLocale.zhHans: '启用动效',
+      AppLocale.zhHant: '啟用動效',
+      AppLocale.en: 'Enable Motion',
+      AppLocale.ja: 'モーションを有効化',
+    },
+    'motionEnabledDesc': {
+      AppLocale.zhHans: '关闭后将停用过渡动画以降低性能开销',
+      AppLocale.zhHant: '關閉後將停用過渡動畫以降低效能開銷',
+      AppLocale.en: 'Disable transitions to reduce performance cost',
+      AppLocale.ja: 'オフにするとトランジションを無効化し負荷を下げます',
+    },
     'selectBg': {
       AppLocale.zhHans: '选择背景',
       AppLocale.zhHant: '選擇背景',

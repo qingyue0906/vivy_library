@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
+import '../theme/design_tokens.dart';
 import 'app_data_service.dart';
 import 'translations.dart';
 
@@ -312,6 +313,51 @@ class BackgroundSettings {
       );
 }
 
+/// 主题外观自定义：强调色 / 圆角档位 / 动效开关。轻量持久化到设置文件。
+class ThemeCustomization {
+  final AppAccent accent;
+  final RadiusScale radiusScale;
+  final bool motionEnabled;
+
+  const ThemeCustomization({
+    this.accent = AppAccent.violet,
+    this.radiusScale = RadiusScale.standard,
+    this.motionEnabled = true,
+  });
+
+  ThemeCustomization copyWith({
+    AppAccent? accent,
+    RadiusScale? radiusScale,
+    bool? motionEnabled,
+  }) =>
+      ThemeCustomization(
+        accent: accent ?? this.accent,
+        radiusScale: radiusScale ?? this.radiusScale,
+        motionEnabled: motionEnabled ?? this.motionEnabled,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'accent': accent.name,
+        'radiusScale': radiusScale.name,
+        'motionEnabled': motionEnabled,
+      };
+
+  factory ThemeCustomization.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const ThemeCustomization();
+    return ThemeCustomization(
+      accent: AppAccent.values.firstWhere(
+        (e) => e.name == map['accent'],
+        orElse: () => AppAccent.violet,
+      ),
+      radiusScale: RadiusScale.values.firstWhere(
+        (e) => e.name == map['radiusScale'],
+        orElse: () => RadiusScale.standard,
+      ),
+      motionEnabled: map['motionEnabled'] != false,
+    );
+  }
+}
+
 class SettingsService {
   static const _sortFieldKey = 'sort_field';
   static const _sortOrderKey = 'sort_order';
@@ -386,6 +432,24 @@ class SettingsService {
 
   static Future<void> saveThemeMode(ThemeMode mode) async {
     await AppDataService.setString(_themeKey, mode.name);
+  }
+
+  // --- Theme customization (accent / radius / motion) ---
+
+  static const _themeCustomizationKey = 'theme_customization';
+
+  static Future<ThemeCustomization> loadThemeCustomization() async {
+    final data = await AppDataService.loadSettings();
+    final raw = data[_themeCustomizationKey];
+    return ThemeCustomization.fromMap(
+      raw is Map ? Map<String, dynamic>.from(raw) : null,
+    );
+  }
+
+  static Future<void> saveThemeCustomization(ThemeCustomization tc) async {
+    final data = await AppDataService.loadSettings();
+    data[_themeCustomizationKey] = tc.toMap();
+    await AppDataService.saveSettings(data);
   }
 
   // --- Grid/UI settings ---

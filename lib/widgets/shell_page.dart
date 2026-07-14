@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animations/animations.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
 import '../models/library_item.dart';
@@ -17,6 +18,7 @@ import 'top_bar.dart';
 import 'grid_display_settings_panel.dart';
 import 'edit_dialog.dart';
 import 'create_item_dialog.dart';
+import 'app_dialog.dart';
 import '../services/library_root_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
@@ -25,11 +27,14 @@ import 'settings_page.dart';
 import 'dart:io';
 import 'compact_level.dart';
 import '../services/script_service.dart';
+import '../theme/design_tokens.dart';
 import '../utils/app_quit.dart';
 
 class ShellPage extends StatefulWidget {
   final ScriptService scriptService;
   final void Function(ThemeMode mode) onThemeChanged;
+  final ThemeCustomization themeCustomization;
+  final void Function(ThemeCustomization tc) onThemeCustomizationChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
   final GridSettings gridSettings;
   final BackgroundSettings backgroundSettings;
@@ -40,6 +45,8 @@ class ShellPage extends StatefulWidget {
     super.key,
     required this.scriptService,
     required this.onThemeChanged,
+    required this.themeCustomization,
+    required this.onThemeCustomizationChanged,
     required this.onGridSettingsChanged,
     required this.gridSettings,
     required this.backgroundSettings,
@@ -141,11 +148,15 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   void _openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => SettingsPage(
+      PageRouteBuilder(
+        transitionDuration: MotionDurations.page,
+        reverseTransitionDuration: MotionDurations.page,
+        pageBuilder: (context, animation, secondaryAnimation) => SettingsPage(
           libraryRootPath: _state.currentRootPath,
           scriptService: widget.scriptService,
           onThemeChanged: widget.onThemeChanged,
+          themeCustomization: widget.themeCustomization,
+          onThemeCustomizationChanged: widget.onThemeCustomizationChanged,
           onGridSettingsChanged: widget.onGridSettingsChanged,
           backgroundSettings: widget.backgroundSettings,
           onBackgroundChanged: widget.onBackgroundChanged,
@@ -153,12 +164,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           onSearchScopeChanged: _state.setSearchScope,
           searchScope: _state.searchScope,
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            SharedAxisTransition(
+          animation: animation,
+          secondaryAnimation: secondaryAnimation,
+          transitionType: SharedAxisTransitionType.horizontal,
+          child: child,
+        ),
       ),
     );
   }
 
   void _openGridDisplaySettings() {
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (_) => GridDisplaySettingsPanel(
         initial: widget.gridSettings,
@@ -282,24 +300,25 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   Widget _buildTitleBar(ColorScheme cs) {
     final c = CompactLevel.of(context);
     return Container(
-      height: 30 * c,
+      height: 32 * c,
       color: cs.surfaceContainerHigh,
       child: Row(
         children: [
           Expanded(
             child: DragToMoveArea(
               child: Container(
-                height: 30 * c,
+                height: 32 * c,
                 alignment: Alignment.centerLeft,
                 padding: EdgeInsets.only(left: 12 * c),
                 child: Row(
                   children: [
-                    Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
-                    SizedBox(width: 6 * c),
+                    Icon(Icons.menu_book, size: 15 * c, color: cs.primary),
+                    SizedBox(width: 7 * c),
                     Text(
                       'Vivy Library',
                       style: TextStyle(
-                        fontSize: 12 * c,
+                        fontSize: 12.5 * c,
+                        fontWeight: FontWeight.w600,
                         color: cs.onSurface,
                       ),
                     ),
@@ -444,7 +463,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 onFilePanelResize: _resizeFilePanel,
                 onFilePanelResizeEnd: _saveLayout,
                 onEditRequest: (targets, isBatch) {
-                  showDialog(
+                  showAppDialog(
                     context: context,
                     builder: (_) => EditDialog(
                       targets: targets,
@@ -454,7 +473,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   );
                 },
                 onFolderEditRequest: (folder) {
-                  showDialog(
+                  showAppDialog(
                     context: context,
                     builder: (_) => EditDialog(
                       targets: const [],
@@ -465,7 +484,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   );
                 },
                 onFolderBatchEditRequest: (folders) {
-                  showDialog(
+                  showAppDialog(
                     context: context,
                     builder: (_) => EditDialog(
                       targets: const [],
@@ -481,7 +500,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   if (_createDialogShowing) return;
                   _createDialogShowing = true;
                   _state.setModalDropActive(true);
-                  showDialog(
+                  showAppDialog(
                     context: context,
                     builder: (_) => CreateItemDialog(
                       state: _state,
@@ -498,7 +517,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   _state.setModalDropActive(true);
                   final first = paths.first.replaceAll('\\', '/').split('/').last;
                   final title = first.contains('.') ? first.substring(0, first.lastIndexOf('.')) : first;
-                  showDialog(
+                  showAppDialog(
                     context: context,
                     builder: (_) => CreateItemDialog(
                       state: _state,
@@ -568,18 +587,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     required void Function(double) onDrag,
     VoidCallback? onDragEnd,
   }) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanUpdate: (details) => onDrag(details.delta.dx),
-        onPanEnd: (_) => onDragEnd?.call(),
-        child: Container(
-          width: 5,
-          color: Colors.transparent,
-        ),
-      ),
-    );
+    return _ResizeHandle(onDrag: onDrag, onDragEnd: onDragEnd);
   }
 
   void _resizeLeftPanel(double dx) {
@@ -758,7 +766,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   }
 }
 
-class _CaptionButton extends StatelessWidget {
+class _CaptionButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool isClose;
@@ -772,17 +780,85 @@ class _CaptionButton extends StatelessWidget {
   });
 
   @override
+  State<_CaptionButton> createState() => _CaptionButtonState();
+}
+
+class _CaptionButtonState extends State<_CaptionButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 46 * compactLevel,
-      height: 30 * compactLevel,
+    final c = widget.compactLevel;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          color: Colors.transparent,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: MotionDurations.instant,
+          curve: MotionCurves.standard,
+          width: 46 * c,
+          height: 32 * c,
+          color: _hovered
+              ? (widget.isClose
+                  ? Colors.red.withValues(alpha: 0.9)
+                  : cs.primary.withValues(alpha: 0.1))
+              : Colors.transparent,
           child: Center(
-            child: Icon(icon, size: 12 * compactLevel, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+            child: Icon(
+              widget.icon,
+              size: 12 * c,
+              color: _hovered && widget.isClose
+                  ? Colors.white
+                  : (widget.isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 面板分隔拖拽手柄：悬停时显示细分隔线，低开销。
+class _ResizeHandle extends StatefulWidget {
+  final void Function(double) onDrag;
+  final VoidCallback? onDragEnd;
+
+  const _ResizeHandle({required this.onDrag, this.onDragEnd});
+
+  @override
+  State<_ResizeHandle> createState() => _ResizeHandleState();
+}
+
+class _ResizeHandleState extends State<_ResizeHandle> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanUpdate: (details) => widget.onDrag(details.delta.dx),
+        onPanEnd: (_) => widget.onDragEnd?.call(),
+        child: Container(
+          width: 6,
+          alignment: Alignment.center,
+          child: AnimatedContainer(
+            duration: MotionDurations.instant,
+            curve: MotionCurves.standard,
+            width: 1.5,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _hovered
+                  ? cs.primary.withValues(alpha: 0.5)
+                  : cs.outlineVariant.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(1),
+            ),
           ),
         ),
       ),

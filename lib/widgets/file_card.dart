@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/direct_file.dart';
 import '../services/settings_service.dart';
 import '../services/library_scanner.dart' show previewExtensions;
+import '../theme/design_tokens.dart';
 import 'gif_image.dart';
 import 'compact_level.dart';
 
@@ -56,14 +57,15 @@ class _FileCardState extends State<FileCard> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
+    final tokens = AppDesignTokens.of(context);
     if (widget.displayMode == GridDisplayMode.list) {
-      return _buildListRow(c, cs);
+      return _buildListRow(c, cs, tokens);
     }
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
+    final radius = BorderRadius.circular(tokens.cardRadius * c);
+    final isSel = widget.isSelected;
+    final isHov = _isHovered;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -73,27 +75,30 @@ class _FileCardState extends State<FileCard> {
         onSecondaryTapUp: widget.onRightClick != null
             ? (details) => widget.onRightClick!(details.globalPosition)
             : null,
-        child: Container(
+        child: AnimatedContainer(
+          duration: tokens.duration(MotionDurations.fast),
+          curve: MotionCurves.standard,
+          padding: EdgeInsets.all(6 * c),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6 * c),
-            border: widget.isSelected
-                ? Border.all(color: cs.primary, width: 1.5 * c)
-                : (_isHovered
-                      ? Border.all(color: hoverColor, width: 1.0 * c)
-                      : null),
-            color: widget.isSelected
-                ? cs.primaryContainer.withValues(alpha: 0.25)
-                : Colors.transparent,
+            borderRadius: radius,
+            border: Border.all(
+              color: isSel
+                  ? cs.primary
+                  : (isHov ? cs.primary.withValues(alpha: 0.4) : Colors.transparent),
+              width: isSel ? 2.0 * c : 1.0 * c,
+            ),
+            color: isSel
+                ? cs.primaryContainer.withValues(alpha: 0.3)
+                : (isHov ? cs.primary.withValues(alpha: 0.05) : Colors.transparent),
           ),
-          padding: EdgeInsets.all(4 * c),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 56 * c,
-                height: 56 * c,
+                width: 58 * c,
+                height: 58 * c,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6 * c),
+                  borderRadius: BorderRadius.circular(tokens.cardRadius * 0.7 * c),
                   color: cs.surfaceContainerHighest,
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -107,13 +112,17 @@ class _FileCardState extends State<FileCard> {
                       )
                     : _buildFileIcon(context, ext, c),
               ),
-              SizedBox(height: 4 * c),
+              SizedBox(height: 5 * c),
               Text(
                 widget.file.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 9 * c, color: cs.onSurface),
+                style: TextStyle(
+                  fontSize: 10 * c,
+                  height: 1.2,
+                  color: cs.onSurface,
+                ),
               ),
             ],
           ),
@@ -156,13 +165,10 @@ class _FileCardState extends State<FileCard> {
     return Icon(icon, size: 28 * c, color: color);
   }
 
-  Widget _buildListRow(double c, ColorScheme cs) {
-    final hoverColor = cs.brightness == Brightness.light
-        ? const Color(0xFFB89AFF)
-        : const Color(0xFF7E8FA3);
-    final borderColor = widget.isSelected
-        ? cs.primary
-        : (_isHovered ? hoverColor : cs.outlineVariant);
+  Widget _buildListRow(double c, ColorScheme cs, AppDesignTokens tokens) {
+    final radius = BorderRadius.circular(tokens.buttonRadius * c);
+    final isSel = widget.isSelected;
+    final isHov = _isHovered;
     final ext = widget.file.extension;
     final isImage = previewExtensions.any((e) => e == '.$ext');
     return MouseRegion(
@@ -173,17 +179,21 @@ class _FileCardState extends State<FileCard> {
         onSecondaryTapUp: widget.onRightClick != null
             ? (details) => widget.onRightClick!(details.globalPosition)
             : null,
-        child: Container(
-          height: 44 * c,
-          padding: EdgeInsets.symmetric(vertical: 4 * c, horizontal: 4 * c),
+        child: AnimatedContainer(
+          duration: tokens.duration(MotionDurations.fast),
+          curve: MotionCurves.standard,
+          height: 46 * c,
+          padding: EdgeInsets.symmetric(vertical: 5 * c, horizontal: 6 * c),
           decoration: BoxDecoration(
-            color: widget.isSelected
-                ? cs.primaryContainer.withValues(alpha: 0.25)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4 * c),
+            color: isSel
+                ? cs.primaryContainer.withValues(alpha: 0.35)
+                : (isHov ? cs.primary.withValues(alpha: 0.06) : Colors.transparent),
+            borderRadius: radius,
             border: Border.all(
-              color: borderColor,
-              width: widget.isSelected ? 1.5 : 1.0,
+              color: isSel
+                  ? cs.primary
+                  : (isHov ? cs.primary.withValues(alpha: 0.4) : Colors.transparent),
+              width: isSel ? 1.5 * c : 1.0 * c,
             ),
           ),
           child: Row(
@@ -202,13 +212,17 @@ class _FileCardState extends State<FileCard> {
                       )
                     : _buildFileIcon(context, ext, c),
               ),
-              SizedBox(width: 8 * c),
+              SizedBox(width: 10 * c),
               Expanded(
                 child: Text(
                   widget.file.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12 * c, color: cs.onSurface),
+                  style: TextStyle(
+                    fontSize: 12.5 * c,
+                    fontWeight: isSel ? FontWeight.w600 : FontWeight.normal,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ],

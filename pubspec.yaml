@@ -47,6 +47,9 @@ dependencies:
   video_player: ^2.10.0
   fvp: ^0.37.0
   image_size_getter: ^2.4.1
+  # 轻量动效包：提供 OpenContainer / SharedAxis / FadeThrough 等容器过渡，
+  # 纯 Dart 实现无原生依赖，用于页面/卡片切换的丝滑转场。
+  animations: ^2.2.0
 
 dev_dependencies:
   flutter_test:

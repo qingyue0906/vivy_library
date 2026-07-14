@@ -9,12 +9,15 @@ import '../services/app_data_service.dart';
 import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../theme/design_tokens.dart';
 import '../utils/app_quit.dart';
 import 'smooth_scroll.dart';
 
 class SettingsPage extends StatefulWidget {
   final String libraryRootPath;
   final void Function(ThemeMode mode) onThemeChanged;
+  final ThemeCustomization themeCustomization;
+  final void Function(ThemeCustomization tc) onThemeCustomizationChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
   final BackgroundSettings backgroundSettings;
   final void Function(BackgroundSettings settings) onBackgroundChanged;
@@ -27,6 +30,8 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.libraryRootPath,
     required this.onThemeChanged,
+    required this.themeCustomization,
+    required this.onThemeCustomizationChanged,
     required this.onGridSettingsChanged,
     required this.backgroundSettings,
     required this.onBackgroundChanged,
@@ -45,6 +50,7 @@ class _SettingsPageState extends State<SettingsPage>
   late TabController _tabCtrl;
 
   ThemeMode _themeMode = ThemeMode.system;
+  ThemeCustomization _themeCustomization = const ThemeCustomization();
   GridSettings _gridSettings = const GridSettings();
   late BackgroundSettings _bgSettings;
   late AppLocale _locale;
@@ -56,6 +62,7 @@ class _SettingsPageState extends State<SettingsPage>
     super.initState();
     _tabCtrl = TabController(length: 6, vsync: this);
     _bgSettings = widget.backgroundSettings;
+    _themeCustomization = widget.themeCustomization;
     _locale = Strings.currentLocale;
     _searchScope = widget.searchScope;
     _load();
@@ -83,21 +90,25 @@ class _SettingsPageState extends State<SettingsPage>
       body: Column(
         children: [
           Container(
-            height: 30,
+            height: 32,
             color: cs.surfaceContainerHigh,
             child: Row(
               children: [
                 Expanded(
                   child: DragToMoveArea(
                     child: Container(
-                      height: 30,
+                      height: 32,
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.only(left: 12),
                       child: Row(
                         children: [
-                          Icon(Icons.menu_book, size: 14, color: cs.onSurface),
-                          const SizedBox(width: 6),
-                          Text('Vivy Library', style: TextStyle(fontSize: 12, color: cs.onSurface)),
+                          Icon(Icons.menu_book, size: 15, color: cs.primary),
+                          const SizedBox(width: 7),
+                          Text('Vivy Library',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurface)),
                         ],
                       ),
                     ),
@@ -182,7 +193,9 @@ class _SettingsPageState extends State<SettingsPage>
                     Icon(
                       selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                       size: 18,
-                      color: selected ? Colors.deepPurple : Colors.grey,
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 8),
                     Text(locale.displayName, style: const TextStyle(fontSize: 12)),
@@ -300,11 +313,22 @@ class _SettingsPageState extends State<SettingsPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(Strings.t('themeSection'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
-            _buildThemeOption(Strings.t('light'), ThemeMode.light),
-            _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                child: Column(
+                  children: [
+                    _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
+                    _buildThemeOption(Strings.t('light'), ThemeMode.light),
+                    _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildAppearanceSection(),
+            const SizedBox(height: 24),
             Text(Strings.t('customBg'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
             Row(
@@ -351,6 +375,100 @@ class _SettingsPageState extends State<SettingsPage>
         ),
       ),
     );
+  }
+
+  Widget _buildAppearanceSection() {
+    final cs = Theme.of(context).colorScheme;
+    final tokens = AppDesignTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(Strings.t('appearance'),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Text(Strings.t('accentColor'),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: AppAccent.values.map((accent) {
+            final selected = _themeCustomization.accent == accent;
+            return GestureDetector(
+              onTap: () => _updateThemeCustomization(
+                  _themeCustomization.copyWith(accent: accent)),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: AnimatedContainer(
+                  duration: tokens.duration(MotionDurations.fast),
+                  curve: MotionCurves.standard,
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: accent.seed,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? cs.onSurface.withValues(alpha: 0.9)
+                          : Colors.transparent,
+                      width: 3,
+                    ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: accent.seed.withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check, size: 16, color: Colors.white)
+                      : null,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Text(Strings.t('radiusScale'),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: RadiusScale.values.map((scale) {
+            final selected = _themeCustomization.radiusScale == scale;
+            return ChoiceChip(
+              label: Text(scale.label),
+              selected: selected,
+              onSelected: (_) => _updateThemeCustomization(
+                _themeCustomization.copyWith(radiusScale: scale),
+              ),
+              visualDensity: VisualDensity.compact,
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          child: SwitchListTile(
+            title: Text(Strings.t('motionEnabled'),
+                style: const TextStyle(fontSize: 12.5)),
+            subtitle: Text(Strings.t('motionEnabledDesc'),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            value: _themeCustomization.motionEnabled,
+            onChanged: (v) => _updateThemeCustomization(
+              _themeCustomization.copyWith(motionEnabled: v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _updateThemeCustomization(ThemeCustomization tc) {
+    setState(() => _themeCustomization = tc);
+    widget.onThemeCustomizationChanged(tc);
   }
 
   Widget _buildOpacitySlider(String label, double value, bool enabled, ValueChanged<double> onChanged) {
@@ -868,24 +986,30 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildThemeOption(String label, ThemeMode mode) {
+    final cs = Theme.of(context).colorScheme;
     final selected = _themeMode == mode;
     return InkWell(
+      borderRadius: BorderRadius.circular(8),
       onTap: () {
         setState(() => _themeMode = mode);
         SettingsService.saveThemeMode(mode);
         widget.onThemeChanged(mode);
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
         child: Row(
           children: [
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
               size: 18,
-              color: selected ? Colors.deepPurple : Colors.grey,
+              color: selected ? cs.primary : cs.onSurfaceVariant,
             ),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(
+              fontSize: 12.5,
+              color: cs.onSurface,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            )),
           ],
         ),
       ),
@@ -911,13 +1035,20 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _windowButton(IconData icon, ColorScheme cs, VoidCallback onTap, {bool isClose = false}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 46,
-        height: 30,
-        alignment: Alignment.center,
-        child: Icon(icon, size: 12, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 46,
+          height: 32,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 12,
+            color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }
