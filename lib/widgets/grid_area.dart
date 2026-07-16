@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../models/library_item.dart';
 import '../models/category_node.dart';
@@ -198,6 +199,9 @@ class _SectionGridLayout extends SliverGridLayout {
   @override
   double computeMaxScrollOffset(int childCount) => _maxScroll;
 
+  /// 第 [index] 个单元在 item 段内的起始偏移（供滚动补偿计算视口上方高度差）。
+  double startAtIndex(int index) => _starts[index];
+
   /// 单列内二分：首个 end > [scrollOffset] 的全局索引；整列都已滚过时返回该列
   /// 最后一个（对全局最小可见索引无贡献）。
   int _colFirstVisible(List<int> colItems, double scrollOffset) {
@@ -257,6 +261,30 @@ class _SectionGridLayout extends SliverGridLayout {
   }
 }
 
+/// item 段布局所需的参数快照：由最近一次 build 捕获，供 Ticker 在脱离 build
+/// 上下文时按当前 displayAspect 预测新布局、计算视口上方高度差。
+class _ItemLayoutParams {
+  final int crossAxisCount;
+  final double spacing;
+  final double headerExtent;
+  final Set<int> headerIndices;
+  final int childCount;
+  final double cardWidth;
+  final double captionExtra;
+  final List<String?> previewPaths;
+
+  _ItemLayoutParams({
+    required this.crossAxisCount,
+    required this.spacing,
+    required this.headerExtent,
+    required this.headerIndices,
+    required this.childCount,
+    required this.cardWidth,
+    required this.captionExtra,
+    required this.previewPaths,
+  });
+}
+
 class GridArea extends StatefulWidget {
   final List<LibraryItem> items;
   final List<CategoryNode> subDirs;
@@ -305,7 +333,7 @@ class GridArea extends StatefulWidget {
   State<GridArea> createState() => _GridAreaState();
 }
 
-class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin {
+class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
   // Bridge getters — allow method bodies to reference fields by name
   // without changing every `this.xxx` to `widget.xxx`.
   List<LibraryItem> get items => widget.items;
@@ -356,29 +384,37 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   /// 这条路径，此时才需要真的解码一次小图。
   static const int _aspectProbeWidth = 48;
 
-  /// 自适应模式（方案 D：恢复三级缓存）：只在"真的有新的宽高比被解析出来"
-  /// 时才递增，而不是每次 setState/rebuild 都变。把它纳入 delegateKey/
-  /// fullKey 后，面板动画、hover、选中态变化等与宽高比无关的 rebuild 依旧能
-  /// 命中一二级缓存；只有宽高比真正更新、需要重排砖石布局时才会失效重建。
-  int _aspectVersion = 0;
+  /// 自适应模式：宽高比解析完成后的"逐帧平滑插值"动画状态。
+  /// [_previewAspectRatios] 是解析出的真实目标宽高比；[_displayAspects] 是当前
+  /// 正在屏幕上显示（逐帧逼近 target）的宽高比。两者一致时动画结束。
+  /// 用 Ticker + 指数平滑替代原先"解析完成即 setState 一次性重排"的跳变，
+  /// 让卡片高度/位置随真实比例平滑过渡，消除加载时的突兀跳动。
+  bool _extentAnimating = false;
+  final Map<String, double> _displayAspects = {};
+  double _defaultAspect = 1.0;
 
-  /// 宽高比解析结果批量刷新：探测大多走"读文件头，不解码"的快速路径，
-  /// 短时间内可能连续解析出成百上千张的宽高比。若每解析出一张就调用一次
-  /// setState/触发一次重排（包括三级缓存里 tier2/tier3 的重新 flatten +
-  /// 重建 delegate），条目一多，等价于短时间内做几百上千次全量重建——这才是
-  /// "项目很多时改善不明显"的真正原因。这里把结果先写入 map，实际的
-  /// setState 用一个短防抖定时器合并，同一批集中触发一次重排。
-  bool _aspectFlushScheduled = false;
-  Timer? _aspectFlushTimer;
+  /// 逐帧插值系数（每帧向 target 靠近 28%），约 300ms 收敛。
+  static const double _extentLerpK = 0.28;
+  /// 宽高比收敛阈值：与目标差小于此值即视为到位（约 <0.4px 高度差）。
+  static const double _aspectEpsilon = 0.004;
 
-  void _scheduleAspectFlush() {
-    if (_aspectFlushScheduled) return;
-    _aspectFlushScheduled = true;
-    _aspectFlushTimer = Timer(const Duration(milliseconds: 120), () {
-      _aspectFlushScheduled = false;
-      if (mounted) setState(() => _aspectVersion++);
-    });
-  }
+  late final Ticker _extentTicker;
+
+  /// 自适应网格的滚动控制器（由 SmoothScroll 的 builder 回调捕获），用于
+  /// 在逐帧改高度时对"视口上方内容高度变化"做滚动补偿，消除向上滚回弹。
+  ScrollController? _scrollCtrl;
+
+  /// item 段 SliverGrid 的 key：用于在 Ticker 内读取其在滚动视图中的起始
+  /// 偏移（itemSectionTop），从而把绝对滚动偏移换算成 item 段内的局部偏移。
+  final GlobalKey _itemGridKey = GlobalKey();
+
+  /// 当前帧 item 段的布局（由最近一次 build 设置），用于滚动补偿时作为
+  /// "改高度之前"的基准，计算视口上方高度差。
+  _SectionGridLayout? _lastItemLayout;
+
+  /// 构建 item 段布局所需的参数快照（捕获自最近一次 build），供 Ticker 在
+  /// 不依赖 build 上下文的情况下预测新布局、做同帧滚动补偿。
+  _ItemLayoutParams? _itemLayoutParams;
 
   /// 底部文件面板进出场动画控制器：作为面板滑入/滑出与中间内容让位的唯一动画源。
   /// 同一进度 v 同时驱动内容让位、面板位移、FAB 位置，确保三者完全同步。
@@ -394,6 +430,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
+    _extentTicker = createTicker(_onExtentTick);
     if (state.fileBrowserVisible && state.selectedItem != null) {
       _panelAnim.value = 1;
       _panelItem = state.selectedItem;
@@ -403,7 +440,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     _panelAnim.dispose();
-    _aspectFlushTimer?.cancel();
+    _extentTicker.dispose();
     super.dispose();
   }
 
@@ -582,6 +619,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     final spacing = 8.0 * c;
     final fixedPerRow = gridSettings.itemsPerRow;
     final aspectRatio = gridSettings.aspectRatioValue;
+    _defaultAspect = aspectRatio;
     final mode = gridSettings.displayMode;
     final badges = gridSettings.badges;
     final adaptive = mode == GridDisplayMode.adaptive;
@@ -624,8 +662,8 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         final gFiles = state.groupedFiles;
 
         // 三级缓存对所有模式（含自适应）统一启用。自适应模式下宽高比的变化
-        // 通过 _aspectVersion 纳入下面的 key 来驱动失效，而不是像之前那样
-        // 直接对整个自适应模式关闭缓存——后者导致面板动画、hover、选中态
+        // 通过逐帧平滑插值动画处理：动画期间临时旁路整块/委托缓存、每帧用最新
+        // displayAspect 重建；动画结束后恢复缓存。这样面板动画、hover、选中态
         // 变化等与宽高比完全无关的 rebuild，也会触发全量重新 flatten + 重建
         // delegate，在条目很多时是显著的 CPU/GC 开销来源。
         const cacheEnabled = true;
@@ -642,19 +680,23 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             '${identityHashCode(gridSettings)}|'
             '${gridSettings.aspectRatioValue}|'
             '${gridSettings.cardGifMode}|${gridSettings.fileGifMode}|'
-            '$mode|${badges.enabled.map((e) => e.name).join(',')}|$c|$cardWidth|'
-            '${adaptive ? _aspectVersion : 0}';
+            '$mode|${badges.enabled.map((e) => e.name).join(',')}|$c|$cardWidth|';
         final fullKey = '$delegateKey|$crossAxisCount';
 
         if (cacheEnabled) {
           // Tier 1: full cache hit — return same widget, zero work.
-          if (fullKey == _cachedFullKey && _cachedScrollContent != null) {
+          // 动画进行中需逐帧重建，临时绕过整块缓存。
+          if (!_extentAnimating &&
+              fullKey == _cachedFullKey &&
+              _cachedScrollContent != null) {
             return _cachedScrollContent!;
           }
         }
 
         // Determine whether to reuse cached delegates.
+        // 动画进行中需每帧用最新 displayAspect 重建 item delegate，故强制 miss。
         final delegateHit = cacheEnabled &&
+            !_extentAnimating &&
             delegateKey == _cachedDelegateKey &&
             _cachedFolderDelegate != null;
 
@@ -677,9 +719,20 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           // Tier 3: full miss — flatten each section's groups into a single
           // delegate (one SliverGrid per section; group labels become full-width
           // header rows rendered by _SectionGridDelegate).
-          gSubDirsUsed = _flatten(gSubDirs);
-          gItemsUsed = _flatten(gItems);
-          gFilesUsed = _flatten(gFiles);
+          // 动画期间每帧走这里：扁平列表数据未变时可复用缓存，仅重建
+          // delegate 闭包（其捕获的 displayAspect 每帧更新），避免重复 flatten。
+          gSubDirsUsed = (delegateKey == _cachedDelegateKey &&
+                  _cachedFolderFlat != null)
+              ? _cachedFolderFlat!
+              : _flatten(gSubDirs);
+          gItemsUsed = (delegateKey == _cachedDelegateKey &&
+                  _cachedItemFlat != null)
+              ? _cachedItemFlat!
+              : _flatten(gItems);
+          gFilesUsed = (delegateKey == _cachedDelegateKey &&
+                  _cachedFileFlat != null)
+              ? _cachedFileFlat!
+              : _flatten(gFiles);
 
           folderDelegate = _buildFlatDelegate(
             gSubDirsUsed,
@@ -693,7 +746,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
             cs,
             (item) {
               final aspect = adaptive
-                  ? (_previewAspectRatios[item.previewPath] ?? aspectRatio)
+                  ? _displayAspectFor(item.previewPath, aspectRatio)
                   : aspectRatio;
               final ih = cardWidth / aspect;
               if (adaptive) _requestAspectResolution(item.previewPath);
@@ -737,21 +790,50 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         }
 
         final headerExtent = 16 * c;
+        final itemHeaderIndices = _headerIndices(gItemsUsed);
 
         // 自适应下为每张 item 卡片计算独立高度（砖石布局）。
+        // 高度取自逐帧插值的 _displayAspects，使真实比例平滑过渡。
+        // 同时构建一份 item 段布局快照，供 Ticker 做同帧滚动补偿。
         List<double>? itemPerExtents;
+        _itemLayoutParams = null;
         if (adaptive && gItemsUsed.isNotEmpty) {
-          itemPerExtents = [
-            for (final fe in gItemsUsed)
-              fe.isHeader
-                  ? headerExtent
-                  : (() {
-                      final item = fe.entry as LibraryItem;
-                      final aspect =
-                          _previewAspectRatios[item.previewPath] ?? aspectRatio;
-                      return cardWidth / aspect + (hasCaption ? 38 * c : 0);
-                    })(),
-          ];
+          final captionExtra = hasCaption ? 38 * c : 0.0;
+          final previewPaths = List<String?>.filled(gItemsUsed.length, null);
+          final extents = List<double>.filled(gItemsUsed.length, 0.0);
+          for (var i = 0; i < gItemsUsed.length; i++) {
+            final fe = gItemsUsed[i];
+            if (fe.isHeader) {
+              extents[i] = headerExtent;
+            } else {
+              final item = fe.entry as LibraryItem;
+              previewPaths[i] = item.previewPath;
+              final aspect = _displayAspectFor(item.previewPath, aspectRatio);
+              extents[i] = cardWidth / aspect + captionExtra;
+            }
+          }
+          itemPerExtents = extents;
+          _itemLayoutParams = _ItemLayoutParams(
+            crossAxisCount: crossAxisCount,
+            spacing: spacing,
+            headerExtent: headerExtent,
+            headerIndices: itemHeaderIndices,
+            childCount: gItemsUsed.length,
+            cardWidth: cardWidth,
+            captionExtra: captionExtra,
+            previewPaths: previewPaths,
+          );
+          _lastItemLayout = _SectionGridLayout(
+            crossAxisCount: crossAxisCount,
+            mainAxisExtent: 0,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            headerExtent: headerExtent,
+            headerIndices: itemHeaderIndices,
+            childCount: gItemsUsed.length,
+            crossAxisExtent: 1000,
+            perChildExtents: extents,
+          );
         }
 
         // Build slivers list using ONE SliverGrid per section. The grid itself
@@ -759,7 +841,6 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         // visual grouping is preserved while SliverGrid count stays ≤3
         // (the per-frame relayout cost no longer multiplies by group count).
         final folderHeaderIndices = _headerIndices(gSubDirsUsed);
-        final itemHeaderIndices = _headerIndices(gItemsUsed);
         final fileHeaderIndices = _headerIndices(gFilesUsed);
 
         final slivers = <Widget>[];
@@ -788,6 +869,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
                 spacing,
                 headerExtent,
                 itemHeaderIndices,
+                key: _itemGridKey,
                 perChildExtents: itemPerExtents,
               ),
             );
@@ -810,18 +892,21 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         final content = GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => state.clearSelection(),
-          child: SmoothScroll(
-            builder: (context, controller, physics) => CustomScrollView(
-              controller: controller,
-              physics: physics,
+            child: SmoothScroll(
+              builder: (context, controller, physics) {
+                _scrollCtrl = controller;
+                return CustomScrollView(
+                  controller: controller,
+                  physics: physics,
               // 不显式设置 cacheExtent，使用默认(≈0)：分组模式网格已被拆成
               // 数十个稀疏 SliverGrid，扩大缓存窗口会让视口边界跨越多分组，
               // 面板重排时边界附近的 GifImage 反复挂载/卸载造成掉帧。
               // 屏幕外动图的 CPU 限流已由 GifImage 的 TickerMode 冻结承担，
               // 无需再用 cacheExtent 限流。
-              slivers: slivers,
+                  slivers: slivers,
+                );
+              },
             ),
-          ),
         );
         if (cacheEnabled) {
           _cachedScrollContent = content;
@@ -1003,7 +1088,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
       _resolvingAspects.remove(path);
       _activeAspectResolves--;
       _previewAspectRatios[path] = aspect;
-      _scheduleAspectFlush();
+      _startExtentAnim();
       _drainAspectQueue();
       return;
     }
@@ -1019,7 +1104,7 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
           final h = info.image.height.toDouble();
           if (w > 0 && h > 0) {
             _previewAspectRatios[path] = w / h;
-            _scheduleAspectFlush();
+            _startExtentAnim();
           }
           _drainAspectQueue();
         },
@@ -1072,6 +1157,133 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
         _drainAspectQueue();
       });
     }
+  }
+
+  // ===== 自适应高度平滑动画 + 滚动补偿 =====
+
+  /// 取某张预览图当前应显示的宽高比：已在插值时取 display 值（逐帧逼近真实
+  /// 比例），尚未解析时回退默认 aspectRatio。
+  double _displayAspectFor(String? path, double defaultAspect) {
+    if (path == null) return defaultAspect;
+    final target = _previewAspectRatios[path];
+    if (target == null) return defaultAspect;
+    return _displayAspects[path] ?? defaultAspect;
+  }
+
+  /// 有新的真实宽高比被解析出来时调用：置动画标志并启动 Ticker
+  /// （若未运行）。Ticker 每帧把 _displayAspects 朝目标逼近，结束时自动停止。
+  void _startExtentAnim() {
+    _extentAnimating = true;
+    if (!_extentTicker.isActive) _extentTicker.start();
+  }
+
+  void _onExtentTick(Duration elapsed) {
+    final animating = _updateDisplayAspects();
+    if (!animating) {
+      _extentAnimating = false;
+      _extentTicker.stop();
+      if (mounted) setState(() {});
+      return;
+    }
+    // 在 build 之前预测新布局并立即补偿滚动偏移，使"改高度"与"改滚动位置"
+    // 发生在同一帧，避免一帧的位置跳动（向上滚回弹的根治）。
+    _predictiveCompensate();
+    if (mounted) setState(() {});
+  }
+
+  /// 逐帧把 _displayAspects 朝目标（真实宽高比）指数逼近，返回是否仍在动画。
+  bool _updateDisplayAspects() {
+    final da = _defaultAspect;
+    bool animating = false;
+    final toRemove = <String>[];
+    for (final p in _displayAspects.keys.toList()) {
+      final target = _previewAspectRatios[p] ?? da;
+      final current = _displayAspects[p]!;
+      if ((target - current).abs() < _aspectEpsilon) {
+        _displayAspects[p] = target;
+        if (target == da) {
+          toRemove.add(p); // 已回到默认（未解析）：移除，免占内存
+        }
+        continue;
+      }
+      _displayAspects[p] = current + (target - current) * _extentLerpK;
+      animating = true;
+    }
+    for (final p in _previewAspectRatios.keys) {
+      if (_displayAspects.containsKey(p)) {
+        continue;
+      }
+      final target = _previewAspectRatios[p]!;
+      if ((target - da).abs() < _aspectEpsilon) {
+        continue; // 与默认近似，无需动画
+      }
+      _displayAspects[p] = da; // 从默认起步开始插值
+      animating = true;
+    }
+    for (final p in toRemove) {
+      _displayAspects.remove(p);
+    }
+    return animating;
+  }
+
+  /// 依据当前 _displayAspects 预测 item 段新布局，与上一帧布局对比"视口上方
+  /// 高度差"，在 build 之前 jumpTo 补偿，使可见卡片钉在原地。
+  void _predictiveCompensate() {
+    final params = _itemLayoutParams;
+    final ctrl = _scrollCtrl;
+    final oldLayout = _lastItemLayout;
+    if (params == null || ctrl == null || !ctrl.hasClients || oldLayout == null) {
+      return;
+    }
+    final newLayout = _buildItemLayoutFromParams(params);
+    final renderObj = _itemGridKey.currentContext?.findRenderObject();
+    if (renderObj is! RenderSliver) return;
+    // item 段在滚动视图中的起始偏移：folder 段高度恒定，故动画期间不变。
+    final itemSectionTop = renderObj.constraints.scrollOffset;
+    final localOffset = ctrl.offset - itemSectionTop;
+    final delta = _heightAbove(newLayout, localOffset) -
+        _heightAbove(oldLayout, localOffset);
+    if (delta.abs() <= 0.1) return;
+    final target =
+        (ctrl.offset + delta).clamp(0.0, ctrl.position.maxScrollExtent);
+    if ((target - ctrl.offset).abs() > 0.1) ctrl.jumpTo(target);
+  }
+
+  _SectionGridLayout _buildItemLayoutFromParams(_ItemLayoutParams p) {
+    final extents = List<double>.filled(p.childCount, 0);
+    for (var i = 0; i < p.childCount; i++) {
+      if (p.headerIndices.contains(i)) {
+        extents[i] = p.headerExtent;
+      } else {
+        final aspect = _displayAspectFor(p.previewPaths[i], _defaultAspect);
+        extents[i] = p.cardWidth / aspect + p.captionExtra;
+      }
+    }
+    return _SectionGridLayout(
+      crossAxisCount: p.crossAxisCount,
+      mainAxisExtent: 0,
+      crossAxisSpacing: p.spacing,
+      mainAxisSpacing: p.spacing,
+      headerExtent: p.headerExtent,
+      headerIndices: p.headerIndices,
+      childCount: p.childCount,
+      crossAxisExtent: 1000,
+      perChildExtents: extents,
+    );
+  }
+
+  /// item 段内"局部偏移 [localOffset] 之上"的内容高度（用于滚动补偿的锚点）。
+  /// 取视口内最靠上的可见单元作为锚：localOffset 落在段内时返回该单元起始；
+  /// 段整体在视口上方时返回段总长。_starts/_extents 与 crossAxisExtent 无关，
+  /// 故用占位 crossAxisExtent 计算出的布局在此处完全等效。
+  double _heightAbove(_SectionGridLayout layout, double localOffset) {
+    if (localOffset <= 0) return 0.0;
+    final max = layout.computeMaxScrollOffset(layout.childCount);
+    if (localOffset >= max) return max;
+    final idx = layout
+        .getMinChildIndexForScrollOffset(localOffset)
+        .clamp(0, layout.childCount - 1);
+    return layout.startAtIndex(idx);
   }
 
   Widget _sectionHeader(
@@ -1152,9 +1364,11 @@ class _GridAreaState extends State<GridArea> with SingleTickerProviderStateMixin
     double spacing,
     double headerExtent,
     Set<int> headerIndices, {
+    Key? key,
     List<double>? perChildExtents,
   }) {
     return SliverGrid(
+      key: key,
       gridDelegate: _SectionGridDelegate(
         crossAxisCount: crossAxisCount,
         mainAxisExtent: mainAxisExtent,
