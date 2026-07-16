@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import '../services/app_data_service.dart';
 import '../services/script_service.dart';
@@ -20,6 +22,7 @@ class SettingsPage extends StatefulWidget {
   final void Function(BackgroundSettings settings) onBackgroundChanged;
   final void Function(AppLocale locale) onLocaleChanged;
   final ScriptService scriptService;
+  final void Function(Color? color) onAccentChanged;
   final void Function(SearchScope scope) onSearchScopeChanged;
   final SearchScope searchScope;
 
@@ -32,6 +35,7 @@ class SettingsPage extends StatefulWidget {
     required this.onBackgroundChanged,
     required this.onLocaleChanged,
     required this.scriptService,
+    required this.onAccentChanged,
     required this.onSearchScopeChanged,
     required this.searchScope,
   });
@@ -45,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage>
   late TabController _tabCtrl;
 
   ThemeMode _themeMode = ThemeMode.system;
+  Color? _accentColor;
   GridSettings _gridSettings = const GridSettings();
   late BackgroundSettings _bgSettings;
   late AppLocale _locale;
@@ -64,9 +69,11 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _load() async {
     final theme = await SettingsService.loadThemeMode();
     final grid = await SettingsService.loadGridSettings();
+    final accent = await SettingsService.loadAccentColor();
     setState(() {
       _themeMode = theme;
       _gridSettings = grid;
+      _accentColor = accent;
     });
   }
 
@@ -182,7 +189,7 @@ class _SettingsPageState extends State<SettingsPage>
                     Icon(
                       selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                       size: 18,
-                      color: selected ? Colors.deepPurple : Colors.grey,
+                      color: selected ? Theme.of(context).colorScheme.primary : Colors.grey,
                     ),
                     const SizedBox(width: 8),
                     Text(locale.displayName, style: const TextStyle(fontSize: 12)),
@@ -304,6 +311,8 @@ class _SettingsPageState extends State<SettingsPage>
             _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
             _buildThemeOption(Strings.t('light'), ThemeMode.light),
             _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
+            const SizedBox(height: 20),
+            _buildAccentSection(),
             const SizedBox(height: 20),
             Text(Strings.t('customBg'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
@@ -867,6 +876,142 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
+  /// 预设强调色（null 表示"默认"，不覆盖）。
+  static const List<(String, Color?)> _accentPresets = [
+    ('accentDefault', null),
+    ('accentDeepPurple', Color(0xFF6750A4)),
+    ('accentBlue', Color(0xFF007ACC)),
+    ('accentIndigo', Color(0xFF3F51B5)),
+    ('accentTeal', Color(0xFF00897B)),
+    ('accentGreen', Color(0xFF2E7D32)),
+    ('accentOrange', Color(0xFFEF6C00)),
+    ('accentPink', Color(0xFFC2185B)),
+    ('accentRed', Color(0xFFD32F2F)),
+    ('accentAmber', Color(0xFFFFB300)),
+  ];
+
+  void _setAccent(Color? color) {
+    setState(() => _accentColor = color);
+    SettingsService.saveAccentColor(color);
+    widget.onAccentChanged(color);
+  }
+
+  Widget _buildAccentSection() {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(Strings.t('accentColor'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(Strings.t('accentColorDesc'), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final (labelKey, color) in _accentPresets)
+              _buildAccentSwatch(
+                label: Strings.t(labelKey),
+                color: color,
+                selected: _accentColor == color,
+                onTap: () => _setAccent(color),
+              ),
+            _buildCustomAccentSwatch(cs),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAccentSwatch({
+    required String label,
+    required Color? color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final swatch = Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: color ?? Theme.of(context).colorScheme.primaryContainer,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black26, width: 1),
+      ),
+      child: color == null
+          ? Icon(Icons.auto_awesome, size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer)
+          : null,
+    );
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+              width: 3,
+            ),
+          ),
+          child: swatch,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomAccentSwatch(ColorScheme cs) {
+    final selected = _accentColor != null &&
+        !_accentPresets.any((p) => p.$2 == _accentColor);
+    return Tooltip(
+      message: Strings.t('customColor'),
+      child: InkWell(
+        onTap: () => _openColorPicker(cs),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? cs.primary : Colors.transparent,
+              width: 3,
+            ),
+          ),
+          child: Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black12, width: 1),
+              // 彩色渐变环示意"自定义"。
+              gradient: const SweepGradient(
+                colors: [
+                  Colors.red, Colors.orange, Colors.yellow, Colors.green,
+                  Colors.teal, Colors.blue, Colors.indigo, Colors.purple, Colors.red,
+                ],
+              ),
+            ),
+            child: Center(
+              child: Icon(Icons.add, size: 16, color: cs.onSurface),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openColorPicker(ColorScheme cs) async {
+    // 自定义色块被选中时以其作为初始值，否则回退到当前强调色或蓝。
+    final initial = _accentColor ??
+        (cs.brightness == Brightness.dark ? const Color(0xFF007ACC) : Colors.deepPurple);
+    final picked = await showDialog<Color>(
+      context: context,
+      builder: (ctx) => _ColorPickerDialog(initialColor: initial),
+    );
+    if (picked != null) _setAccent(picked);
+  }
+
   Widget _buildThemeOption(String label, ThemeMode mode) {
     final selected = _themeMode == mode;
     return InkWell(
@@ -882,7 +1027,7 @@ class _SettingsPageState extends State<SettingsPage>
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
               size: 18,
-              color: selected ? Colors.deepPurple : Colors.grey,
+              color: selected ? Theme.of(context).colorScheme.primary : Colors.grey,
             ),
             const SizedBox(width: 8),
             Text(label, style: const TextStyle(fontSize: 12)),
@@ -1096,6 +1241,12 @@ class _SettingsPageState extends State<SettingsPage>
           final themeMode = ThemeMode.values.firstWhere((e) => e.name == oldTheme, orElse: () => ThemeMode.system);
           widget.onThemeChanged(themeMode);
         }
+        final accentVal = importedSettings['accent_color'] as String?;
+        if (accentVal != null && accentVal.isNotEmpty) {
+          final intVal = int.tryParse(accentVal);
+          final importedAccent = intVal == null ? null : Color(intVal);
+          _setAccent(importedAccent);
+        }
         if (importedSettings['grid_minCardWidth'] != null) {
           widget.onGridSettingsChanged(GridSettings.fromMap({
             'minCardWidth': importedSettings['grid_minCardWidth'],
@@ -1188,5 +1339,138 @@ class _SettingsPageState extends State<SettingsPage>
         );
       }
     }
+  }
+}
+
+class _ColorPickerDialog extends StatefulWidget {
+  final Color initialColor;
+  const _ColorPickerDialog({required this.initialColor});
+
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late Color _pickerColor;
+  final _rCtrl = TextEditingController();
+  final _gCtrl = TextEditingController();
+  final _bCtrl = TextEditingController();
+  final _rFocus = FocusNode();
+  final _gFocus = FocusNode();
+  final _bFocus = FocusNode();
+
+  int to255(double v) => (v * 255.0).round().clamp(0, 255);
+  Color combine(int r, int g, int b) => Color.fromARGB(255, r, g, b);
+
+  @override
+  void initState() {
+    super.initState();
+    _pickerColor = widget.initialColor;
+    _rCtrl.text = to255(_pickerColor.r).toString();
+    _gCtrl.text = to255(_pickerColor.g).toString();
+    _bCtrl.text = to255(_pickerColor.b).toString();
+  }
+
+  @override
+  void dispose() {
+    _rCtrl.dispose();
+    _gCtrl.dispose();
+    _bCtrl.dispose();
+    _rFocus.dispose();
+    _gFocus.dispose();
+    _bFocus.dispose();
+    super.dispose();
+  }
+
+  void _syncFields(Color c) {
+    if (!_rFocus.hasFocus) _rCtrl.text = to255(c.r).toString();
+    if (!_gFocus.hasFocus) _gCtrl.text = to255(c.g).toString();
+    if (!_bFocus.hasFocus) _bCtrl.text = to255(c.b).toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(Strings.t('pickColor'), style: const TextStyle(fontSize: 14)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ColorPicker(
+              pickerColor: _pickerColor,
+              onColorChanged: (c) {
+                setState(() => _pickerColor = c);
+                _syncFields(c);
+              },
+              enableAlpha: false,
+              labelTypes: const [],
+              pickerAreaBorderRadius: BorderRadius.circular(8),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _rgbField('R', _rCtrl, _rFocus,
+                    (v) => _pickerColor = combine(v, to255(_pickerColor.g), to255(_pickerColor.b))),
+                const SizedBox(width: 8),
+                _rgbField('G', _gCtrl, _gFocus,
+                    (v) => _pickerColor = combine(to255(_pickerColor.r), v, to255(_pickerColor.b))),
+                const SizedBox(width: 8),
+                _rgbField('B', _bCtrl, _bFocus,
+                    (v) => _pickerColor = combine(to255(_pickerColor.r), to255(_pickerColor.g), v)),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text(Strings.t('cancel'), style: const TextStyle(fontSize: 12)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _pickerColor),
+          child: Text(Strings.t('ok'), style: const TextStyle(fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
+  Widget _rgbField(
+    String label,
+    TextEditingController ctrl,
+    FocusNode focus,
+    void Function(int) onValid,
+  ) {
+    return Expanded(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 14,
+            child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: ctrl,
+              focusNode: focus,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              maxLength: 3,
+              decoration: const InputDecoration(
+                isDense: true,
+                counterText: '',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              ),
+              onChanged: (s) {
+                final v = (int.tryParse(s) ?? 0).clamp(0, 255);
+                onValid(v);
+                setState(() {});
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

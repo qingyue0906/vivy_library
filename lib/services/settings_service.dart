@@ -318,6 +318,7 @@ class SettingsService {
   static const _layoutPrefix = 'layout_';
   static const _windowPrefix = 'window_';
   static const _themeKey = 'theme_mode';
+  static const _accentColorKey = 'accent_color';
   static const _gridPrefix = 'grid_';
   static const _bgPrefix = 'bg_';
   static const _localeKey = 'app_locale';
@@ -386,6 +387,20 @@ class SettingsService {
 
   static Future<void> saveThemeMode(ThemeMode mode) async {
     await AppDataService.setString(_themeKey, mode.name);
+  }
+
+  // --- Accent color ---
+  // 空字符串表示"默认"（不覆盖，亮色=deepPurple，暗色=VS Code 蓝）。
+
+  static Future<Color?> loadAccentColor() async {
+    final val = await AppDataService.getString(_accentColorKey);
+    if (val == null || val.isEmpty) return null;
+    final intVal = int.tryParse(val);
+    return intVal == null ? null : Color(intVal);
+  }
+
+  static Future<void> saveAccentColor(Color? color) async {
+    await AppDataService.setString(_accentColorKey, color?.toARGB32().toString() ?? '');
   }
 
   // --- Grid/UI settings ---

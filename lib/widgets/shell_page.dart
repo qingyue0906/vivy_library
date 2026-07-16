@@ -30,6 +30,7 @@ import '../utils/app_quit.dart';
 class ShellPage extends StatefulWidget {
   final ScriptService scriptService;
   final void Function(ThemeMode mode) onThemeChanged;
+  final void Function(Color? color) onAccentChanged;
   final void Function(GridSettings settings) onGridSettingsChanged;
   final GridSettings gridSettings;
   final BackgroundSettings backgroundSettings;
@@ -40,6 +41,7 @@ class ShellPage extends StatefulWidget {
     super.key,
     required this.scriptService,
     required this.onThemeChanged,
+    required this.onAccentChanged,
     required this.onGridSettingsChanged,
     required this.gridSettings,
     required this.backgroundSettings,
@@ -146,6 +148,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           libraryRootPath: _state.currentRootPath,
           scriptService: widget.scriptService,
           onThemeChanged: widget.onThemeChanged,
+          onAccentChanged: widget.onAccentChanged,
           onGridSettingsChanged: widget.onGridSettingsChanged,
           backgroundSettings: widget.backgroundSettings,
           onBackgroundChanged: widget.onBackgroundChanged,

@@ -22,6 +22,7 @@ void main() async {
   await AppDataService.migrateIfNeeded();
 
   final savedTheme = await SettingsService.loadThemeMode();
+  final savedAccent = await SettingsService.loadAccentColor();
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -47,8 +48,8 @@ void main() async {
 
   final scriptService = ScriptService();
   await scriptService.init();
-  runApp(ExcludeSemantics(
-    child: VivyApp(initialThemeMode: savedTheme, scriptService: scriptService),
+    runApp(ExcludeSemantics(
+    child: VivyApp(initialThemeMode: savedTheme, initialAccentColor: savedAccent, scriptService: scriptService),
   ));
 
   // fvp 注册时会把 libmdk 日志设为 "all"，解码/打开媒体时产生大量原生→Dart 日志
@@ -68,9 +69,10 @@ class _WindowStateListener with WindowListener {
 
 class VivyApp extends StatefulWidget {
   final ThemeMode initialThemeMode;
+  final Color? initialAccentColor;
   final ScriptService scriptService;
 
-  const VivyApp({super.key, required this.initialThemeMode, required this.scriptService});
+  const VivyApp({super.key, required this.initialThemeMode, this.initialAccentColor, required this.scriptService});
 
   @override
   State<VivyApp> createState() => _VivyAppState();
@@ -78,6 +80,7 @@ class VivyApp extends StatefulWidget {
 
 class _VivyAppState extends State<VivyApp> {
   late ThemeMode _themeMode;
+  Color? _accentColor;
   late GridSettings _gridSettings;
   BackgroundSettings _backgroundSettings = const BackgroundSettings();
   // ignore: unused_field - triggers rebuild on locale change
@@ -87,6 +90,7 @@ class _VivyAppState extends State<VivyApp> {
   void initState() {
     super.initState();
     _themeMode = widget.initialThemeMode;
+    _accentColor = widget.initialAccentColor;
     _gridSettings = const GridSettings();
     _locale = AppLocale.system;
     _loadGridSettings();
@@ -112,6 +116,10 @@ class _VivyAppState extends State<VivyApp> {
 
   void _onThemeChanged(ThemeMode mode) {
     setState(() => _themeMode = mode);
+  }
+
+  void _onAccentChanged(Color? color) {
+    setState(() => _accentColor = color);
   }
 
   void _onGridSettingsChanged(GridSettings settings) {
@@ -140,15 +148,21 @@ class _VivyAppState extends State<VivyApp> {
   static const _vscodeBlue = Color(0xFF007ACC);
   static const _vscodeSelection = Color(0xFF264F78);
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Vivy Library',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+  /// 亮色主题：默认 seed 为 deepPurple，设置强调色后改用强调色。
+  ThemeData _lightTheme(Color? accent) => ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: accent ?? Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
+      );
+
+  /// 暗色主题：默认保留 VS Code 配色（primary=蓝）。
+  /// 一旦设置强调色，用强调色生成主色调，再覆盖回 VS Code 的 surface 系列，
+  /// 既跟随强调色又不破坏暗色整体观感。
+  ThemeData _darkTheme(Color? accent) {
+    if (accent == null) {
+      return ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.dark(
           primary: _vscodeBlue,
@@ -165,11 +179,39 @@ class _VivyAppState extends State<VivyApp> {
           outlineVariant: _vscodeDarkBorder,
         ),
         scaffoldBackgroundColor: _vscodeDarkSurface,
+      );
+    }
+    final base = ColorScheme.fromSeed(seedColor: accent, brightness: Brightness.dark);
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: base.copyWith(
+        surface: _vscodeDarkSurface,
+        onSurface: _vscodeDarkText,
+        surfaceContainerLow: _vscodeDarkSidebar,
+        surfaceContainer: _vscodeDarkInactiveTab,
+        surfaceContainerHigh: _vscodeDarkActivityBar,
+        surfaceContainerHighest: _vscodeDarkBorder,
+        primaryContainer: _vscodeSelection,
+        onPrimaryContainer: _vscodeDarkText,
+        secondaryContainer: _vscodeDarkActivityBar,
+        outline: _vscodeDarkBorder,
+        outlineVariant: _vscodeDarkBorder,
       ),
+      scaffoldBackgroundColor: _vscodeDarkSurface,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Vivy Library',
+      theme: _lightTheme(_accentColor),
+      darkTheme: _darkTheme(_accentColor),
       themeMode: _themeMode,
       home: ShellPage(
         scriptService: widget.scriptService,
         onThemeChanged: _onThemeChanged,
+        onAccentChanged: _onAccentChanged,
         onGridSettingsChanged: _onGridSettingsChanged,
         gridSettings: _gridSettings,
         backgroundSettings: _backgroundSettings,
