@@ -101,7 +101,10 @@ class TopBar extends StatelessWidget {
     };
     return SizedBox(
       height: 22 * c,
-      child: PopupMenuButton<String>(
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(4 * c),
+        child: PopupMenuButton<String>(
         tooltip: Strings.t('sortMethod'),
         initialValue: state.sortField.name,
         onSelected: (val) {
@@ -172,6 +175,7 @@ class TopBar extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

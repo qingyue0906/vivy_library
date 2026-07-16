@@ -72,17 +72,17 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: _showPanel,
+    return Material(
+      color: cs.surface,
       borderRadius: BorderRadius.circular(4 * c),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 4 * c),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(4 * c),
-        ),
-        child: Row(
+      child: InkWell(
+        onTap: _showPanel,
+        borderRadius: BorderRadius.circular(4 * c),
+        hoverColor: cs.onSurface.withValues(alpha: 0.08),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 4 * c),
+          child: Row(
           children: [
             Icon(Icons.video_library, size: 12 * c, color: cs.onSurfaceVariant),
             SizedBox(width: 4 * c),
@@ -99,6 +99,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
             Icon(Icons.arrow_drop_down, size: 14 * c, color: cs.onSurfaceVariant),
           ],
         ),
+      ),
       ),
     );
   }

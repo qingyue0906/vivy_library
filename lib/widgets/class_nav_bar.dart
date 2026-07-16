@@ -92,20 +92,23 @@ class ClassNavBar extends StatelessWidget {
         ? cs.primary
         : (cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer);
 
-    return InkWell(
-      onTap: () => state.setSelectedClass(label),
+    return Material(
+      color: chipBg,
       borderRadius: BorderRadius.circular(3 * c),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
-        decoration: BoxDecoration(
-          color: chipBg,
-          borderRadius: BorderRadius.circular(3 * c),
-          border: Border.all(
-            color: isSelected ? cs.primary : cs.outlineVariant,
-            width: 0.5,
+      child: InkWell(
+        onTap: () => state.setSelectedClass(label),
+        borderRadius: BorderRadius.circular(3 * c),
+        hoverColor: cs.onSurface.withValues(alpha: 0.08),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(3 * c),
+            border: Border.all(
+              color: isSelected ? cs.primary : cs.outlineVariant,
+              width: 0.5,
+            ),
           ),
-        ),
-        child: Text(
+          child: Text(
           '$displayLabel ($count)',
           style: TextStyle(
             fontSize: 10 * c,
@@ -113,6 +116,7 @@ class ClassNavBar extends StatelessWidget {
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
+      ),
       ),
     );
   }
