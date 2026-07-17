@@ -500,6 +500,25 @@ class SettingsService {
     await AppDataService.setString(_playerShowMsKey, v.toString());
   }
 
+  // --- Player external audio (同名外置音频文件用作音轨) ---
+
+  static const _playerUseExternalAudioKey = 'player_use_external_audio';
+  static bool _cachedUseExternalAudio = true;
+
+  static bool loadPlayerUseExternalAudioSync() => _cachedUseExternalAudio;
+
+  /// 默认开启：同名外置音频文件作为视频音轨。
+  static Future<bool> loadPlayerUseExternalAudio() async {
+    final val = await AppDataService.getString(_playerUseExternalAudioKey);
+    _cachedUseExternalAudio = val == null || val == 'true';
+    return _cachedUseExternalAudio;
+  }
+
+  static Future<void> savePlayerUseExternalAudio(bool v) async {
+    _cachedUseExternalAudio = v;
+    await AppDataService.setString(_playerUseExternalAudioKey, v.toString());
+  }
+
   // --- Player playlist panel ---
 
   static const _playerShowPlaylistKey = 'player_show_playlist';

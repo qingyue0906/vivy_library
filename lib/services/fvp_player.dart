@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import 'package:fvp/fvp.dart' as fvp;
 
 import '../models/video_entry.dart';
+import 'translations.dart';
 
 /// 基于 fvp (libmdk) 的播放器封装，对外暴露与 media_kit [Player] 近似的接口，
 /// 让播放页只做“调用替换”而不必关心 video_player / fvp 后端细节。
@@ -29,6 +30,18 @@ class FvpPlayer {
   double _volume = 100.0;
   double _rate = 1.0;
 
+  // 当前已注册的外置音频文件路径（同名音频文件），供音轨菜单列为「外部」轨。
+  List<String> _externalAudioPaths = const [];
+  // 当前音频选择：null = 自动(默认首条音轨)；int = 指定轨索引；_audioOff = 关闭音频。
+  int? _activeAudioIndex;
+  bool _audioOff = false;
+
+  // 外部轨待落实标记：无内嵌音轨、需默认用外部轨时为真，播放后启动重试落实。
+  bool _pendingExternalSelection = false;
+  // 选择令牌：每次打开/切换/取消重试都自增，让上一次未结束的重试循环自行退出，
+  // 避免多次打开或切轨时并发叠加。
+  int _selectionToken = 0;
+
   final _positionCtl = StreamController<Duration>.broadcast();
   final _durationCtl = StreamController<Duration>.broadcast();
   final _playingCtl = StreamController<bool>.broadcast();
@@ -49,6 +62,15 @@ class FvpPlayer {
 
   FvpPlayerState get state => _state;
 
+  /// 当前选中的音轨索引；null = 自动(首条音轨)。仅供音轨菜单显示打勾状态。
+  int? get activeAudioIndex => _activeAudioIndex;
+
+  /// 是否处于「关闭音频」状态。仅供音轨菜单显示打勾状态。
+  bool get audioDisabled => _audioOff;
+
+  /// 已注册的外置音频文件路径列表。
+  List<String> get externalAudioPaths => _externalAudioPaths;
+
   Stream<Duration> get positionStream => _positionCtl.stream;
   Stream<Duration> get durationStream => _durationCtl.stream;
   Stream<bool> get playingStream => _playingCtl.stream;
@@ -56,11 +78,17 @@ class FvpPlayer {
   Stream<FvpTracks> get tracksStream => _tracksCtl.stream;
 
   /// 打开并（可选）立即播放一个媒体文件。
-  /// 切换文件时复用式地创建新 controller，旧 controller 延后一帧释放，避免控件引用已释放对象。
-  Future<void> open(String path, {bool play = true}) async {
+  /// [externalAudio] 为同名外置音频文件路径列表（由 [findExternalAudio] 得出），
+  /// 会注册为「外部音轨」（libmdk 负责与视频时钟对齐同步播放），并在音轨菜单以
+  /// 「外部」标识列出。切换文件时复用式地创建新 controller，旧 controller 延后一帧释放。
+  Future<void> open(String path,
+      {bool play = true, List<String> externalAudio = const []}) async {
     final old = _controller;
     final c = VideoPlayerController.file(File(path));
     _controller = c;
+    // 取消上一次打开遗留的外部轨重试循环，避免它作用于新 controller。
+    _selectionToken++;
+    _pendingExternalSelection = false;
     try {
       await c.initialize();
     } catch (e) {
@@ -77,6 +105,9 @@ class FvpPlayer {
       _lastPos = Duration.zero;
       _lastDur = Duration.zero;
       _lastPlaying = false;
+      _audioOff = false;
+      _activeAudioIndex = null;
+      _externalAudioPaths = const [];
       _state = const FvpPlayerState();
       _positionCtl.add(Duration.zero);
       _durationCtl.add(Duration.zero);
@@ -90,25 +121,85 @@ class FvpPlayer {
     c.setVolume(_volume / 100);
     c.setPlaybackSpeed(_rate);
     _completedFired = false;
-    _updateTracks();
+    // 先读取内嵌音轨（此时尚未加外置音频，计数不含外置）。
+    final embedded = _readAudioTracks(c);
+    // 逐个把同名外置音频注册为外部音轨；单个失败不影响其余与播放。
+    _externalAudioPaths = <String>[];
+    final externalTracks = <FvpTrack>[];
+    for (final ext in externalAudio) {
+      try {
+        // fvp 原生层对外部音频 URI 不做 decode（与主视频 _toUri 对 file 的处理
+        // 不一致）。主视频走的是解码后的原始路径，故这里也传解码后的路径，
+        // 避免中文/全角标点被百分号编码导致 libmdk 打不开文件、外部轨为空。
+        c.setExternalAudio(Uri.decodeComponent(Uri.file(ext).toString()));
+        _externalAudioPaths.add(ext);
+        // 外部轨在 libmdk 中与主音轨共用同一索引空间，按「内嵌数 + i」续编。
+        // mediaInfo 不会回显外部轨，故直接用合成索引，播放后用重试落实选中。
+        externalTracks.add(FvpTrack(
+          index: embedded.length + externalTracks.length,
+          title: ext.split(RegExp(r'[/\\]')).last,
+          external: true,
+        ));
+      } catch (_) {
+        // 忽略无效的外置音频文件。
+      }
+    }
+    _buildTracks(c, embedded, externalTracks);
+    _applyDefaultAudioSelection();
     _emitState();
     if (old != null) {
       // 等当前帧把旧 VideoPlayer 控件卸载后再释放旧 controller。
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
     if (play) await c.play();
+    // 外置音频由 libmdk 异步加载，播放前 setAudioTracks 选中的轨可能尚未就绪被忽略。
+    // 播放开始后再周期性重试让目标轨生效；非阻塞，不影响开头播放。
+    _requestAudioSelection();
   }
 
   List<String> get _currentHwList =>
       _hwDecoders[Platform.operatingSystem] ?? _swDecoders;
 
-  Future<void> play() async => _controller?.play();
+  /// 视作「同名外置音频」的扩展名白名单（按常见度排序）。
+  /// 与视频自身后缀相同者会被跳过（避免把视频本身当外置音轨）。
+  static const List<String> _audioExtensions = [
+    'm4a', 'aac', 'mp3', 'opus', 'ogg', 'flac', 'wav', 'wma', 'ape',
+    'ac3', 'eac3', 'dts', 'mka', 'wv', 'tta', 'mp2', 'mpa', 'aiff', 'caf',
+  ];
+
+  /// 查找与 [videoPath] 同目录、同名(去后缀)、不同后缀的音频文件。
+  /// 返回按白名单顺序命中的全部路径（可能多条，如同时存在 .mp3 与 .flac）。
+  static List<String> findExternalAudio(String videoPath) {
+    final file = File(videoPath);
+    final dir = file.parent;
+    final fileName = videoPath.split(RegExp(r'[/\\]')).last;
+    final dot = fileName.lastIndexOf('.');
+    if (dot <= 0) return const [];
+    final nameNoExt = fileName.substring(0, dot);
+    final videoExt = fileName.substring(dot + 1).toLowerCase();
+    final results = <String>[];
+    if (!dir.existsSync()) return results;
+    for (final ext in _audioExtensions) {
+      if (ext == videoExt) continue;
+      final candidate =
+          '${dir.path}${Platform.pathSeparator}$nameNoExt.$ext';
+      if (File(candidate).existsSync()) results.add(candidate);
+    }
+    return results;
+  }
+
+  Future<void> play() async {
+    await _controller?.play();
+    // 覆盖 open(play:false) 后手动恢复播放的场景，确保外部轨在真正播放时被落实。
+    _requestAudioSelection();
+  }
   Future<void> pause() async => _controller?.pause();
 
   /// [v] 为 0–100，映射到 video_player 的 0–1。暂存以便 open 时应用。
+  /// 关闭音频期间不把音量透传到 controller（避免拖动音量条意外解除「关闭音频」）。
   void setVolume(double v) {
     _volume = v.clamp(0, 100);
-    _controller?.setVolume(_volume / 100);
+    if (!_audioOff) _controller?.setVolume(_volume / 100);
   }
 
   Future<void> setRate(double r) async {
@@ -123,14 +214,37 @@ class FvpPlayer {
 
   bool get useHardwareDecode => _useHardwareDecode;
 
-  /// 选择音轨：null = 自动（默认首条），否则按 [FvpTrack.index]。
+  /// 选择音轨：null = 自动（默认首条音轨，优先内嵌），否则按 [FvpTrack.index]。
   void setAudioTrackIndex(int? index) {
+    _audioOff = false;
+    _selectionToken++;
+    // 恢复音量：关闭音频是经由 setVolume(0) 静音的，切回时若仍为 0 则依旧无声。
+    _controller?.setVolume(_volume / 100);
     if (index == null) {
-      final first = _tracks.audio.isNotEmpty ? _tracks.audio.first.index : null;
-      _controller?.setAudioTracks(first != null ? [first] : const []);
+      final first = _tracks.audio.isNotEmpty ? _tracks.audio.first : null;
+      _activeAudioIndex = null;
+      final target = first?.index;
+      _controller?.setAudioTracks(target != null ? [target] : const []);
+      // 默认轨若是外置音频，仍需重试落实（关→开后外置轨可能需重复 set 才生效）。
+      _pendingExternalSelection = first?.external ?? false;
     } else {
+      _activeAudioIndex = index;
       _controller?.setAudioTracks([index]);
+      // 选中的若是外置轨，重试落实（关→开后可能需重复 set 才生效）。
+      _pendingExternalSelection =
+          _tracks.audio.any((e) => e.index == index && e.external);
     }
+    // 重新启用外部轨重试，确保「关闭音频→再切回」时外部轨被重新激活。
+    if (_pendingExternalSelection) _requestAudioSelection();
+  }
+
+  /// 关闭音频（音量静音，不停止视频，也不卸载外置音频轨）。
+  /// 注意：不能用 setAudioTracks([]) 静音——libmdk 会因此卸载外置音频轨，
+  /// 导致「关闭→再开」后外置 .m4a 无法恢复出声。音量 0 静音可保留轨绑定，
+  /// 恢复音量即重新出声。
+  void disableAudio() {
+    _audioOff = true;
+    _controller?.setVolume(0);
   }
 
   /// 选择字幕轨：null = 关闭，否则按 [FvpTrack.index]。
@@ -189,16 +303,14 @@ class FvpPlayer {
     }
   }
 
-  void _updateTracks() {
-    final c = _controller;
-    if (c == null) return;
+  /// 读取内嵌音轨（来自 getMediaInfo，不含外置音频）。
+  static List<FvpTrack> _readAudioTracks(VideoPlayerController c) {
     final info = c.getMediaInfo();
-    if (info == null) return;
-    final audio = <FvpTrack>[];
-    final a = info.audio as List?;
+    final list = <FvpTrack>[];
+    final a = info?.audio as List?;
     if (a != null) {
       for (final s in a) {
-        audio.add(FvpTrack(
+        list.add(FvpTrack(
           index: s.index as int,
           title: _meta(s.metadata, 'title'),
           language: _meta(s.metadata, 'language'),
@@ -206,11 +318,17 @@ class FvpPlayer {
         ));
       }
     }
-    final sub = <FvpTrack>[];
-    final su = info.subtitle as List?;
+    return list;
+  }
+
+  /// 读取内嵌字幕轨（来自 getMediaInfo）。
+  static List<FvpTrack> _readSubtitleTracks(VideoPlayerController c) {
+    final info = c.getMediaInfo();
+    final list = <FvpTrack>[];
+    final su = info?.subtitle as List?;
     if (su != null) {
       for (final s in su) {
-        sub.add(FvpTrack(
+        list.add(FvpTrack(
           index: s.index as int,
           title: _meta(s.metadata, 'title'),
           language: _meta(s.metadata, 'language'),
@@ -218,8 +336,66 @@ class FvpPlayer {
         ));
       }
     }
-    _tracks = FvpTracks(audio: audio, subtitle: sub);
+    return list;
+  }
+
+  /// 合成完整音轨列表：内嵌在前（来自 getMediaInfo），外置音频（带真实索引）续在后。
+  void _buildTracks(
+      VideoPlayerController c, List<FvpTrack> embedded, List<FvpTrack> external) {
+    final audio = <FvpTrack>[...embedded, ...external];
+    _tracks = FvpTracks(audio: audio, subtitle: _readSubtitleTracks(c));
     _tracksCtl.add(_tracks);
+  }
+
+  /// 让 libmdk 真正落实「当前想用的音轨」。外置音频在播放开始后才异步加载，
+  /// 播放前 setAudioTracks 选中的轨可能尚未就绪被忽略；这里周期性重设直到超时被打断。
+  /// 仅在有外部轨待落实时启用（_pendingExternalSelection），普通场景不重试、零副作用。
+  /// 用 _selectionToken 取消上一次未结束的重试，避免并发叠加。
+  void _requestAudioSelection() {
+    if (!_pendingExternalSelection || _audioOff) return;
+    _selectionToken++;
+    final token = _selectionToken;
+    _ensureAudioSelection(token);
+  }
+
+  Future<void> _ensureAudioSelection(int token) async {
+    final c = _controller;
+    if (c == null) return;
+    final deadline = DateTime.now().add(const Duration(milliseconds: 1500));
+    while (DateTime.now().isBefore(deadline)) {
+      if (token != _selectionToken) return; // 被新的选择/打开覆盖
+      if (_controller != c) return; // 已切换或释放
+      if (_audioOff) return; // 用户关闭音频
+      if (!_pendingExternalSelection) return; // 手动选了其它轨
+      // 每轮按当前目标轨重试；libmdk 加载好外部轨后该调用才会真正生效。
+      c.setAudioTracks([_activeAudioIndex ?? 0]);
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+  }
+
+  /// 落实默认音轨选择：
+  /// - 无内嵌音轨且有外置 → 默认选中第一条外置；外部轨需播放后重试落实；
+  /// - 其余（有内嵌 / 只有内嵌）→ Auto（首条内嵌音轨），无需重试。
+  void _applyDefaultAudioSelection() {
+    _audioOff = false;
+    final externalTracks = _tracks.audio.where((t) => t.external).toList();
+    final embeddedCount = _tracks.audio.length - externalTracks.length;
+    if (embeddedCount == 0 && externalTracks.isNotEmpty) {
+      // 无内嵌音轨：默认选中第一条外置轨（合成索引 = 0）。外部音频异步加载，
+      // 播放前 setAudioTracks 可能因轨未就绪被忽略，故启用重试循环，待
+      // libmdk 加载好后由 _ensureAudioSelection 周期性重设落实选中。
+      _activeAudioIndex = externalTracks.first.index;
+      _pendingExternalSelection = true;
+    } else {
+      // 有内嵌/只有内嵌：Auto（首条内嵌），无需重试。
+      _pendingExternalSelection = false;
+      _activeAudioIndex = null;
+      final firstEmbedded = _tracks.audio.firstWhere(
+        (t) => !t.external,
+        orElse: () => _tracks.audio.first,
+      );
+      _controller?.setAudioTracks([firstEmbedded.index]);
+    }
   }
 
   void _emitState() {
@@ -337,14 +513,20 @@ class FvpTrack {
   final String? title;
   final String? language;
   final String? codec;
+  final bool external;
 
   const FvpTrack({
     required this.index,
     this.title,
     this.language,
     this.codec,
+    this.external = false,
   });
 
   String get label =>
-      [title, language, codec].where((e) => e != null && e.isNotEmpty).join(' · ');
+      external && title != null && title!.isNotEmpty
+          ? '$title  ·  ${Strings.t('externalAudio')}'
+          : [title, language, codec]
+              .where((e) => e != null && e.isNotEmpty)
+              .join(' · ');
 }

@@ -1754,6 +1754,24 @@ class Strings {
       AppLocale.en: 'Audio Track',
       AppLocale.ja: '音声トラック',
     },
+    'externalAudio': {
+      AppLocale.zhHans: '外部',
+      AppLocale.zhHant: '外部',
+      AppLocale.en: 'External',
+      AppLocale.ja: '外部',
+    },
+    'audioAuto': {
+      AppLocale.zhHans: '自动',
+      AppLocale.zhHant: '自動',
+      AppLocale.en: 'Auto',
+      AppLocale.ja: '自動',
+    },
+    'audioOff': {
+      AppLocale.zhHans: '关闭音频',
+      AppLocale.zhHant: '關閉音訊',
+      AppLocale.en: 'Audio Off',
+      AppLocale.ja: '音声オフ',
+    },
     'subtitle': {
       AppLocale.zhHans: '字幕',
       AppLocale.zhHant: '字幕',
@@ -1807,6 +1825,18 @@ class Strings {
       AppLocale.zhHant: '進度條時間以 分:秒.毫秒 顯示，如 0:09.150',
       AppLocale.en: 'Show progress time as M:SS.mmm, e.g. 0:09.150',
       AppLocale.ja: '再生バーの時間を 分:秒.ミリ秒 で表示 (例: 0:09.150)',
+    },
+    'useExternalAudio': {
+      AppLocale.zhHans: '同名外置音频作为音轨',
+      AppLocale.zhHant: '同名外置音訊作為音軌',
+      AppLocale.en: 'Use same-name external audio as track',
+      AppLocale.ja: '同名の外部音声を音軌として使用',
+    },
+    'useExternalAudioDesc': {
+      AppLocale.zhHans: '视频无音轨时自动用同名音频文件配音；有音轨时可在音轨菜单中切换',
+      AppLocale.zhHant: '影片無音軌時自動用同名音訊檔配音；有音軌時可在音軌選單中切換',
+      AppLocale.en: 'Auto-use same-name audio file when the video has no audio track; switchable in the audio menu when it does',
+      AppLocale.ja: '映像に音声トラックがない場合は同名音声ファイルを自動使用；ある場合は音声メニューで切替',
     },
     'minimize': {
       AppLocale.zhHans: '最小化',

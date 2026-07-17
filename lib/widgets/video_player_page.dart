@@ -19,6 +19,22 @@ import 'smooth_scroll.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
 
+/// 音轨菜单的选项：自动(Auto) / 指定音轨 / 关闭音频。
+enum _AudioChoiceKind { auto, track, off }
+
+class _AudioChoice {
+  final _AudioChoiceKind kind;
+  final int? index;
+
+  const _AudioChoice.auto()
+      : kind = _AudioChoiceKind.auto,
+        index = null;
+  const _AudioChoice.track(this.index) : kind = _AudioChoiceKind.track;
+  const _AudioChoice.off()
+      : kind = _AudioChoiceKind.off,
+        index = null;
+}
+
 class VideoPlayerPage extends StatefulWidget {
   final VideoPlaylist playlist;
   final int initialIndex;
@@ -82,6 +98,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   /// 是否使用硬件解码。默认开启；切换时重新载入当前视频以生效。
   bool _useHardwareDecode = true;
+
+  /// 同名外置音频文件作为音轨。默认开启；切换时重新载入当前视频以生效。
+  bool _useExternalAudio = SettingsService.loadPlayerUseExternalAudioSync();
 
   /// 是否已启动媒体初始化。用于把 open/元数据探测推迟到入场动画结束后，
   /// 且保证只触发一次。
@@ -152,6 +171,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   Future<void> _initPlayback() async {
     _useHardwareDecode = await SettingsService.loadPlayerHardwareDecode();
     player.setHardwareDecode(_useHardwareDecode);
+    _useExternalAudio = await SettingsService.loadPlayerUseExternalAudio();
     if (!mounted) return;
     setState(() {});
     _startMediaAfterEnter();
@@ -199,7 +219,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     // 登记当前播放项：其元数据由播放器内核直接回填，后台扫描排除它，避免重复建播放器。
     VideoMetadataService.setActivePath(entry.path);
     // 不 await：元数据/轨道通过流在初始化完成后回填。
-    player.open(entry.path, play: true);
+    final ext = _useExternalAudio
+        ? FvpPlayer.findExternalAudio(entry.path)
+        : const <String>[];
+    player.open(entry.path, play: true, externalAudio: ext);
   }
 
   /// 当播放器解析出当前视频的轨道信息/分辨率/时长时，回填到播放列表条目。
@@ -341,10 +364,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _applyHwdec();
   }
 
-  /// 切换硬件/软件解码：fvp 的解码器改变需重新载入文件才生效。
   /// 重新打开当前视频并以切换前的播放进度继续播放（保留播放/暂停状态），
-  /// 不再从开头重播。
-  Future<void> _applyHwdec() async {
+  /// 不再从开头重播。用于硬件解码、外置音轨开关等需要重载文件才生效的偏好切换。
+  /// 重新打开时会依据当前 [_useExternalAudio] 重新探测并挂载同名外置音频。
+  Future<void> _reopenCurrentPreservingPosition() async {
     if (widget.playlist.entries.isEmpty) return;
     if (_currentIndex < 0 || _currentIndex >= widget.playlist.entries.length) {
       return;
@@ -354,12 +377,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     // 切换期间冻结进度条，避免 open 重置 position/duration 流使进度条跳到 0 再跳回。
     _switchingDecode = true;
     if (mounted) setState(() {});
-    player.setHardwareDecode(_useHardwareDecode);
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
+    final ext = _useExternalAudio
+        ? FvpPlayer.findExternalAudio(entry.path)
+        : const <String>[];
     // 先以暂停方式重新打开，待媒体可定位后 seek 到原进度，再恢复播放/暂停，
     // 避免 open(play:true) 后 seek 被载入过程吞掉而从开头重播。
-    await player.open(entry.path, play: false);
+    await player.open(entry.path, play: false, externalAudio: ext);
     if (pos > Duration.zero) {
       final deadline = DateTime.now().add(const Duration(seconds: 3));
       while (DateTime.now().isBefore(deadline)) {
@@ -373,6 +398,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     _switchingDecode = false;
     if (mounted) setState(() {});
+  }
+
+  /// 切换硬件/软件解码：fvp 的解码器改变需重新载入文件才生效。
+  Future<void> _applyHwdec() async {
+    player.setHardwareDecode(_useHardwareDecode);
+    await _reopenCurrentPreservingPosition();
+  }
+
+  /// 切换同名外置音频开关：重新载入当前视频以挂载/卸载外置音轨，保留播放进度。
+  Future<void> _applyExternalAudio() async {
+    await _reopenCurrentPreservingPosition();
   }
 
   /// 真正的 OS 全屏：调用 window_manager 缩放窗口铺满屏幕（隐藏任务栏）。
@@ -546,6 +582,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                     onMillisecondsChanged: (v) {
                       setState(() => _showMilliseconds = v);
                       SettingsService.savePlayerShowMilliseconds(v);
+                    },
+                    useExternalAudio: _useExternalAudio,
+                    onExternalAudioChanged: (v) {
+                      setState(() => _useExternalAudio = v);
+                      SettingsService.savePlayerUseExternalAudio(v);
+                      _applyExternalAudio();
                     },
                     onBack: () => setState(() => _showSettings = false),
                     trailing: _buildWindowControls(cs, iconColor: cs.onSurface),
@@ -1007,25 +1049,75 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
 
   Widget _buildAudioMenu(Color iconColor) {
     final tracks = player.state.tracks.audio;
-    return PopupMenuButton<int?>(
+    final hasAny = tracks.isNotEmpty;
+    return PopupMenuButton<_AudioChoice>(
       tooltip: Strings.t('audioTrack'),
       icon: Icon(Icons.audiotrack, color: iconColor),
-      enabled: tracks.isNotEmpty,
+      enabled: hasAny || player.audioDisabled,
       itemBuilder: (ctx) {
-        return [
-          PopupMenuItem<int?>(
-            value: null,
-            child: const Text('Auto'),
+        final items = <PopupMenuEntry<_AudioChoice>>[];
+        // Auto：默认首条音轨（无内嵌时即外置首条）。
+        final autoChecked = hasAny && !player.audioDisabled && player.activeAudioIndex == null;
+        items.add(PopupMenuItem<_AudioChoice>(
+          value: const _AudioChoice.auto(),
+          child: Row(
+            children: [
+              if (autoChecked) ...[
+                const Icon(Icons.check, size: 16),
+                const SizedBox(width: 4),
+              ],
+              Text(Strings.t('audioAuto')),
+            ],
           ),
-          ...tracks.map(
-            (t) => PopupMenuItem<int?>(
-              value: t.index,
-              child: Text(t.label.isNotEmpty ? t.label : 'Track ${t.index}'),
+        ));
+        // 各音轨（内嵌 / 外置）。
+        for (final t in tracks) {
+          final selected =
+              !player.audioDisabled && player.activeAudioIndex == t.index;
+          items.add(PopupMenuItem<_AudioChoice>(
+            value: _AudioChoice.track(t.index),
+            child: Row(
+              children: [
+                if (selected) ...[
+                  const Icon(Icons.check, size: 16),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(
+                    t.label.isNotEmpty ? t.label : 'Track ${t.index}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
+          ));
+        }
+        // 关闭音频。
+        items.add(PopupMenuItem<_AudioChoice>(
+          value: const _AudioChoice.off(),
+          child: Row(
+            children: [
+              if (player.audioDisabled) ...[
+                const Icon(Icons.check, size: 16),
+                const SizedBox(width: 4),
+              ],
+              Text(Strings.t('audioOff')),
+            ],
           ),
-        ];
+        ));
+        return items;
       },
-      onSelected: (i) => player.setAudioTrackIndex(i),
+      onSelected: (choice) {
+        switch (choice.kind) {
+          case _AudioChoiceKind.auto:
+            player.setAudioTrackIndex(null);
+          case _AudioChoiceKind.track:
+            player.setAudioTrackIndex(choice.index);
+          case _AudioChoiceKind.off:
+            player.disableAudio();
+        }
+        if (mounted) setState(() {});
+      },
     );
   }
 

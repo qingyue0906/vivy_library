@@ -7,6 +7,8 @@ import '../services/translations.dart';
 class PlayerSettingsPage extends StatelessWidget {
   final bool showMilliseconds;
   final ValueChanged<bool> onMillisecondsChanged;
+  final bool useExternalAudio;
+  final ValueChanged<bool> onExternalAudioChanged;
   final VoidCallback onBack;
   final Widget? trailing;
 
@@ -14,9 +16,13 @@ class PlayerSettingsPage extends StatelessWidget {
     super.key,
     required this.showMilliseconds,
     required this.onMillisecondsChanged,
+    this.useExternalAudio = true,
+    this.onExternalAudioChanged = _noop,
     required this.onBack,
     this.trailing,
   });
+
+  static void _noop(bool _) {}
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +80,14 @@ class PlayerSettingsPage extends StatelessWidget {
                   desc: Strings.t('showMillisecondsDesc'),
                   value: showMilliseconds,
                   onChanged: onMillisecondsChanged,
+                ),
+                const SizedBox(height: 16),
+                _buildSwitchRow(
+                  cs,
+                  title: Strings.t('useExternalAudio'),
+                  desc: Strings.t('useExternalAudioDesc'),
+                  value: useExternalAudio,
+                  onChanged: onExternalAudioChanged,
                 ),
               ],
             ),
