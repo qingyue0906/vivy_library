@@ -798,7 +798,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   }
 }
 
-class _CaptionButton extends StatelessWidget {
+class _CaptionButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool isClose;
@@ -812,17 +812,30 @@ class _CaptionButton extends StatelessWidget {
   });
 
   @override
+  State<_CaptionButton> createState() => _CaptionButtonState();
+}
+
+class _CaptionButtonState extends State<_CaptionButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 46 * compactLevel,
-      height: 32 * compactLevel,
+    final hoverBg = widget.isClose ? Colors.red.shade600 : cs.onSurface.withValues(alpha: 0.1);
+    final iconColor = widget.isClose && _hovered
+        ? Colors.white
+        : (widget.isClose ? Colors.red.shade300 : cs.onSurfaceVariant);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Container(
-          color: Colors.transparent,
+          width: 46 * widget.compactLevel,
+          height: 32 * widget.compactLevel,
+          color: _hovered ? hoverBg : Colors.transparent,
           child: Center(
-            child: Icon(icon, size: 12 * compactLevel, color: isClose ? Colors.red.shade300 : cs.onSurfaceVariant),
+            child: Icon(widget.icon, size: 12 * widget.compactLevel, color: iconColor),
           ),
         ),
       ),
