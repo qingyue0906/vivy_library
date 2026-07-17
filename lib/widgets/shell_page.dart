@@ -289,9 +289,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     final c = CompactLevel.of(context);
     final bg = widget.backgroundSettings;
     final hasBg = bg.path != null;
-    final leftOpacity = hasBg ? bg.leftOpacity : 1.0;
-    final middleOpacity = hasBg ? bg.middleOpacity : 1.0;
-    final rightOpacity = hasBg ? bg.rightOpacity : 1.0;
+    final opacity = hasBg ? bg.middleOpacity : 1.0;
     const captionMinWidth = 3 * 46; // 最小化/最大化/关闭三个按钮的固定宽度之和
     return ListenableBuilder(
       listenable: Listenable.merge([_leftPanelWidth, _rightPanelWidth]),
@@ -301,45 +299,42 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         final right = max(_rightPanelWidth.value + _dragHandleWidth, captionMinWidth * c);
         return SizedBox(
           height: 32 * c,
-          child: Row(
+          child: Stack(
             children: [
-              Container(
-                width: left,
-                color: cs.surfaceContainerHigh.withValues(alpha: leftOpacity),
+              // 底层：整条统一背景 + 可拖拽窗口（无分段接缝；上层控件会拦截点击，空白处穿透到此层触发拖窗）
+              Positioned.fill(
                 child: DragToMoveArea(
                   child: Container(
-                    width: double.infinity,
-                    height: 32 * c,
-                    alignment: Alignment.centerLeft,
-                    padding: EdgeInsets.only(left: 12 * c, right: 12 * c),
-                    child: Row(
-                      children: [
-                        Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
-                        SizedBox(width: 6 * c),
-                        Text(
-                          'Vivy Library',
-                          style: TextStyle(
-                            fontSize: 12 * c,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
+                    color: cs.surfaceContainerHigh.withValues(alpha: opacity),
                   ),
                 ),
               ),
-              Expanded(
-                child: Stack(
+              // 上层：三段布局，全透明，仅交互控件拦截点击
+              Positioned.fill(
+                child: Row(
                   children: [
-                    // 底层：仅在空白处可拖拽窗口（按钮/搜索框在其上层拦截点击）
-                    DragToMoveArea(
-                      child: Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        color: cs.surfaceContainerHigh.withValues(alpha: middleOpacity),
+                    // 左段：标题
+                    SizedBox(
+                      width: left,
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 12 * c, right: 12 * c),
+                        child: Row(
+                          children: [
+                            Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
+                            SizedBox(width: 6 * c),
+                            Text(
+                              'Vivy Library',
+                              style: TextStyle(
+                                fontSize: 12 * c,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    Positioned.fill(
+                    // 中段：TopBar（设置/搜索靠左，排序/顺序/刷新/网格靠右）
+                    Expanded(
                       child: TopBar(
                         state: _state,
                         searchController: _searchController,
@@ -347,37 +342,36 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                         onGridDisplayTap: _openGridDisplaySettings,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Container(
-                width: right,
-                color: cs.surfaceContainerHigh.withValues(alpha: rightOpacity),
-                height: 32 * c,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _CaptionButton(
-                      icon: Icons.horizontal_rule,
-                      onTap: () => windowManager.minimize(),
-                      compactLevel: c,
-                    ),
-                    _CaptionButton(
-                      icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
-                      onTap: () {
-                        if (_isMaximized) {
-                          windowManager.unmaximize();
-                        } else {
-                          windowManager.maximize();
-                        }
-                      },
-                      compactLevel: c,
-                    ),
-                    _CaptionButton(
-                      icon: Icons.close,
-                      onTap: () => quitApp(),
-                      isClose: true,
-                      compactLevel: c,
+                    // 右段：窗口控制按钮
+                    SizedBox(
+                      width: right,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _CaptionButton(
+                            icon: Icons.horizontal_rule,
+                            onTap: () => windowManager.minimize(),
+                            compactLevel: c,
+                          ),
+                          _CaptionButton(
+                            icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+                            onTap: () {
+                              if (_isMaximized) {
+                                windowManager.unmaximize();
+                              } else {
+                                windowManager.maximize();
+                              }
+                            },
+                            compactLevel: c,
+                          ),
+                          _CaptionButton(
+                            icon: Icons.close,
+                            onTap: () => quitApp(),
+                            isClose: true,
+                            compactLevel: c,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
