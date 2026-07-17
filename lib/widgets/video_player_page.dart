@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:fvp/fvp.dart' as fvp;
@@ -52,6 +53,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   double _playlistWidth = SettingsService.loadPlayerPlaylistWidthSync();
   Timer? _hideTimer;
 
+  /// 滚动空闲定时器：滚动时暂停后台元数据扫描，停止滚动 400ms 后恢复，
+  /// 避免探测抢占平台线程导致滚动/播放掉帧。
+  Timer? _scrollIdleTimer;
+
   double _volume = 100;
   bool _muted = false;
   double _rate = 1.0;
@@ -60,8 +65,15 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   /// 已展开的文件夹路径集合（用于树形播放列表的收起/展开）。
   final Set<String> _expanded = {};
   final Random _random = Random();
-  bool _probing = false;
-  int _probeGen = 0;
+
+  /// 路径 → 全局播放序号。供播放列表叶子 O(1) 定位，避免原 `entries.indexOf` 的 O(n) 查找
+  /// （整棵树每次重建都会对每个叶子做一次，列表大时是 O(n²) 的重建开销）。
+  final Map<String, int> _entryIndex = {};
+
+  /// 播放列表「扁平化」缓存：仅含当前展开状态下可见的文件夹头/文件叶，供 ListView.builder
+  /// 虚拟化渲染。随展开状态或列表内容变化置脏重建，平时直接复用，避免反复遍历整棵大树。
+  List<_FlatItem>? _flatList;
+  bool _flatDirty = true;
 
   /// 最近一次真正打开视频的时间戳。用于过滤播放器在打开瞬间误发的
   /// [completed] 事件：若 completed 在打开后极短时间内触发且播放位置仍接近 0，
@@ -103,6 +115,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (widget.playlist.entries.isNotEmpty) {
       _ensureExpanded(widget.playlist.entries[_currentIndex]);
     }
+    _rebuildIndex();
+    _flatDirty = true;
     _initPlayer();
     _initPlayback();
     if (widget.initialPlaylistWidth != null) {
@@ -155,7 +169,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         if (_mediaStarted || !mounted) return;
         _mediaStarted = true;
         _openCurrent();
-        _startMetadataProbe();
+        // 启动静默慢扫：后台单并发、限速、可见优先地探测列表全部视频；
+        // 滚动时由 ScrollNotification 暂停，避免抢占平台线程导致卡顿。
+        VideoMetadataService.scanAll(widget.playlist.entries);
       }
 
       if (anim == null || anim.status == AnimationStatus.completed) {
@@ -180,6 +196,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
+    // 登记当前播放项：其元数据由播放器内核直接回填，后台扫描排除它，避免重复建播放器。
+    VideoMetadataService.setActivePath(entry.path);
     // 不 await：元数据/轨道通过流在初始化完成后回填。
     player.open(entry.path, play: true);
   }
@@ -212,55 +230,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       meta = meta.copyWith(duration: dur);
     }
     if (entry.meta != meta) {
-      entry.meta = meta;
-      if (mounted) setState(() {});
+      entry.setMeta(meta);
+      // 登记到探测缓存：当前播放项的元数据已由播放器内核回填，后台扫描无需重复探测。
+      VideoMetadataService.putCache(entry.path, meta);
     }
   }
 
-  /// 后台渐进探测所有视频元数据（基于 fvp 的 getMediaInfo，不依赖系统 ffprobe）。
-  /// 仅用临时 VideoPlayerController 打开每个文件、读取 MediaInfo（编码/分辨率/帧率/时长），
-  /// 读不到的视频保持 N/A 而非崩溃。当前播放项优先探测。
-  void _startMetadataProbe() {
-    if (widget.playlist.entries.isEmpty) return;
-    _probing = true;
-    if (mounted) setState(() {});
-    final gen = ++_probeGen;
-    () async {
-      // 优先探测当前播放项（用户最关心的），其余随后。
-      final ordered = [...widget.playlist.entries]
-        ..sort((a, b) => _isCurrent(a) == _isCurrent(b)
-            ? 0
-            : _isCurrent(a)
-                ? -1
-                : 1);
-      for (final e in ordered) {
-        if (!mounted || gen != _probeGen) return;
-        final meta = await VideoMetadataService.probe(e.path);
-        if (meta != null &&
-            mounted &&
-            gen == _probeGen &&
-            (meta.codec != null && meta.codec!.isNotEmpty ||
-                meta.width != null && meta.width! > 0 ||
-                (meta.duration != null && meta.duration! > Duration.zero))) {
-          e.meta = VideoMeta(
-            codec: meta.codec ?? e.meta?.codec,
-            width: meta.width ?? e.meta?.width,
-            height: meta.height ?? e.meta?.height,
-            fps: meta.fps ?? e.meta?.fps,
-            duration: meta.duration ?? e.meta?.duration,
-          );
-          setState(() {});
-        }
-      }
-      _probing = false;
-      if (mounted) setState(() {});
-    }();
+  /// 重建 路径→全局播放序号 索引，供播放列表叶子 O(1) 定位当前项，
+  /// 替代原先每个叶子用 `entries.indexOf` 的 O(n) 查找（整树重建时是 O(n²)）。
+  void _rebuildIndex() {
+    _entryIndex.clear();
+    for (var i = 0; i < widget.playlist.entries.length; i++) {
+      _entryIndex[widget.playlist.entries[i].path] = i;
+    }
   }
-
-  bool _isCurrent(VideoEntry e) =>
-      _currentIndex >= 0 &&
-      _currentIndex < widget.playlist.entries.length &&
-      widget.playlist.entries[_currentIndex] == e;
 
   void _onCompleted() {
     // 过滤打开瞬间的误触发：播放器有时在 open 后会立刻发一次 completed，
@@ -508,15 +491,30 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
   }
 
+  /// 播放列表滚动回调：开始/更新滚动时暂停后台元数据扫描，停止滚动 400ms 后恢复。
+  /// 滚动期间零探测，平台线程只服务 UI 与正在播放的视频，滚动/播放都不掉帧。
+  void _onPlaylistScroll(ScrollNotification n) {
+    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+      VideoMetadataService.setPaused(true);
+      _scrollIdleTimer?.cancel();
+      _scrollIdleTimer = Timer(const Duration(milliseconds: 400), () {
+        VideoMetadataService.setPaused(false);
+      });
+    }
+  }
+
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _scrollIdleTimer?.cancel();
     windowManager.removeListener(this);
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
     }
     _playlistScrollController.dispose();
     player.dispose();
+    // 停止后台元数据扫描循环并清场，避免 timer/临时探测 controller 泄漏。
+    VideoMetadataService.dispose();
     super.dispose();
   }
 
@@ -1106,15 +1104,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   style: TextStyle(fontSize: 13, color: cs.onSurface),
                 ),
                 const Spacer(),
-                if (_probing)
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.primary,
-                    ),
-                  ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: VideoMetadataService.busy,
+                  builder: (context, probing, _) => probing
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.primary,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '${widget.playlist.entries.length}',
@@ -1131,18 +1133,46 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                     ),
                   )
-                : Scrollbar(
-                    controller: _playlistScrollController,
-                    thumbVisibility: true,
-                    child: SmoothScroll(
+                : NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      _onPlaylistScroll(n);
+                      return false;
+                    },
+                    child: Scrollbar(
                       controller: _playlistScrollController,
-                      builder: (context, controller, physics) => ListView(
-                        controller: controller,
-                        physics: physics,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        children: widget.playlist.tree
-                            .map((r) => _treeNode(r, cs, 0))
-                            .toList(),
+                      thumbVisibility: true,
+                      child: SmoothScroll(
+                        controller: _playlistScrollController,
+                        builder: (context, controller, physics) =>
+                            ListView.builder(
+                          controller: controller,
+                          physics: physics,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: _visibleItems().length,
+                          itemBuilder: (context, index) {
+                            final item = _visibleItems()[index];
+                            if (item.isFolder) {
+                              return _buildFolderItem(
+                                item.folder!,
+                                cs,
+                                item.depth,
+                                item.hasKids,
+                                item.expanded,
+                              );
+                            }
+                            final f = item.file!;
+                            final gi = _entryIndex[f.path] ?? -1;
+                            final isCurrent = gi == _currentIndex && f.isVideo;
+                            return _FileLeaf(
+                              key: ValueKey(f.path),
+                              entry: f,
+                              cs: cs,
+                              depth: item.depth,
+                              isCurrent: isCurrent,
+                              onTap: f.isVideo ? () => _playIndex(gi) : null,
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -1152,74 +1182,236 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     );
   }
 
-  /// 递归渲染文件夹树节点（含展开/收起）。
-  Widget _treeNode(VideoFolderNode node, ColorScheme cs, int depth) {
-    final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
-    final expanded = _expanded.contains(node.path);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: hasKids
-              ? () => setState(() {
-                    if (expanded) {
-                      _expanded.remove(node.path);
-                    } else {
-                      _expanded.add(node.path);
-                    }
-                  })
-              : null,
-          child: Container(
-            padding: EdgeInsets.only(
-              left: 8.0 + depth * 14,
-              right: 8,
-              top: 4,
-              bottom: 4,
-            ),
-            child: Row(
-              children: [
-                if (hasKids)
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: cs.onSurfaceVariant,
-                  )
-                else
-                  const SizedBox(width: 16),
-                const SizedBox(width: 4),
-                Icon(
-                  expanded ? Icons.folder_open : Icons.folder,
-                  size: 16,
-                  color: expanded ? cs.primary : Colors.amber.shade400,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    node.name,
-                    style: TextStyle(fontSize: 12, color: cs.onSurface),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+  /// 渲染展开的文件夹树中的单个「文件夹头」（含展开/收起）。
+  /// 折叠/展开时只需置脏扁平列表（_flatDirty）并重建可见项，不会重建整棵大树。
+  Widget _buildFolderItem(
+    VideoFolderNode node,
+    ColorScheme cs,
+    int depth,
+    bool hasKids,
+    bool expanded,
+  ) {
+    return InkWell(
+      key: ValueKey('folder:${node.path}'),
+      onTap: hasKids
+          ? () => setState(() {
+                if (expanded) {
+                  _expanded.remove(node.path);
+                } else {
+                  _expanded.add(node.path);
+                }
+                _flatDirty = true;
+              })
+          : null,
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 8.0 + depth * 14,
+          right: 8,
+          top: 4,
+          bottom: 4,
         ),
-        if (hasKids && expanded)
-          ...[
-            for (final c in node.children) _treeNode(c, cs, depth + 1),
-            for (final f in node.files) _fileLeaf(f, cs, depth + 1),
+        child: Row(
+          children: [
+            if (hasKids)
+              Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: 16,
+                color: cs.onSurfaceVariant,
+              )
+            else
+              const SizedBox(width: 16),
+            const SizedBox(width: 4),
+            Icon(
+              expanded ? Icons.folder_open : Icons.folder,
+              size: 16,
+              color: expanded ? cs.primary : Colors.amber.shade400,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                node.name,
+                style: TextStyle(fontSize: 12, color: cs.onSurface),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
-      ],
+        ),
+      ),
     );
   }
 
-  /// 树中的文件叶（视频可点击播放；非视频灰显）。
-  Widget _fileLeaf(VideoEntry f, ColorScheme cs, int depth) {
-    final globalIndex = widget.playlist.entries.indexOf(f);
-    final isCurrent = globalIndex == _currentIndex && f.isVideo;
+  /// 把「当前展开状态」下的文件夹树扁平化成一条有序列表，供 ListView.builder 虚拟化渲染。
+  /// 只放入可见的文件夹头与文件叶；折叠的文件夹及其子项不进入列表。
+  List<_FlatItem> _buildFlatList() {
+    final list = <_FlatItem>[];
+    void walk(VideoFolderNode node, int depth) {
+      final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
+      final expanded = _expanded.contains(node.path);
+      list.add(_FlatItem.folder(node, depth, expanded, hasKids));
+      if (hasKids && expanded) {
+        for (final c in node.children) {
+          walk(c, depth + 1);
+        }
+        for (final f in node.files) {
+          list.add(_FlatItem.file(f, depth + 1));
+        }
+      }
+    }
+
+    for (final r in widget.playlist.tree) {
+      walk(r, 0);
+    }
+    return list;
+  }
+
+  /// 返回当前可见项列表（带扁平化缓存，仅在展开状态/列表变化后置脏时重建）。
+  List<_FlatItem> _visibleItems() {
+    if (_flatDirty || _flatList == null) {
+      _flatList = _buildFlatList();
+      _flatDirty = false;
+    }
+    return _flatList!;
+  }
+
+  Future<void> _openLocalFile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.video);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    int size = 0;
+    try {
+      size = File(path).lengthSync();
+    } catch (_) {}
+    final name = path.split(RegExp(r'[/\\]')).last;
+    final entry = VideoEntry(
+      path: path,
+      name: name,
+      dirPath: File(path).parent.path,
+      sizeInBytes: size,
+      isVideo: true,
+    );
+    widget.playlist.entries.add(entry);
+    if (widget.playlist.tree.isNotEmpty) {
+      widget.playlist.tree.first.files.add(entry);
+    }
+    _rebuildIndex();
+    _flatDirty = true;
+    setState(() {});
+    _playIndex(widget.playlist.entries.length - 1);
+    // 新增条目后重新规划后台扫描，把新文件纳入静默慢扫。
+    VideoMetadataService.scanAll(widget.playlist.entries);
+  }
+
+  Future<void> _openLocalFolder() async {
+    final dir = await FilePicker.platform.getDirectoryPath();
+    if (dir == null) return;
+    final newPlaylist = await VideoPlaylistService.buildFromPath(dir);
+    if (newPlaylist.entries.isEmpty) return;
+    widget.playlist.entries
+      ..clear()
+      ..addAll(newPlaylist.entries);
+    widget.playlist.tree
+      ..clear()
+      ..addAll(newPlaylist.tree);
+    _expanded
+      ..clear()
+      ..addAll(newPlaylist.tree.map((r) => r.path));
+    _currentIndex = 0;
+    _openCurrent();
+    _rebuildIndex();
+    _flatDirty = true;
+    setState(() {});
+    // 打开新文件夹后重新规划后台扫描，把新列表纳入静默慢扫。
+    VideoMetadataService.scanAll(widget.playlist.entries);
+  }
+}
+
+/// 播放列表「扁平化」后的可见项：文件夹头或文件叶，供 ListView.builder 使用。
+class _FlatItem {
+  final bool isFolder;
+  final VideoFolderNode? folder;
+  final VideoEntry? file;
+  final int depth;
+  final bool expanded;
+  final bool hasKids;
+
+  _FlatItem.folder(this.folder, this.depth, this.expanded, this.hasKids)
+      : isFolder = true,
+        file = null;
+
+  _FlatItem.file(this.file, this.depth)
+      : isFolder = false,
+        folder = null,
+        expanded = false,
+        hasKids = false;
+}
+
+/// 播放列表中的单个文件叶（视频可点击播放；非视频灰显）。
+/// 自带状态：挂载时只向 [VideoMetadataService] 登记可见性（不发起探测），
+/// 元数据由页面级后台扫描按「可见优先」慢慢探测完成后，通过
+/// [VideoEntry.setMeta] → [VideoEntry.metaNotifier] 通知本叶自更新，**不会触发父级整树重建**。
+/// 探测与挂载彻底解耦：滚动时不会产生新探测请求，滚动纯 UI、不卡；
+/// 离屏叶子卸载时注销可见性，扫描仍可在后台慢慢补齐其元数据并缓存。
+class _FileLeaf extends StatefulWidget {
+  final VideoEntry entry;
+  final ColorScheme cs;
+  final int depth;
+  final bool isCurrent;
+  final VoidCallback? onTap;
+
+  const _FileLeaf({
+    required Key key,
+    required this.entry,
+    required this.cs,
+    required this.depth,
+    required this.isCurrent,
+    this.onTap,
+  }) : super(key: key);
+
+  @override
+  State<_FileLeaf> createState() => _FileLeafState();
+}
+
+class _FileLeafState extends State<_FileLeaf> {
+  @override
+  void initState() {
+    super.initState();
+    widget.entry.metaNotifier.addListener(_onMeta);
+    // 挂载即登记可见性（不发起探测）：真正的探测由页面级后台扫描按“可见优先”慢扫。
+    // 探测与挂载解耦后，滚动时不再产生新探测请求，滚动纯 UI、不卡。
+    VideoMetadataService.markVisible(widget.entry.path, true);
+  }
+
+  void _onMeta() {
+    if (!mounted) return;
+    // 若在 build 阶段被通知（如父级重建时某个探测结果返回并触发 metaNotifier），
+    // 延后一帧再 setState，避免 “setState() or markNeedsBuild() called during build”。
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.entry.metaNotifier.removeListener(_onMeta);
+    // 卸载即注销可见性。
+    VideoMetadataService.markVisible(widget.entry.path, false);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.entry;
+    final cs = widget.cs;
+    final isCurrent = widget.isCurrent;
     final playable = f.isVideo;
     return InkWell(
-      onTap: playable ? () => _playIndex(globalIndex) : null,
+      onTap: widget.onTap,
       child: Container(
         decoration: isCurrent
             ? BoxDecoration(
@@ -1230,7 +1422,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               )
             : null,
         padding: EdgeInsets.only(
-          left: 8.0 + depth * 14 + 14,
+          left: 8.0 + widget.depth * 14 + 14,
           right: 8,
           top: 6,
           bottom: 6,
@@ -1264,15 +1456,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                     const SizedBox(height: 3),
                     Text(
                       _metaLine(f),
-                      style: TextStyle(
-                          fontSize: 10, color: cs.onSurfaceVariant),
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 1),
                     Text(
                       '${f.meta?.durationText ?? '--'} · ${f.sizeText}',
-                      style:
-                          TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ] else
@@ -1293,62 +1483,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       ),
     );
   }
+}
 
-  /// 播放列表中的元信息行：编码格式 · 分辨率 · 帧率，用“·”分隔。
-  String _metaLine(VideoEntry f) {
-    final codec = f.meta?.codecText;
-    final codecLabel = (codec != null && codec != '--') ? codec : 'N/A';
-    return [
-      codecLabel,
-      f.meta?.resolutionText ?? '--',
-      f.meta?.fpsText ?? '--',
-    ].join(' · ');
-  }
-
-  Future<void> _openLocalFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
-    final path = result?.files.single.path;
-    if (path == null) return;
-    int size = 0;
-    try {
-      size = File(path).lengthSync();
-    } catch (_) {}
-    final name = path.split(RegExp(r'[/\\]')).last;
-    final entry = VideoEntry(
-      path: path,
-      name: name,
-      dirPath: File(path).parent.path,
-      sizeInBytes: size,
-      isVideo: true,
-    );
-    widget.playlist.entries.add(entry);
-    if (widget.playlist.tree.isNotEmpty) {
-      widget.playlist.tree.first.files.add(entry);
-    }
-    setState(() {});
-    _playIndex(widget.playlist.entries.length - 1);
-    _startMetadataProbe();
-  }
-
-  Future<void> _openLocalFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath();
-    if (dir == null) return;
-    final newPlaylist = await VideoPlaylistService.buildFromPath(dir);
-    if (newPlaylist.entries.isEmpty) return;
-    widget.playlist.entries
-      ..clear()
-      ..addAll(newPlaylist.entries);
-    widget.playlist.tree
-      ..clear()
-      ..addAll(newPlaylist.tree);
-    _expanded
-      ..clear()
-      ..addAll(newPlaylist.tree.map((r) => r.path));
-    _currentIndex = 0;
-    _openCurrent();
-    setState(() {});
-    _startMetadataProbe();
-  }
+/// 播放列表中的元信息行：编码格式 · 分辨率 · 帧率，用“·”分隔。
+String _metaLine(VideoEntry f) {
+  final codec = f.meta?.codecText;
+  final codecLabel = (codec != null && codec != '--') ? codec : 'N/A';
+  return [
+    codecLabel,
+    f.meta?.resolutionText ?? '--',
+    f.meta?.fpsText ?? '--',
+  ].join(' · ');
 }
 
 /// 播放区与播放列表之间的可拖拽分隔条。常驻显示一条细线，左/右拖动通过 [onDrag]

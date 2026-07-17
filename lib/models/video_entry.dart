@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// 单条视频/文件的元数据（编码/分辨率/帧率/时长），由 [VideoMetadataService] 填充。
 class VideoMeta {
   final String? codec;
@@ -94,6 +96,10 @@ class VideoEntry {
   final bool isVideo; // 是否受支持的视频（决定是否可点击播放）
   VideoMeta? meta; // 渐进填充，初始为空
 
+  /// 当 [meta] 变化时通知监听者（播放列表中的叶子小部件借此自更新，
+  /// 无需父级整树重建），是“探测完成只刷新单个条目”的关键。
+  final ValueNotifier<VideoMeta?> metaNotifier;
+
   VideoEntry({
     required this.path,
     required this.name,
@@ -101,7 +107,13 @@ class VideoEntry {
     required this.sizeInBytes,
     this.isVideo = true,
     this.meta,
-  });
+  }) : metaNotifier = ValueNotifier(meta);
+
+  /// 写入元数据并通知监听者。替代直接 `meta = ...`，让挂载中的叶子小部件自行刷新。
+  void setMeta(VideoMeta? m) {
+    meta = m;
+    metaNotifier.value = m;
+  }
 
   String get sizeText {
     final b = sizeInBytes;
