@@ -38,7 +38,7 @@ class TopBar extends StatelessWidget {
         _buildGridDisplayButton(c),
         SizedBox(width: 2 * c),
         IconButton(
-          icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
+          icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurfaceVariant),
           tooltip: Strings.t('settingsTooltip'),
           onPressed: onSettingsTap,
           padding: EdgeInsets.zero,
