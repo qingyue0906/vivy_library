@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
@@ -60,9 +61,23 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   final Set<String> _expanded = {};
   final Random _random = Random();
 
+  /// 路径 → 全局播放序号。供播放列表叶子 O(1) 定位，避免原 `entries.indexOf` 的 O(n) 查找
+  /// （整棵树每次重建都会对每个叶子做一次，列表大时是 O(n²) 的重建开销）。
+  final Map<String, int> _entryIndex = {};
+
+  /// 播放列表「扁平化」缓存：仅含当前展开状态下可见的文件夹头/文件叶，供 ListView.builder
+  /// 虚拟化渲染。随展开状态或列表内容变化置脏重建，平时直接复用，避免反复遍历整棵大树。
+  List<_FlatItem>? _flatList;
+  bool _flatDirty = true;
+
   /// 已展开的文件夹路径集合（用于树形播放列表的收起/展开）。
   final ScrollController _playlistScrollController = ScrollController();
   final ScrollController _lyricScrollController = ScrollController();
+
+  /// 扫描暂停：滚动/拖动窗口/缩放窗口时为 true，交互停止 400ms 后回落 false，
+  /// 期间后台探测循环挂起，让出平台线程避免掉帧。
+  bool _scanPaused = false;
+  Timer? _scanPauseTimer;
 
   // 标签/时长渐进探测
   bool _probing = false;
@@ -95,6 +110,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
       _ensureExpanded(widget.playlist.entries[_currentIndex]);
     }
     _applySort();
+    _flatDirty = true;
     _initPlayer();
     _initPlayback();
     if (widget.initialPlaylistWidth != null) {
@@ -210,14 +226,17 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     if (entry == null) return;
     final dur = player.state.duration;
     if (dur > Duration.zero) {
-      entry.meta = (entry.meta ?? const AudioMeta())
-          .copyWith(duration: dur);
+      entry.setMeta((entry.meta ?? const AudioMeta())
+          .copyWith(duration: dur));
       if (mounted) setState(() {});
     }
   }
 
   /// 后台渐进加载标签（标题/艺人/封面/歌词）与时长。
   /// 标签来自纯 Dart 的 [AudioTagService]；时长来自 fvp 的 getMediaInfo() 离屏探测。
+  /// 探测与挂载解耦：每个条目完成后经 [AudioEntry.setMeta] → [AudioEntry.metaNotifier]
+  /// 通知对应叶子自更新，**不触发父级整树重建**（虚拟化后只刷新单个可见条目）；
+  /// 滚动/拖动窗口/缩放窗口期间由交互暂停机制挂起本循环，避免抢占平台线程掉帧。
   void _startMetaProbe() {
     if (widget.playlist.entries.isEmpty) return;
     _probing = true;
@@ -232,27 +251,57 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                 : 1);
       for (final e in ordered) {
         if (!mounted || gen != _probeGen) return;
+        // 交互（拖动窗口/缩放/滚动）期间暂停探测，让出平台线程避免掉帧。
+        await _waitWhilePaused();
+        if (!mounted || gen != _probeGen) return;
         final tag = await AudioTagService.read(e.path);
         Duration? dur;
         try {
           dur = (await FvpPlayer.probeVideoMeta(e.path))?.duration;
         } catch (_) {}
         if (!mounted || gen != _probeGen) return;
-        e.meta = (e.meta ?? const AudioMeta()).copyWith(
+        e.setMeta((e.meta ?? const AudioMeta()).copyWith(
           title: tag.title ?? e.meta?.title,
           artist: tag.artist ?? e.meta?.artist,
           album: tag.album ?? e.meta?.album,
           coverBytes: tag.coverBytes ?? e.meta?.coverBytes,
           lyrics: tag.lyrics ?? e.meta?.lyrics,
           duration: dur ?? tag.duration ?? e.meta?.duration,
-        );
+        ));
         // 当前曲目：歌词可能刚刚加载，重新解析。
         if (_isCurrent(e)) _onEntryChanged();
-        setState(() {});
+        // 条目间让出平台线程（FvpPlayer.probeVideoMeta 占平台线程），
+        // 避免持续抢占导致拖动/滚动掉帧。
+        await Future.delayed(const Duration(milliseconds: 120));
       }
       _probing = false;
       if (mounted) setState(() {});
     }();
+  }
+
+  /// 暂停后台元数据扫描，并在停止一切交互（滚动/拖动窗口/缩放窗口）400ms 后自动恢复。
+  /// 交互期间零探测，平台线程只服务 UI 与正在播放的音频，避免窗口拖动/缩放/滚动掉帧。
+  void _pauseScanThenResumeLater() {
+    if (!mounted) return;
+    _scanPaused = true;
+    _scanPauseTimer?.cancel();
+    _scanPauseTimer = Timer(const Duration(milliseconds: 400), () {
+      _scanPaused = false;
+    });
+  }
+
+  /// 播放列表滚动回调：开始/更新滚动时暂停后台元数据扫描，停止滚动 400ms 后恢复。
+  void _onPlaylistScroll(ScrollNotification n) {
+    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
+      _pauseScanThenResumeLater();
+    }
+  }
+
+  /// 交互暂停期间（_scanPaused 为 true）阻塞探测循环，每 ~32ms 轮询直到恢复且本页仍存活。
+  Future<void> _waitWhilePaused() async {
+    while (_scanPaused && mounted) {
+      await Future.delayed(const Duration(milliseconds: 32));
+    }
   }
 
   bool _isCurrent(AudioEntry e) =>
@@ -468,11 +517,29 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     for (final r in widget.playlist.tree) {
       walk(r);
     }
+    // 展开集可能新增了文件夹（如定位到当前曲目所在目录链），可见项集合随之变化，
+    // 必须置脏扁平列表缓存，否则 ListView 沿用旧可见项不刷新。
+    _flatDirty = true;
+  }
+
+  @override
+  void onWindowMove() {
+    // 拖动窗口时暂停后台探测，GPU/平台线程让给窗口合成，避免一卡一卡。
+    _pauseScanThenResumeLater();
+    super.onWindowMove();
+  }
+
+  @override
+  void onWindowResize() {
+    // 缩放窗口时暂停后台探测，GPU/平台线程让给窗口合成，避免一卡一卡。
+    _pauseScanThenResumeLater();
+    super.onWindowResize();
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _scanPauseTimer?.cancel();
     windowManager.removeListener(this);
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
@@ -1149,18 +1216,46 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                     ),
                   )
-                : Scrollbar(
-                    controller: _playlistScrollController,
-                    thumbVisibility: true,
-                    child: SmoothScroll(
+                : NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      _onPlaylistScroll(n);
+                      return false;
+                    },
+                    child: Scrollbar(
                       controller: _playlistScrollController,
-                      builder: (context, controller, physics) => ListView(
-                        controller: controller,
-                        physics: physics,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        children: widget.playlist.tree
-                            .map((r) => _treeNode(r, cs, 0))
-                            .toList(),
+                      thumbVisibility: true,
+                      child: SmoothScroll(
+                        controller: _playlistScrollController,
+                        builder: (context, controller, physics) =>
+                            ListView.builder(
+                          controller: controller,
+                          physics: physics,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: _visibleItems().length,
+                          itemBuilder: (context, index) {
+                            final item = _visibleItems()[index];
+                            if (item.isFolder) {
+                              return _buildFolderItem(
+                                item.folder!,
+                                cs,
+                                item.depth,
+                                item.hasKids,
+                                item.expanded,
+                              );
+                            }
+                            final f = item.file!;
+                            final gi = _entryIndex[f.path] ?? -1;
+                            final isCurrent = gi == _currentIndex && f.isAudio;
+                            return _FileLeaf(
+                              key: ValueKey(f.path),
+                              entry: f,
+                              cs: cs,
+                              depth: item.depth,
+                              isCurrent: isCurrent,
+                              onTap: f.isAudio ? () => _playIndex(gi) : null,
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -1173,6 +1268,15 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   /// 按当前排序偏好对「播放顺序 entries」与「文件夹树 tree」统一重排。
   /// 文件夹节点始终按名称排序（无 size/date），仅文件按所选字段/升降序排。
   /// 重排后定位回当前播放项，避免播放被打断。
+  /// 重建 路径→全局播放序号 索引，供播放列表叶子 O(1) 定位当前项，
+  /// 替代原先每个叶子用 `entries.indexOf` 的 O(n) 查找（整树重建时是 O(n²)）。
+  void _rebuildIndex() {
+    _entryIndex.clear();
+    for (var i = 0; i < widget.playlist.entries.length; i++) {
+      _entryIndex[widget.playlist.entries[i].path] = i;
+    }
+  }
+
   void _applySort() {
     final playingPath = (_currentIndex >= 0 &&
             _currentIndex < widget.playlist.entries.length)
@@ -1191,10 +1295,12 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     for (final root in widget.playlist.tree) {
       _sortTree(root);
     }
+    _rebuildIndex();
     if (playingPath != null) {
-      _currentIndex =
-          widget.playlist.entries.indexWhere((e) => e.path == playingPath);
+      _currentIndex = _entryIndex[playingPath] ?? _currentIndex;
     }
+    // 扁平化列表缓存依赖顺序，重排后必须置脏，否则 ListView 沿用旧顺序不刷新。
+    _flatDirty = true;
   }
 
   void _sortTree(AudioFolderNode node) {
@@ -1276,74 +1382,233 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     );
   }
 
-  Widget _treeNode(AudioFolderNode node, ColorScheme cs, int depth) {
-    final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
-    final expanded = _expanded.contains(node.path);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: hasKids
-              ? () => setState(() {
-                    if (expanded) {
-                      _expanded.remove(node.path);
-                    } else {
-                      _expanded.add(node.path);
-                    }
-                  })
-              : null,
-          child: Container(
-            padding: EdgeInsets.only(
-              left: 8.0 + depth * 14,
-              right: 8,
-              top: 4,
-              bottom: 4,
-            ),
-            child: Row(
-              children: [
-                if (hasKids)
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: cs.onSurfaceVariant,
-                  )
-                else
-                  const SizedBox(width: 16),
-                const SizedBox(width: 4),
-                Icon(
-                  expanded ? Icons.folder_open : Icons.folder,
-                  size: 16,
-                  color:
-                      expanded ? cs.primary : Colors.amber.shade400,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    node.name,
-                    style: TextStyle(fontSize: 12, color: cs.onSurface),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+  /// 渲染展开的文件夹树中的单个「文件夹头」（含展开/收起）。
+  /// 折叠/展开时只需置脏扁平列表（_flatDirty）并重建可见项，不会重建整棵大树。
+  Widget _buildFolderItem(
+    AudioFolderNode node,
+    ColorScheme cs,
+    int depth,
+    bool hasKids,
+    bool expanded,
+  ) {
+    return InkWell(
+      key: ValueKey('folder:${node.path}'),
+      onTap: hasKids
+          ? () => setState(() {
+                if (expanded) {
+                  _expanded.remove(node.path);
+                } else {
+                  _expanded.add(node.path);
+                }
+                _flatDirty = true;
+              })
+          : null,
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 8.0 + depth * 14,
+          right: 8,
+          top: 4,
+          bottom: 4,
         ),
-        if (hasKids && expanded)
-          ...[
-            for (final c in node.children) _treeNode(c, cs, depth + 1),
-            for (final f in node.files) _fileLeaf(f, cs, depth + 1),
+        child: Row(
+          children: [
+            if (hasKids)
+              Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: 16,
+                color: cs.onSurfaceVariant,
+              )
+            else
+              const SizedBox(width: 16),
+            const SizedBox(width: 4),
+            Icon(
+              expanded ? Icons.folder_open : Icons.folder,
+              size: 16,
+              color: expanded ? cs.primary : Colors.amber.shade400,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                node.name,
+                style: TextStyle(fontSize: 12, color: cs.onSurface),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
-      ],
+        ),
+      ),
     );
   }
 
-  Widget _fileLeaf(AudioEntry f, ColorScheme cs, int depth) {
-    final globalIndex = widget.playlist.entries.indexOf(f);
-    final isCurrent = globalIndex == _currentIndex && f.isAudio;
+  /// 把「当前展开状态」下的文件夹树扁平化成一条有序列表，供 ListView.builder 虚拟化渲染。
+  /// 只放入可见的文件夹头与文件叶；折叠的文件夹及其子项不进入列表。
+  List<_FlatItem> _buildFlatList() {
+    final list = <_FlatItem>[];
+    void walk(AudioFolderNode node, int depth) {
+      final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
+      final expanded = _expanded.contains(node.path);
+      list.add(_FlatItem.folder(node, depth, expanded, hasKids));
+      if (hasKids && expanded) {
+        for (final c in node.children) {
+          walk(c, depth + 1);
+        }
+        for (final f in node.files) {
+          list.add(_FlatItem.file(f, depth + 1));
+        }
+      }
+    }
+
+    for (final r in widget.playlist.tree) {
+      walk(r, 0);
+    }
+    return list;
+  }
+
+  /// 返回当前可见项列表（带扁平化缓存，仅在展开状态/列表变化后置脏时重建）。
+  List<_FlatItem> _visibleItems() {
+    if (_flatDirty || _flatList == null) {
+      _flatList = _buildFlatList();
+      _flatDirty = false;
+    }
+    return _flatList!;
+  }
+
+  Future<void> _openLocalFile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    int size = 0;
+    DateTime modified = DateTime.fromMillisecondsSinceEpoch(0);
+    try {
+      size = File(path).lengthSync();
+    } catch (_) {}
+    try {
+      modified = File(path).lastModifiedSync();
+    } catch (_) {}
+    final name = path.split(RegExp(r'[/\\]')).last;
+    final entry = AudioEntry(
+      path: path,
+      name: name,
+      dirPath: File(path).parent.path,
+      sizeInBytes: size,
+      modifiedTime: modified,
+      isAudio: true,
+    );
+    widget.playlist.entries.add(entry);
+    if (widget.playlist.tree.isNotEmpty) {
+      widget.playlist.tree.first.files.add(entry);
+    }
+    _applySort();
+    _flatDirty = true;
+    setState(() {});
+    _playIndex(_entryIndex[path] ?? widget.playlist.entries.length - 1);
+    _startMetaProbe();
+  }
+
+  Future<void> _openLocalFolder() async {
+    final dir = await FilePicker.platform.getDirectoryPath();
+    if (dir == null) return;
+    final newPlaylist = await AudioPlaylistService.buildFromPath(dir);
+    if (newPlaylist.entries.isEmpty) return;
+    widget.playlist.entries
+      ..clear()
+      ..addAll(newPlaylist.entries);
+    widget.playlist.tree
+      ..clear()
+      ..addAll(newPlaylist.tree);
+    _expanded
+      ..clear()
+      ..addAll(newPlaylist.tree.map((r) => r.path));
+    _applySort();
+    _flatDirty = true;
+    _currentIndex = 0;
+    _openCurrent();
+    setState(() {});
+    _startMetaProbe();
+  }
+}
+
+/// 播放列表「扁平化」后的可见项：文件夹头或文件叶，供 ListView.builder 使用。
+class _FlatItem {
+  final bool isFolder;
+  final AudioFolderNode? folder;
+  final AudioEntry? file;
+  final int depth;
+  final bool expanded;
+  final bool hasKids;
+
+  _FlatItem.folder(this.folder, this.depth, this.expanded, this.hasKids)
+      : isFolder = true,
+        file = null;
+
+  _FlatItem.file(this.file, this.depth)
+      : isFolder = false,
+        folder = null,
+        expanded = false,
+        hasKids = false;
+}
+
+/// 播放列表中的单个文件叶（音频可点击播放；非音频灰显）。
+/// 自带状态：挂载时订阅条目 [AudioEntry.metaNotifier]，元数据由页面级后台扫描
+/// 慢慢探测完成后通过 [AudioEntry.setMeta] 通知本叶自更新，**不会触发父级整树重建**。
+/// 探测与挂载彻底解耦：滚动时不会产生新探测请求，滚动纯 UI、不卡。
+class _FileLeaf extends StatefulWidget {
+  final AudioEntry entry;
+  final ColorScheme cs;
+  final int depth;
+  final bool isCurrent;
+  final VoidCallback? onTap;
+
+  const _FileLeaf({
+    required Key key,
+    required this.entry,
+    required this.cs,
+    required this.depth,
+    required this.isCurrent,
+    this.onTap,
+  }) : super(key: key);
+
+  @override
+  State<_FileLeaf> createState() => _FileLeafState();
+}
+
+class _FileLeafState extends State<_FileLeaf> {
+  @override
+  void initState() {
+    super.initState();
+    widget.entry.metaNotifier.addListener(_onMeta);
+  }
+
+  void _onMeta() {
+    if (!mounted) return;
+    // 若在 build 阶段被通知（如父级重建时某个探测结果返回并触发 metaNotifier），
+    // 延后一帧再 setState，避免 “setState() or markNeedsBuild() called during build”。
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.entry.metaNotifier.removeListener(_onMeta);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.entry;
+    final cs = widget.cs;
+    final isCurrent = widget.isCurrent;
     final playable = f.isAudio;
     final cover = f.meta?.coverBytes;
     return InkWell(
-      onTap: playable ? () => _playIndex(globalIndex) : null,
+      onTap: widget.onTap,
       child: Container(
         decoration: isCurrent
             ? BoxDecoration(
@@ -1354,7 +1619,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
               )
             : null,
         padding: EdgeInsets.only(
-          left: 8.0 + depth * 14 + 14,
+          left: 8.0 + widget.depth * 14 + 14,
           right: 8,
           top: 6,
           bottom: 6,
@@ -1370,11 +1635,11 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                   width: 32,
                   height: 32,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _fileIcon(cs, playable, isCurrent),
+                  errorBuilder: (_, _, _) => _audioFileIcon(cs, playable, isCurrent),
                 ),
               )
             else
-              _fileIcon(cs, playable, isCurrent, size: 32),
+              _audioFileIcon(cs, playable, isCurrent, size: 32),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1414,68 +1679,17 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
       ),
     );
   }
+}
 
-  Widget _fileIcon(ColorScheme cs, bool playable, bool isCurrent, {double size = 32}) {
-    return Icon(
-      playable ? Icons.audio_file : Icons.insert_drive_file,
-      size: size * 0.7,
-      color: playable
-          ? (isCurrent ? cs.primary : cs.onSurfaceVariant)
-          : cs.onSurfaceVariant.withValues(alpha: 0.6),
-    );
-  }
-
-  Future<void> _openLocalFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    final path = result?.files.single.path;
-    if (path == null) return;
-    int size = 0;
-    DateTime modified = DateTime.fromMillisecondsSinceEpoch(0);
-    try {
-      size = File(path).lengthSync();
-    } catch (_) {}
-    try {
-      modified = File(path).lastModifiedSync();
-    } catch (_) {}
-    final name = path.split(RegExp(r'[/\\]')).last;
-    final entry = AudioEntry(
-      path: path,
-      name: name,
-      dirPath: File(path).parent.path,
-      sizeInBytes: size,
-      modifiedTime: modified,
-      isAudio: true,
-    );
-    widget.playlist.entries.add(entry);
-    if (widget.playlist.tree.isNotEmpty) {
-      widget.playlist.tree.first.files.add(entry);
-    }
-    _applySort();
-    setState(() {});
-    _playIndex(widget.playlist.entries.indexWhere((e) => e.path == path));
-    _startMetaProbe();
-  }
-
-  Future<void> _openLocalFolder() async {
-    final dir = await FilePicker.platform.getDirectoryPath();
-    if (dir == null) return;
-    final newPlaylist = await AudioPlaylistService.buildFromPath(dir);
-    if (newPlaylist.entries.isEmpty) return;
-    widget.playlist.entries
-      ..clear()
-      ..addAll(newPlaylist.entries);
-    widget.playlist.tree
-      ..clear()
-      ..addAll(newPlaylist.tree);
-    _expanded
-      ..clear()
-      ..addAll(newPlaylist.tree.map((r) => r.path));
-    _applySort();
-    _currentIndex = 0;
-    _openCurrent();
-    setState(() {});
-    _startMetaProbe();
-  }
+/// 文件叶的占位图标：音频文件用 [Icons.audio_file]，非音频灰显。
+Widget _audioFileIcon(ColorScheme cs, bool playable, bool isCurrent, {double size = 32}) {
+  return Icon(
+    playable ? Icons.audio_file : Icons.insert_drive_file,
+    size: size * 0.7,
+    color: playable
+        ? (isCurrent ? cs.primary : cs.onSurfaceVariant)
+        : cs.onSurfaceVariant.withValues(alpha: 0.6),
+  );
 }
 
 /// 播放区与播放列表之间的可拖拽分隔条。

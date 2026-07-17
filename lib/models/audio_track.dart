@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 /// 单条音频的元数据（标题/艺人/专辑/内嵌封面/内嵌歌词/时长），由 [AudioTagService] 填充。
 class AudioMeta {
@@ -60,6 +60,10 @@ class AudioEntry {
   final bool isAudio; // 是否受支持的音频（决定是否可点击播放）
   AudioMeta? meta; // 渐进填充，初始为空
 
+  /// 当 [meta] 变化时通知监听者（播放列表中的叶子小部件借此自更新，
+  /// 无需父级整树重建），是“探测完成只刷新单个条目”的关键。
+  final ValueNotifier<AudioMeta?> metaNotifier;
+
   AudioEntry({
     required this.path,
     required this.name,
@@ -68,7 +72,13 @@ class AudioEntry {
     required this.modifiedTime,
     this.isAudio = true,
     this.meta,
-  });
+  }) : metaNotifier = ValueNotifier(meta);
+
+  /// 写入元数据并通知监听者。替代直接 `meta = ...`，让挂载中的叶子小部件自行刷新。
+  void setMeta(AudioMeta? m) {
+    meta = m;
+    metaNotifier.value = m;
+  }
 
   /// 去除扩展名后的文件名（无标签时的兜底显示名）。
   String get baseName {
