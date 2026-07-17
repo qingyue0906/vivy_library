@@ -313,33 +313,38 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
               Positioned.fill(
                 child: Row(
                   children: [
-                    // 左段：标题
+                    // 左段：标题（包 DragToMoveArea 保证可拖拽；Icon/Text 会吸收事件，需显式包裹）
                     SizedBox(
                       width: left,
-                      child: Padding(
-                        padding: EdgeInsets.only(left: 12 * c, right: 12 * c),
-                        child: Row(
-                          children: [
-                            Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
-                            SizedBox(width: 6 * c),
-                            Text(
-                              'Vivy Library',
-                              style: TextStyle(
-                                fontSize: 12 * c,
-                                color: cs.onSurface,
+                      child: DragToMoveArea(
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12 * c, right: 12 * c),
+                          child: Row(
+                            children: [
+                              Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
+                              SizedBox(width: 6 * c),
+                              Text(
+                                'Vivy Library',
+                                style: TextStyle(
+                                  fontSize: 12 * c,
+                                  color: cs.onSurface,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    // 中段：TopBar（设置/搜索靠左，排序/顺序/刷新/网格靠右）
+                    // 中段：TopBar（设置/搜索靠左，排序/顺序/刷新/网格靠右）；监听 _state 以刷新排序/顺序/搜索显示
                     Expanded(
-                      child: TopBar(
-                        state: _state,
-                        searchController: _searchController,
-                        onSettingsTap: _openSettings,
-                        onGridDisplayTap: _openGridDisplaySettings,
+                      child: ListenableBuilder(
+                        listenable: _state,
+                        builder: (context, _) => TopBar(
+                          state: _state,
+                          searchController: _searchController,
+                          onSettingsTap: _openSettings,
+                          onGridDisplayTap: _openGridDisplaySettings,
+                        ),
                       ),
                     ),
                     // 右段：窗口控制按钮
