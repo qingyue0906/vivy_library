@@ -93,6 +93,7 @@ class VideoEntry {
   final String name;
   final String dirPath; // 所在文件夹绝对路径
   final int sizeInBytes;
+  final DateTime modifiedTime; // 文件最后修改时间（用于日期排序）
   final bool isVideo; // 是否受支持的视频（决定是否可点击播放）
   VideoMeta? meta; // 渐进填充，初始为空
 
@@ -105,6 +106,7 @@ class VideoEntry {
     required this.name,
     required this.dirPath,
     required this.sizeInBytes,
+    required this.modifiedTime,
     this.isVideo = true,
     this.meta,
   }) : metaNotifier = ValueNotifier(meta);

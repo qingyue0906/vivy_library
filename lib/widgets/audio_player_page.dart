@@ -11,6 +11,8 @@ import '../services/audio_tag_service.dart';
 import '../services/translations.dart';
 import '../services/settings_service.dart';
 import '../services/fvp_player.dart';
+import '../services/playlist_sort.dart';
+import '../providers/library_state.dart';
 import 'smooth_scroll.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
@@ -45,6 +47,9 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   bool _showPlaylist = SettingsService.loadAudioShowPlaylistSync();
   bool _showLyrics = SettingsService.loadAudioShowLyricsSync();
   double _playlistWidth = SettingsService.loadAudioPlaylistWidthSync();
+  // 播放列表排序偏好（持久化，音频/视频各自独立）。
+  SortField _sortField = SettingsService.loadAudioSortFieldSync();
+  SortOrder _sortOrder = SettingsService.loadAudioSortOrderSync();
   Timer? _hideTimer;
 
   double _volume = 100;
@@ -89,6 +94,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     if (widget.playlist.entries.isNotEmpty) {
       _ensureExpanded(widget.playlist.entries[_currentIndex]);
     }
+    _applySort();
     _initPlayer();
     _initPlayback();
     if (widget.initialPlaylistWidth != null) {
@@ -1115,6 +1121,8 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                   Strings.t('playlist'),
                   style: TextStyle(fontSize: 13, color: cs.onSurface),
                 ),
+                const SizedBox(width: 8),
+                _buildSortControls(cs),
                 const Spacer(),
                 if (_probing)
                   SizedBox(
@@ -1159,6 +1167,112 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
           ),
         ],
       ),
+    );
+  }
+
+  /// 按当前排序偏好对「播放顺序 entries」与「文件夹树 tree」统一重排。
+  /// 文件夹节点始终按名称排序（无 size/date），仅文件按所选字段/升降序排。
+  /// 重排后定位回当前播放项，避免播放被打断。
+  void _applySort() {
+    final playingPath = (_currentIndex >= 0 &&
+            _currentIndex < widget.playlist.entries.length)
+        ? widget.playlist.entries[_currentIndex].path
+        : null;
+    widget.playlist.entries.sort((a, b) => comparePlaylistEntries(
+          nameA: a.name,
+          sizeA: a.sizeInBytes,
+          dateA: a.modifiedTime,
+          nameB: b.name,
+          sizeB: b.sizeInBytes,
+          dateB: b.modifiedTime,
+          field: _sortField,
+          order: _sortOrder,
+        ));
+    for (final root in widget.playlist.tree) {
+      _sortTree(root);
+    }
+    if (playingPath != null) {
+      _currentIndex =
+          widget.playlist.entries.indexWhere((e) => e.path == playingPath);
+    }
+  }
+
+  void _sortTree(AudioFolderNode node) {
+    node.files.sort((a, b) => comparePlaylistEntries(
+          nameA: a.name,
+          sizeA: a.sizeInBytes,
+          dateA: a.modifiedTime,
+          nameB: b.name,
+          sizeB: b.sizeInBytes,
+          dateB: b.modifiedTime,
+          field: _sortField,
+          order: _sortOrder,
+        ));
+    node.children.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    for (final c in node.children) {
+      _sortTree(c);
+    }
+  }
+
+  /// 播放列表头部排序控件：字段下拉（名称/大小/日期）+ 升降序箭头按钮。
+  Widget _buildSortControls(ColorScheme cs) {
+    final itemStyle = TextStyle(fontSize: 12, color: cs.onSurfaceVariant);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButton<SortField>(
+          value: _sortField,
+          underline: const SizedBox.shrink(),
+          isDense: true,
+          iconSize: 16,
+          style: itemStyle,
+          items: [
+            DropdownMenuItem(
+              value: SortField.name,
+              child: Text(Strings.t('sortName')),
+            ),
+            DropdownMenuItem(
+              value: SortField.size,
+              child: Text(Strings.t('sortSize')),
+            ),
+            DropdownMenuItem(
+              value: SortField.date,
+              child: Text(Strings.t('sortDate')),
+            ),
+          ],
+          onChanged: (f) {
+            if (f == null || f == _sortField) return;
+            setState(() {
+              _sortField = f;
+              _applySort();
+            });
+            SettingsService.saveAudioSort(_sortField, _sortOrder);
+          },
+        ),
+        IconButton(
+          icon: Icon(
+            _sortOrder == SortOrder.ascending
+                ? Icons.arrow_upward
+                : Icons.arrow_downward,
+          ),
+          iconSize: 16,
+          splashRadius: 14,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          color: cs.onSurfaceVariant,
+          tooltip: _sortOrder == SortOrder.ascending
+              ? Strings.t('sortAsc')
+              : Strings.t('sortDesc'),
+          onPressed: () {
+            setState(() {
+              _sortOrder = _sortOrder == SortOrder.ascending
+                  ? SortOrder.descending
+                  : SortOrder.ascending;
+              _applySort();
+            });
+            SettingsService.saveAudioSort(_sortField, _sortOrder);
+          },
+        ),
+      ],
     );
   }
 
@@ -1316,8 +1430,12 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     final path = result?.files.single.path;
     if (path == null) return;
     int size = 0;
+    DateTime modified = DateTime.fromMillisecondsSinceEpoch(0);
     try {
       size = File(path).lengthSync();
+    } catch (_) {}
+    try {
+      modified = File(path).lastModifiedSync();
     } catch (_) {}
     final name = path.split(RegExp(r'[/\\]')).last;
     final entry = AudioEntry(
@@ -1325,14 +1443,16 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
       name: name,
       dirPath: File(path).parent.path,
       sizeInBytes: size,
+      modifiedTime: modified,
       isAudio: true,
     );
     widget.playlist.entries.add(entry);
     if (widget.playlist.tree.isNotEmpty) {
       widget.playlist.tree.first.files.add(entry);
     }
+    _applySort();
     setState(() {});
-    _playIndex(widget.playlist.entries.length - 1);
+    _playIndex(widget.playlist.entries.indexWhere((e) => e.path == path));
     _startMetaProbe();
   }
 
@@ -1350,6 +1470,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     _expanded
       ..clear()
       ..addAll(newPlaylist.tree.map((r) => r.path));
+    _applySort();
     _currentIndex = 0;
     _openCurrent();
     setState(() {});

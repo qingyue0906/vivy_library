@@ -653,6 +653,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     // 预加载播放列表/毫秒开关以填充同步缓存，避免播放器首帧按默认闪现后跳变。
     await SettingsService.loadPlayerShowPlaylist();
     await SettingsService.loadPlayerShowMilliseconds();
+    await SettingsService.loadVideoSort();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -687,6 +688,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     // 预加载音频偏好以填充同步缓存，避免首帧按默认闪现后跳变。
     await SettingsService.loadAudioShowPlaylist();
     await SettingsService.loadAudioShowLyrics();
+    await SettingsService.loadAudioSort();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

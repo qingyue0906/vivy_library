@@ -60,16 +60,23 @@ class VideoPlaylistService {
         subDirs.add(e);
       } else if (e is File && isVideoFile(e.path)) {
         int size;
+        DateTime modified;
         try {
           size = e.lengthSync();
         } catch (_) {
           size = 0;
+        }
+        try {
+          modified = e.lastModifiedSync();
+        } catch (_) {
+          modified = DateTime.fromMillisecondsSinceEpoch(0);
         }
         final entry = VideoEntry(
           path: e.path,
           name: p.basename(e.path),
           dirPath: dir.path,
           sizeInBytes: size,
+          modifiedTime: modified,
           isVideo: true,
         );
         node.files.add(entry);

@@ -56,6 +56,7 @@ class AudioEntry {
   final String name; // 含扩展名的文件名
   final String dirPath; // 所在文件夹绝对路径
   final int sizeInBytes;
+  final DateTime modifiedTime; // 文件最后修改时间（用于日期排序）
   final bool isAudio; // 是否受支持的音频（决定是否可点击播放）
   AudioMeta? meta; // 渐进填充，初始为空
 
@@ -64,6 +65,7 @@ class AudioEntry {
     required this.name,
     required this.dirPath,
     required this.sizeInBytes,
+    required this.modifiedTime,
     this.isAudio = true,
     this.meta,
   });

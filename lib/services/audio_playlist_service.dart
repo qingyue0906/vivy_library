@@ -43,16 +43,23 @@ class AudioPlaylistService {
         subDirs.add(e);
       } else if (e is File && isAudioFile(e.path)) {
         int size;
+        DateTime modified;
         try {
           size = e.lengthSync();
         } catch (_) {
           size = 0;
+        }
+        try {
+          modified = e.lastModifiedSync();
+        } catch (_) {
+          modified = DateTime.fromMillisecondsSinceEpoch(0);
         }
         final entry = AudioEntry(
           path: e.path,
           name: p.basename(e.path),
           dirPath: dir.path,
           sizeInBytes: size,
+          modifiedTime: modified,
           isAudio: true,
         );
         node.files.add(entry);

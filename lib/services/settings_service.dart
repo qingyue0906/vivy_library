@@ -632,6 +632,60 @@ class SettingsService {
     await AppDataService.setString(_audioPlaylistWidthKey, w.toString());
   }
 
+  // --- Player / Audio playlist sort (音频与视频各自独立持久化) ---
+
+  static const _videoSortFieldKey = 'video_playlist_sort_field';
+  static const _videoSortOrderKey = 'video_playlist_sort_order';
+  static const _audioSortFieldKey = 'audio_playlist_sort_field';
+  static const _audioSortOrderKey = 'audio_playlist_sort_order';
+
+  static SortField _cachedVideoSortField = SortField.name;
+  static SortOrder _cachedVideoSortOrder = SortOrder.ascending;
+  static SortField _cachedAudioSortField = SortField.name;
+  static SortOrder _cachedAudioSortOrder = SortOrder.ascending;
+
+  /// 同步读取缓存（页面 initState 使用，需先由 loadVideoSort 预热）。
+  static SortField loadVideoSortFieldSync() => _cachedVideoSortField;
+  static SortOrder loadVideoSortOrderSync() => _cachedVideoSortOrder;
+  static SortField loadAudioSortFieldSync() => _cachedAudioSortField;
+  static SortOrder loadAudioSortOrderSync() => _cachedAudioSortOrder;
+
+  /// 异步预热视频播放列表排序偏好并填充同步缓存。
+  static Future<void> loadVideoSort() async {
+    final f = await AppDataService.getString(_videoSortFieldKey);
+    final o = await AppDataService.getString(_videoSortOrderKey);
+    _cachedVideoSortField =
+        SortField.values.firstWhere((e) => e.name == f, orElse: () => SortField.name);
+    _cachedVideoSortOrder =
+        SortOrder.values.firstWhere((e) => e.name == o, orElse: () => SortOrder.ascending);
+  }
+
+  /// 持久化视频播放列表排序偏好（同时更新同步缓存）。
+  static Future<void> saveVideoSort(SortField field, SortOrder order) async {
+    _cachedVideoSortField = field;
+    _cachedVideoSortOrder = order;
+    await AppDataService.setString(_videoSortFieldKey, field.name);
+    await AppDataService.setString(_videoSortOrderKey, order.name);
+  }
+
+  /// 异步预热音频播放列表排序偏好并填充同步缓存。
+  static Future<void> loadAudioSort() async {
+    final f = await AppDataService.getString(_audioSortFieldKey);
+    final o = await AppDataService.getString(_audioSortOrderKey);
+    _cachedAudioSortField =
+        SortField.values.firstWhere((e) => e.name == f, orElse: () => SortField.name);
+    _cachedAudioSortOrder =
+        SortOrder.values.firstWhere((e) => e.name == o, orElse: () => SortOrder.ascending);
+  }
+
+  /// 持久化音频播放列表排序偏好（同时更新同步缓存）。
+  static Future<void> saveAudioSort(SortField field, SortOrder order) async {
+    _cachedAudioSortField = field;
+    _cachedAudioSortOrder = order;
+    await AppDataService.setString(_audioSortFieldKey, field.name);
+    await AppDataService.setString(_audioSortOrderKey, order.name);
+  }
+
   // 播放模式：0=顺序(off) 1=列表循环(all) 2=单曲循环(one) 3=随机(shuffle)。
   static const _audioRepeatKey = 'audio_repeat_mode';
   static const int _defaultAudioRepeat = 1; // 默认列表循环
