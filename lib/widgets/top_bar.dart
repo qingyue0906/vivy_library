@@ -8,7 +8,6 @@ class TopBar extends StatelessWidget {
   final TextEditingController searchController;
   final VoidCallback onSettingsTap;
   final VoidCallback? onGridDisplayTap;
-  final double backgroundOpacity;
 
   const TopBar({
     super.key,
@@ -16,38 +15,35 @@ class TopBar extends StatelessWidget {
     required this.searchController,
     required this.onSettingsTap,
     this.onGridDisplayTap,
-    this.backgroundOpacity = 1.0,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      height: 32 * c,
-      color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
-      padding: EdgeInsets.symmetric(horizontal: 8 * c),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
-            tooltip: Strings.t('settingsTooltip'),
-            onPressed: onSettingsTap,
-            padding: EdgeInsets.zero,
-            constraints: BoxConstraints(minWidth: 24 * c, minHeight: 24 * c),
-          ),
-          SizedBox(width: 8 * c),
-          Expanded(child: _buildSearchField(context, c)),
-          SizedBox(width: 6 * c),
-          _buildSortFieldDropdown(context, c),
-          SizedBox(width: 2 * c),
-          _buildSortOrderButton(c),
-          SizedBox(width: 2 * c),
-          _buildRefreshButton(c),
-          SizedBox(width: 2 * c),
-          _buildGridDisplayButton(c),
-        ],
-      ),
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
+          tooltip: Strings.t('settingsTooltip'),
+          onPressed: onSettingsTap,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints(minWidth: 24 * c, minHeight: 24 * c),
+        ),
+        SizedBox(width: 8 * c),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 200 * c),
+          child: _buildSearchField(context, c),
+        ),
+        const Spacer(),
+        _buildSortFieldDropdown(context, c),
+        SizedBox(width: 2 * c),
+        _buildSortOrderButton(c),
+        SizedBox(width: 2 * c),
+        _buildRefreshButton(c),
+        SizedBox(width: 2 * c),
+        _buildGridDisplayButton(c),
+      ],
     );
   }
 

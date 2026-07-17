@@ -23,6 +23,7 @@ import '../services/translations.dart';
 import 'library_root_selector.dart';
 import 'settings_page.dart';
 import 'dart:io';
+import 'dart:math';
 import 'compact_level.dart';
 import '../services/script_service.dart';
 import '../utils/app_quit.dart';
@@ -58,6 +59,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   final ValueNotifier<double> _rightPanelWidth = ValueNotifier(280);
   static const double _minPanelWidth = 120;
   static const double _maxPanelWidth = 400;
+  /// 主区域分隔手柄宽度，标题栏三段需各自加上它才能与下方栏边界对齐。
+  static const double _dragHandleWidth = 5;
 
   final ValueNotifier<double> _filePanelHeight = ValueNotifier(165);
   static const double _minFilePanelHeight = 80;
@@ -284,57 +287,105 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
 
   Widget _buildTitleBar(ColorScheme cs) {
     final c = CompactLevel.of(context);
-    return Container(
-      height: 30 * c,
-      color: cs.surfaceContainerHigh,
-      child: Row(
-        children: [
-          Expanded(
-            child: DragToMoveArea(
-              child: Container(
-                height: 30 * c,
-                alignment: Alignment.centerLeft,
-                padding: EdgeInsets.only(left: 12 * c),
-                child: Row(
+    final bg = widget.backgroundSettings;
+    final hasBg = bg.path != null;
+    final leftOpacity = hasBg ? bg.leftOpacity : 1.0;
+    final middleOpacity = hasBg ? bg.middleOpacity : 1.0;
+    final rightOpacity = hasBg ? bg.rightOpacity : 1.0;
+    const captionMinWidth = 3 * 46; // 最小化/最大化/关闭三个按钮的固定宽度之和
+    return ListenableBuilder(
+      listenable: Listenable.merge([_leftPanelWidth, _rightPanelWidth]),
+      builder: (context, _) {
+        // 标题栏三段宽度与下方栏对齐：左段=左栏+左手柄，右段=右栏+右手柄。
+        final left = _leftPanelWidth.value + _dragHandleWidth;
+        final right = max(_rightPanelWidth.value + _dragHandleWidth, captionMinWidth * c);
+        return SizedBox(
+          height: 32 * c,
+          child: Row(
+            children: [
+              Container(
+                width: left,
+                color: cs.surfaceContainerHigh.withValues(alpha: leftOpacity),
+                child: DragToMoveArea(
+                  child: Container(
+                    width: double.infinity,
+                    height: 32 * c,
+                    alignment: Alignment.centerLeft,
+                    padding: EdgeInsets.only(left: 12 * c, right: 12 * c),
+                    child: Row(
+                      children: [
+                        Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
+                        SizedBox(width: 6 * c),
+                        Text(
+                          'Vivy Library',
+                          style: TextStyle(
+                            fontSize: 12 * c,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Stack(
                   children: [
-                    Icon(Icons.menu_book, size: 14 * c, color: cs.onSurface),
-                    SizedBox(width: 6 * c),
-                    Text(
-                      'Vivy Library',
-                      style: TextStyle(
-                        fontSize: 12 * c,
-                        color: cs.onSurface,
+                    // 底层：仅在空白处可拖拽窗口（按钮/搜索框在其上层拦截点击）
+                    DragToMoveArea(
+                      child: Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: cs.surfaceContainerHigh.withValues(alpha: middleOpacity),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: TopBar(
+                        state: _state,
+                        searchController: _searchController,
+                        onSettingsTap: _openSettings,
+                        onGridDisplayTap: _openGridDisplaySettings,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              Container(
+                width: right,
+                color: cs.surfaceContainerHigh.withValues(alpha: rightOpacity),
+                height: 32 * c,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _CaptionButton(
+                      icon: Icons.horizontal_rule,
+                      onTap: () => windowManager.minimize(),
+                      compactLevel: c,
+                    ),
+                    _CaptionButton(
+                      icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+                      onTap: () {
+                        if (_isMaximized) {
+                          windowManager.unmaximize();
+                        } else {
+                          windowManager.maximize();
+                        }
+                      },
+                      compactLevel: c,
+                    ),
+                    _CaptionButton(
+                      icon: Icons.close,
+                      onTap: () => quitApp(),
+                      isClose: true,
+                      compactLevel: c,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          _CaptionButton(
-            icon: Icons.horizontal_rule,
-            onTap: () => windowManager.minimize(),
-            compactLevel: c,
-          ),
-          _CaptionButton(
-            icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
-            onTap: () {
-              if (_isMaximized) {
-                windowManager.unmaximize();
-              } else {
-                windowManager.maximize();
-              }
-            },
-            compactLevel: c,
-          ),
-          _CaptionButton(
-            icon: Icons.close,
-            onTap: () => quitApp(),
-            isClose: true,
-            compactLevel: c,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -376,20 +427,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ],
       );
     }
-    return Column(
-      children: [
-        TopBar(
-          state: _state,
-          searchController: _searchController,
-          onSettingsTap: _openSettings,
-          onGridDisplayTap: _openGridDisplaySettings,
-          backgroundOpacity: widget.backgroundSettings.path != null
-              ? widget.backgroundSettings.middleOpacity
-              : 1.0,
-        ),
-        Expanded(child: _buildMainArea()),
-      ],
-    );
+    return _buildMainArea();
   }
 
   Widget _buildMainArea() {
@@ -578,7 +616,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         onPanUpdate: (details) => onDrag(details.delta.dx),
         onPanEnd: (_) => onDragEnd?.call(),
         child: Container(
-          width: 5,
+          width: _dragHandleWidth,
           color: Colors.transparent,
         ),
       ),
@@ -779,7 +817,7 @@ class _CaptionButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: 46 * compactLevel,
-      height: 30 * compactLevel,
+      height: 32 * compactLevel,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
