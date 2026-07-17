@@ -494,12 +494,12 @@ class _SettingsPageState extends State<SettingsPage>
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
           ),
           child: Slider(
-            value: _gridSettings.compactLevel,
-            min: 0.5,
-            max: 2.0,
-            divisions: 15,
+            value: (_gridSettings.compactLevel * 100).clamp(85.0, 125.0),
+            min: 85,
+            max: 125,
+            divisions: 8,
             onChanged: (v) => setState(() {
-              _gridSettings = _gridSettings.copyWith(compactLevel: v);
+              _gridSettings = _gridSettings.copyWith(compactLevel: v / 100);
             }),
           ),
         ),
