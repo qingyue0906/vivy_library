@@ -50,7 +50,7 @@ class TopBar extends StatelessWidget {
   Widget _buildSearchField(BuildContext context, double c) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 22 * c,
+      height: 24 * c,
       child: TextField(
         controller: searchController,
         style: TextStyle(color: cs.onSurface, fontSize: 11 * c),
@@ -64,11 +64,11 @@ class TopBar extends StatelessWidget {
           contentPadding:
               EdgeInsets.symmetric(horizontal: 6 * c, vertical: 2 * c),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(4 * c),
+            borderRadius: BorderRadius.circular(12 * c),
             borderSide: BorderSide(color: cs.outlineVariant, width: 1),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(4 * c),
+            borderRadius: BorderRadius.circular(12 * c),
             borderSide: BorderSide(color: cs.outlineVariant, width: 1),
           ),
           suffixIcon: state.searchQuery.isNotEmpty
