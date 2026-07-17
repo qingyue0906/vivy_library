@@ -20,17 +20,60 @@ class AudioTagService {
   static bool isAudioFile(String path) =>
       audioExts.contains(p.extension(path).toLowerCase().replaceAll('.', ''));
 
-  static final Map<String, AudioMeta> _cache = {};
+  // ===================== 标签缓存（LRU 限容） =====================
+  //
+  // 旧实现用「path::size::mtime」作 key 写入一个永不清理的静态 Map，导致：
+  // 1) 反复打开不同项目时内嵌封面字节（coverBytes）无限累积，内存只增不减；
+  // 2) 文件被云盘/git/解压触碰后 mtime 变化 → 旧 key 的封面永不回收，僵尸 key 膨胀。
+  //
+  // 现改为「path 主键 + size/mtime 失效校验 + LRU 容量上限」：
+  // - key 用 path，size/mtime 仅用于判断文件是否被修改（失效则重读），不再因
+  //   mtime 变化产生僵尸 key；
+  // - 容量封顶（_maxCache），超出淘汰最久未访问项，封面内存被压在上限内；
+  // - 提供 [clearCache] 供「切换超大项目 / 退出 app」等场景主动清场。
 
-  /// 读取单个文件的标签元数据。结果按「路径+大小+修改时间」缓存，重开项目时秒回。
+  /// 缓存条目数上限。超出按 LRU 淘汰最旧项。可按项目规模调整。
+  static const int _maxCache = 1200;
+
+  static final Map<String, _TagCacheEntry> _cache = {};
+  static final List<String> _lru = []; // 队头最旧，队尾最新
+
+  static void _touchLru(String path) {
+    final i = _lru.indexOf(path);
+    if (i >= 0) _lru.removeAt(i);
+    _lru.add(path);
+  }
+
+  static void _putCache(String path, AudioMeta meta, int size, int mtime) {
+    _cache[path] = _TagCacheEntry(meta, size, mtime);
+    _lru.add(path);
+    while (_lru.length > _maxCache) {
+      final old = _lru.removeAt(0);
+      _cache.remove(old);
+    }
+  }
+
+  /// 主动清空标签缓存（封面字节随之释放）。跨页面仍有效的「组合元数据缓存」
+  /// 在 [AudioMetadataService] 中维护，调用方按需处理，此处只负责标签解析缓存。
+  static void clearCache() {
+    _cache.clear();
+    _lru.clear();
+  }
+
+  /// 读取单个文件的标签元数据。结果按 path 缓存，以 size+mtime 做失效校验；
+  /// 命中缓存直接秒回，重开项目不重复读盘。容量上限 + LRU 淘汰，封面内存有界。
   static Future<AudioMeta> read(String path) async {
     try {
       final f = File(path);
       if (!f.existsSync()) return const AudioMeta();
       final stat = f.statSync();
-      final key = '$path::${stat.size}::${stat.modified.millisecondsSinceEpoch}';
-      final cached = _cache[key];
-      if (cached != null) return cached;
+      final size = stat.size;
+      final mtime = stat.modified.millisecondsSinceEpoch;
+      final cached = _cache[path];
+      if (cached != null && cached.size == size && cached.mtime == mtime) {
+        _touchLru(path);
+        return cached.meta;
+      }
       final bytes = await f.readAsBytes();
       final ext = p.extension(path).toLowerCase().replaceAll('.', '');
       AudioMeta meta;
@@ -46,7 +89,7 @@ class AudioTagService {
         default:
           meta = const AudioMeta();
       }
-      _cache[key] = meta;
+      _putCache(path, meta, size, mtime);
       return meta;
     } catch (_) {
       return const AudioMeta();
@@ -554,4 +597,13 @@ class AudioTagService {
     if (partial != null) packets.add(partial);
     return packets;
   }
+}
+
+/// 标签缓存条目：解析出的元数据 + 文件 size/mtime（用于失效校验）。
+class _TagCacheEntry {
+  final AudioMeta meta;
+  final int size;
+  final int mtime;
+
+  _TagCacheEntry(this.meta, this.size, this.mtime);
 }

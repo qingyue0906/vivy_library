@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
 import '../models/library_item.dart';
+import '../models/audio_track.dart';
 import '../widgets/video_player_page.dart';
 import '../services/video_playlist_service.dart';
 import '../widgets/audio_player_page.dart';
@@ -680,10 +681,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     );
   }
 
+  /// 已构建的音频播放列表缓存（按项目路径）。重复打开同一项目直接克隆复用，
+  /// 避免每次都全量扫描文件系统 + 全量重建条目树；条目 meta 经 clone 保留，
+  /// 配合 [AudioMetadataService] 的跨页面缓存，封面/时长即时显示、不重探、不泄漏。
+  static final Map<String, AudioPlaylist> _audioPlaylistCache = {};
+
   /// 打开内置音频播放器：递归扫描项目内所有音频构建播放列表，
   /// [startPath] 指定从哪个音频开始播放（底部面板双击音频文件时传入）。
   Future<void> _openAudioPlayer(LibraryItem item, {String? startPath}) async {
-    final playlist = await AudioPlaylistService.build(item);
+    // 同一项目只扫描构建一次；之后每次打开都克隆独立副本（meta 保留），
+    // 使页面级排序/展开/当前索引等状态互不干扰，且不再重复读盘/重探。
+    final built = _audioPlaylistCache[item.path] ??=
+        await AudioPlaylistService.build(item);
+    final playlist = built.clone();
     final playlistWidth = await SettingsService.loadAudioPlaylistWidth();
     // 预加载音频偏好以填充同步缓存，避免首帧按默认闪现后跳变。
     await SettingsService.loadAudioShowPlaylist();

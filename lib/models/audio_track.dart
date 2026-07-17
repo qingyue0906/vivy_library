@@ -121,6 +121,41 @@ class AudioPlaylist {
   final List<AudioFolderNode> tree;
 
   AudioPlaylist({required this.entries, required this.tree});
+
+  /// 深拷贝播放列表，但**保留每个条目的 meta（封面/时长/标签）**——这是反复打开同一
+  /// 项目时「不重复解析标签、不重探时长」的关键：重建的是轻量的条目/树对象，
+  /// 而 meta 与跨页面缓存共享同一引用，封面字节不再被反复读盘、不再泄漏累积。
+  /// 每次打开都拿到独立副本，页面级的排序/展开/当前索引等状态互不干扰。
+  AudioPlaylist clone() {
+    // 关键修正：扁平 entries 与树 files 必须共享「同一份」AudioEntry 实例
+    // （与原 build() 行为一致）。否则 setMeta 只更新扁平表、树里的文件叶永远拿不到
+    // meta → 播放列表无缩略图、无标题/艺人；且每个文件只有 1 个对象持有 meta，
+    // 避免重复拷贝封面字节。
+    final byPath = <String, AudioEntry>{};
+    AudioEntry cloneEntry(AudioEntry e) => byPath.putIfAbsent(
+          e.path,
+          () => AudioEntry(
+            path: e.path,
+            name: e.name,
+            dirPath: e.dirPath,
+            sizeInBytes: e.sizeInBytes,
+            modifiedTime: e.modifiedTime,
+            isAudio: e.isAudio,
+            meta: e.meta,
+          ),
+        );
+    AudioFolderNode cloneNode(AudioFolderNode n) {
+      final c = AudioFolderNode(n.name, n.path);
+      c.files.addAll(n.files.map(cloneEntry));
+      c.children.addAll(n.children.map(cloneNode));
+      return c;
+    }
+
+    return AudioPlaylist(
+      entries: entries.map(cloneEntry).toList(),
+      tree: tree.map(cloneNode).toList(),
+    );
+  }
 }
 
 /// 一行歌词（带时间戳）。无时间戳时 [time] 为 null。

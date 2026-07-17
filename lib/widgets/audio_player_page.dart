@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/audio_track.dart';
 import '../services/audio_playlist_service.dart';
+import '../services/audio_metadata_service.dart';
 import '../services/audio_tag_service.dart';
 import '../services/translations.dart';
 import '../services/settings_service.dart';
@@ -74,14 +75,34 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   final ScrollController _playlistScrollController = ScrollController();
   final ScrollController _lyricScrollController = ScrollController();
 
-  /// 扫描暂停：滚动/拖动窗口/缩放窗口时为 true，交互停止 400ms 后回落 false，
-  /// 期间后台探测循环挂起，让出平台线程避免掉帧。
-  bool _scanPaused = false;
+  /// 扫描暂停定时器：滚动/拖动窗口/缩放窗口时触发，交互停止 400ms 后恢复后台探测。
+  /// 暂停期间 [AudioMetadataService] 的后台扫描循环挂起，让出平台线程避免掉帧。
   Timer? _scanPauseTimer;
 
-  // 标签/时长渐进探测
+  // 标签/时长渐进探测（由 AudioMetadataService 负责；_probing 仅用于头部忙碌指示）
   bool _probing = false;
-  int _probeGen = 0;
+  void _onBusyChanged() {
+    if (mounted && _probing != AudioMetadataService.busy.value) {
+      setState(() => _probing = AudioMetadataService.busy.value);
+    }
+  }
+
+  /// 当前曲目元数据变化监听：回灌或后台探测完成时刷新歌词（歌词来自 meta.lyrics）。
+  AudioEntry? _watchedEntry;
+  void _onCurrentMetaChanged() {
+    if (mounted) _onEntryChanged();
+  }
+
+  /// 已请求过标签解析的当前曲目路径集合（含「无标签」的空结果），避免对已播放曲目
+  /// 反复读盘解析。当前曲目被后台扫描排除，但其封面/标题/艺人/歌词只能来自标签解析，故补一份。
+  final Set<String> _tagRequestedPaths = {};
+
+  void _watchCurrentMeta() {
+    if (_watchedEntry == _currentEntry) return;
+    _watchedEntry?.metaNotifier.removeListener(_onCurrentMetaChanged);
+    _watchedEntry = _currentEntry;
+    _watchedEntry?.metaNotifier.addListener(_onCurrentMetaChanged);
+  }
 
   // 歌词
   List<LyricLine> _lyrics = const [];
@@ -112,6 +133,8 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     _applySort();
     _flatDirty = true;
     _initPlayer();
+    AudioMetadataService.busy.addListener(_onBusyChanged);
+    _probing = AudioMetadataService.busy.value;
     _initPlayback();
     if (widget.initialPlaylistWidth != null) {
       _playlistWidth = widget.initialPlaylistWidth!;
@@ -182,6 +205,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }
     final entry = widget.playlist.entries[_currentIndex];
     _lastOpenAt = DateTime.now();
+    _watchCurrentMeta();
     _openEntry(entry);
     _onEntryChanged();
   }
@@ -224,69 +248,68 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   void _refreshCurrentMetaFromState() {
     final entry = _currentEntry;
     if (entry == null) return;
+    AudioMetadataService.setActivePath(entry.path);
     final dur = player.state.duration;
     if (dur > Duration.zero) {
       entry.setMeta((entry.meta ?? const AudioMeta())
           .copyWith(duration: dur));
+      // 当前曲目时长已由播放器内核回填，登记进跨页面缓存，
+      // 重开本曲目时直接命中，无需再次离屏探测。
+      AudioMetadataService.putCache(entry.path, entry.meta);
       if (mounted) setState(() {});
     }
+    // 当前曲目被后台扫描排除（避免重复建播放器），但其封面/标题/艺人/歌词只能来自标签解析，
+    // 播放器内核不提供。若尚未加载到标签，这里异步补一份，使正在播放的曲目也能显示缩略图。
+    _ensureActiveTag(entry);
   }
 
-  /// 后台渐进加载标签（标题/艺人/封面/歌词）与时长。
-  /// 标签来自纯 Dart 的 [AudioTagService]；时长来自 fvp 的 getMediaInfo() 离屏探测。
+  /// 为当前曲目异步补解析标签（封面/标题/艺人/专辑/歌词）。后台扫描已排除当前曲目，
+  /// 不在此补则会永久缺失封面。保留播放器权威时长，仅回填标签字段。
+  void _ensureActiveTag(AudioEntry entry) {
+    if (_tagRequestedPaths.contains(entry.path)) return; // 已解析过（含空结果）
+    _tagRequestedPaths.add(entry.path);
+    AudioTagService.read(entry.path).then((tag) {
+      if (!mounted) return;
+      final e = _currentEntry;
+      if (e == null || e.path != entry.path) return; // 已切走，丢弃结果
+      // 保留播放器权威时长，回填标签的封面/标题/艺人/专辑/歌词。
+      final merged = (e.meta ?? const AudioMeta()).copyWith(
+        title: tag.title,
+        artist: tag.artist,
+        album: tag.album,
+        coverBytes: tag.coverBytes,
+        lyrics: tag.lyrics,
+      );
+      e.setMeta(merged);
+      // 完整组合元数据（含封面）写回跨页面缓存，重开本曲目时直接命中。
+      AudioMetadataService.putCache(entry.path, merged);
+      _onEntryChanged(); // 重新解析歌词（若标签含内嵌歌词）
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// 后台渐进加载标签（标题/艺人/封面/歌词）与时长，委托给 [AudioMetadataService]。
+  /// 该服务复用跨页面组合缓存：重开同一项目时命中缓存直接回灌，封面/时长即时显示，
+  /// 不再全量重探；且按「单并发 + 限速 + 交互暂停」运行，不抢占平台线程掉帧。
   /// 探测与挂载解耦：每个条目完成后经 [AudioEntry.setMeta] → [AudioEntry.metaNotifier]
-  /// 通知对应叶子自更新，**不触发父级整树重建**（虚拟化后只刷新单个可见条目）；
-  /// 滚动/拖动窗口/缩放窗口期间由交互暂停机制挂起本循环，避免抢占平台线程掉帧。
+  /// 通知对应叶子自更新，不触发父级整树重建（虚拟化后只刷新单个可见条目）。
   void _startMetaProbe() {
     if (widget.playlist.entries.isEmpty) return;
-    _probing = true;
-    if (mounted) setState(() {});
-    final gen = ++_probeGen;
-    () async {
-      final ordered = [...widget.playlist.entries]
-        ..sort((a, b) => _isCurrent(a) == _isCurrent(b)
-            ? 0
-            : _isCurrent(a)
-                ? -1
-                : 1);
-      for (final e in ordered) {
-        if (!mounted || gen != _probeGen) return;
-        // 交互（拖动窗口/缩放/滚动）期间暂停探测，让出平台线程避免掉帧。
-        await _waitWhilePaused();
-        if (!mounted || gen != _probeGen) return;
-        final tag = await AudioTagService.read(e.path);
-        Duration? dur;
-        try {
-          dur = (await FvpPlayer.probeVideoMeta(e.path))?.duration;
-        } catch (_) {}
-        if (!mounted || gen != _probeGen) return;
-        e.setMeta((e.meta ?? const AudioMeta()).copyWith(
-          title: tag.title ?? e.meta?.title,
-          artist: tag.artist ?? e.meta?.artist,
-          album: tag.album ?? e.meta?.album,
-          coverBytes: tag.coverBytes ?? e.meta?.coverBytes,
-          lyrics: tag.lyrics ?? e.meta?.lyrics,
-          duration: dur ?? tag.duration ?? e.meta?.duration,
-        ));
-        // 当前曲目：歌词可能刚刚加载，重新解析。
-        if (_isCurrent(e)) _onEntryChanged();
-        // 条目间让出平台线程（FvpPlayer.probeVideoMeta 占平台线程），
-        // 避免持续抢占导致拖动/滚动掉帧。
-        await Future.delayed(const Duration(milliseconds: 120));
-      }
-      _probing = false;
-      if (mounted) setState(() {});
-    }();
+    // 当前曲目优先探测；其余按列表顺序慢慢扫。
+    AudioMetadataService.scanAll(
+      widget.playlist.entries,
+      currentPath: _currentEntry?.path,
+    );
   }
 
   /// 暂停后台元数据扫描，并在停止一切交互（滚动/拖动窗口/缩放窗口）400ms 后自动恢复。
   /// 交互期间零探测，平台线程只服务 UI 与正在播放的音频，避免窗口拖动/缩放/滚动掉帧。
   void _pauseScanThenResumeLater() {
     if (!mounted) return;
-    _scanPaused = true;
+    AudioMetadataService.setPaused(true);
     _scanPauseTimer?.cancel();
     _scanPauseTimer = Timer(const Duration(milliseconds: 400), () {
-      _scanPaused = false;
+      AudioMetadataService.setPaused(false);
     });
   }
 
@@ -296,18 +319,6 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
       _pauseScanThenResumeLater();
     }
   }
-
-  /// 交互暂停期间（_scanPaused 为 true）阻塞探测循环，每 ~32ms 轮询直到恢复且本页仍存活。
-  Future<void> _waitWhilePaused() async {
-    while (_scanPaused && mounted) {
-      await Future.delayed(const Duration(milliseconds: 32));
-    }
-  }
-
-  bool _isCurrent(AudioEntry e) =>
-      _currentIndex >= 0 &&
-      _currentIndex < widget.playlist.entries.length &&
-      widget.playlist.entries[_currentIndex] == e;
 
   void _onCompleted() {
     final justOpened = _lastOpenAt != null &&
@@ -541,6 +552,11 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     _hideTimer?.cancel();
     _scanPauseTimer?.cancel();
     windowManager.removeListener(this);
+    AudioMetadataService.busy.removeListener(_onBusyChanged);
+    _watchedEntry?.metaNotifier.removeListener(_onCurrentMetaChanged);
+    _watchedEntry = null;
+    // 停止后台扫描循环并清场，但保留跨页面组合缓存（下次打开直接命中）。
+    AudioMetadataService.dispose();
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
     }
