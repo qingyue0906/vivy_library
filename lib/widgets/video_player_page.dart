@@ -69,9 +69,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   double _playlistWidth = SettingsService.loadPlayerPlaylistWidthSync();
   Timer? _hideTimer;
 
-  /// 滚动空闲定时器：滚动时暂停后台元数据扫描，停止滚动 400ms 后恢复，
-  /// 避免探测抢占平台线程导致滚动/播放掉帧。
-  Timer? _scrollIdleTimer;
+  /// 扫描暂停定时器：滚动/拖动窗口/缩放窗口时暂停后台元数据扫描，
+  /// 交互停止 400ms 后恢复，避免探测抢占平台线程导致掉帧。
+  Timer? _scanPauseTimer;
 
   double _volume = 100;
   bool _muted = false;
@@ -456,6 +456,20 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (mounted) setState(() => _isMaximized = false);
   }
 
+  @override
+  void onWindowMove() {
+    // 拖动窗口时暂停后台探测，GPU/平台线程让给窗口合成，避免一卡一卡。
+    _pauseScanThenResumeLater();
+    super.onWindowMove();
+  }
+
+  @override
+  void onWindowResize() {
+    // 缩放窗口时暂停后台探测，GPU/平台线程让给窗口合成，避免一卡一卡。
+    _pauseScanThenResumeLater();
+    super.onWindowResize();
+  }
+
   Future<void> _toggleMaximize() async {
     if (_isMaximized) {
       await windowManager.unmaximize();
@@ -527,22 +541,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     }
   }
 
+  /// 暂停后台元数据扫描，并在停止一切交互（滚动/拖动窗口/缩放窗口）400ms 后自动恢复。
+  /// 交互期间零探测，平台线程只服务 UI 与正在播放的视频，避免窗口拖动/缩放/滚动掉帧。
+  void _pauseScanThenResumeLater() {
+    VideoMetadataService.setPaused(true);
+    _scanPauseTimer?.cancel();
+    _scanPauseTimer = Timer(const Duration(milliseconds: 400), () {
+      VideoMetadataService.setPaused(false);
+    });
+  }
+
   /// 播放列表滚动回调：开始/更新滚动时暂停后台元数据扫描，停止滚动 400ms 后恢复。
-  /// 滚动期间零探测，平台线程只服务 UI 与正在播放的视频，滚动/播放都不掉帧。
   void _onPlaylistScroll(ScrollNotification n) {
     if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
-      VideoMetadataService.setPaused(true);
-      _scrollIdleTimer?.cancel();
-      _scrollIdleTimer = Timer(const Duration(milliseconds: 400), () {
-        VideoMetadataService.setPaused(false);
-      });
+      _pauseScanThenResumeLater();
     }
   }
 
   @override
   void dispose() {
     _hideTimer?.cancel();
-    _scrollIdleTimer?.cancel();
+    _scanPauseTimer?.cancel();
     windowManager.removeListener(this);
     if (_isFullscreen) {
       windowManager.setFullScreen(false);
