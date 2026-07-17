@@ -23,19 +23,12 @@ class TopBar extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        IconButton(
-          icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
-          tooltip: Strings.t('settingsTooltip'),
-          onPressed: onSettingsTap,
-          padding: EdgeInsets.zero,
-          constraints: BoxConstraints(minWidth: 24 * c, minHeight: 24 * c),
-        ),
-        SizedBox(width: 8 * c),
+        const Spacer(),
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: 200 * c),
           child: _buildSearchField(context, c),
         ),
-        const Spacer(),
+        SizedBox(width: 2 * c),
         _buildSortFieldDropdown(context, c),
         SizedBox(width: 2 * c),
         _buildSortOrderButton(c),
@@ -43,6 +36,14 @@ class TopBar extends StatelessWidget {
         _buildRefreshButton(c),
         SizedBox(width: 2 * c),
         _buildGridDisplayButton(c),
+        SizedBox(width: 2 * c),
+        IconButton(
+          icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurface),
+          tooltip: Strings.t('settingsTooltip'),
+          onPressed: onSettingsTap,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints(minWidth: 24 * c, minHeight: 24 * c),
+        ),
       ],
     );
   }
