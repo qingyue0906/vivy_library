@@ -36,8 +36,12 @@ class FvpPlayer {
   int? _activeAudioIndex;
   bool _audioOff = false;
 
-  // 外部轨待落实标记：无内嵌音轨、需默认用外部轨时为真，播放后启动重试落实。
-  bool _pendingExternalSelection = false;
+  // 音轨待落实标记：默认轨（含内嵌/外置）在打开早期 setAudioTracks 可能被 libmdk
+  // 忽略，播放后启动重试循环周期性重设直到生效。无待落实轨时为 false，零副作用。
+  bool _pendingAudioSelection = false;
+  // 重试循环要落实的目标音轨索引，与显示态 [_activeAudioIndex](null=Auto) 解耦：
+  // 重试时必须携带真实索引，不能用「Auto」这种无具体索引的状态。
+  int? _pendingAudioTarget;
   // 选择令牌：每次打开/切换/取消重试都自增，让上一次未结束的重试循环自行退出，
   // 避免多次打开或切轨时并发叠加。
   int _selectionToken = 0;
@@ -86,9 +90,9 @@ class FvpPlayer {
     final old = _controller;
     final c = VideoPlayerController.file(File(path));
     _controller = c;
-    // 取消上一次打开遗留的外部轨重试循环，避免它作用于新 controller。
+    // 取消上一次打开遗留的音轨重试循环，避免它作用于新 controller。
     _selectionToken++;
-    _pendingExternalSelection = false;
+    _pendingAudioSelection = false;
     // 必须在 initialize()（打开媒体）之前设置解码器，否则本次打开会回退到默认
     // auto 选择：在 Windows 上可能落到低效解码路径，表现为「一帧一帧」卡顿；
     // 而重播因前次已写入解码器列表才流畅。
@@ -223,6 +227,10 @@ class FvpPlayer {
   bool get useHardwareDecode => _useHardwareDecode;
 
   /// 选择音轨：null = 自动（默认首条音轨，优先内嵌），否则按 [FvpTrack.index]。
+  ///
+  /// 手动选择发生在音轨已加载(正在播放)之后，setAudioTracks 立即生效，无需重试；
+  /// 重试仅在 [open] 早期针对「外置轨异步加载未就绪」启用，避免手动切换时反复调用
+  /// setAudioTracks 触发流重配导致卡顿。
   void setAudioTrackIndex(int? index) {
     _audioOff = false;
     _selectionToken++;
@@ -232,18 +240,15 @@ class FvpPlayer {
       final first = _tracks.audio.isNotEmpty ? _tracks.audio.first : null;
       _activeAudioIndex = null;
       final target = first?.index;
+      _pendingAudioTarget = target;
       _controller?.setAudioTracks(target != null ? [target] : const []);
-      // 默认轨若是外置音频，仍需重试落实（关→开后外置轨可能需重复 set 才生效）。
-      _pendingExternalSelection = first?.external ?? false;
     } else {
       _activeAudioIndex = index;
+      _pendingAudioTarget = index;
       _controller?.setAudioTracks([index]);
-      // 选中的若是外置轨，重试落实（关→开后可能需重复 set 才生效）。
-      _pendingExternalSelection =
-          _tracks.audio.any((e) => e.index == index && e.external);
     }
-    // 重新启用外部轨重试，确保「关闭音频→再切回」时外部轨被重新激活。
-    if (_pendingExternalSelection) _requestAudioSelection();
+    // 手动选择已加载的音轨立即生效，不再进入重试循环（也避免覆盖 open 早期的外置重试）。
+    _pendingAudioSelection = false;
   }
 
   /// 关闭音频（音量静音，不停止视频，也不卸载外置音频轨）。
@@ -312,14 +317,21 @@ class FvpPlayer {
   }
 
   /// 读取内嵌音轨（来自 getMediaInfo，不含外置音频）。
+  ///
+  /// 关键：setAudioTracks 底层是 libmdk 的 setActiveTracks(Audio, {n})，其 tracks
+  /// 参数为「音频轨内 0 起相对序号」(track number 0~N)；而 mediaInfo.audio[].index
+  /// 是 libmdk 的全局流序号（视频流为 0 时，首条音轨通常为 1）。若直接把全局序号传
+  /// 进去，会选到不存在/错误的音轨→被 libmdk 忽略默认轨→静音。因此这里改用列表位置
+  /// (音频相对序号) 作为 index，与外置轨合成索引(embedded.length + i)保持同一套编号。
   static List<FvpTrack> _readAudioTracks(VideoPlayerController c) {
     final info = c.getMediaInfo();
     final list = <FvpTrack>[];
     final a = info?.audio as List?;
     if (a != null) {
-      for (final s in a) {
+      for (int i = 0; i < a.length; i++) {
+        final s = a[i];
         list.add(FvpTrack(
-          index: s.index as int,
+          index: i, // 音频轨内相对序号(0 起)，而非全局流序号 s.index
           title: _meta(s.metadata, 'title'),
           language: _meta(s.metadata, 'language'),
           codec: s.codec?.codec as String?,
@@ -357,10 +369,10 @@ class FvpPlayer {
 
   /// 让 libmdk 真正落实「当前想用的音轨」。外置音频在播放开始后才异步加载，
   /// 播放前 setAudioTracks 选中的轨可能尚未就绪被忽略；这里周期性重设直到超时被打断。
-  /// 仅在有外部轨待落实时启用（_pendingExternalSelection），普通场景不重试、零副作用。
+  /// 仅在有音轨待落实时启用（_pendingAudioSelection），普通场景不重试、零副作用。
   /// 用 _selectionToken 取消上一次未结束的重试，避免并发叠加。
   void _requestAudioSelection() {
-    if (!_pendingExternalSelection || _audioOff) return;
+    if (!_pendingAudioSelection || _audioOff) return;
     _selectionToken++;
     final token = _selectionToken;
     _ensureAudioSelection(token);
@@ -374,35 +386,37 @@ class FvpPlayer {
       if (token != _selectionToken) return; // 被新的选择/打开覆盖
       if (_controller != c) return; // 已切换或释放
       if (_audioOff) return; // 用户关闭音频
-      if (!_pendingExternalSelection) return; // 手动选了其它轨
-      // 每轮按当前目标轨重试；libmdk 加载好外部轨后该调用才会真正生效。
-      c.setAudioTracks([_activeAudioIndex ?? 0]);
+      if (!_pendingAudioSelection) return; // 手动选了其它轨
+      // 每轮按目标轨重试；libmdk 加载好音轨后该调用才会真正生效。
+      // 用 _pendingAudioTarget 携带真实索引，避免「Auto」(null) 退化为 0 选错轨。
+      c.setAudioTracks([_pendingAudioTarget ?? _activeAudioIndex ?? 0]);
       await Future.delayed(const Duration(milliseconds: 150));
     }
   }
 
   /// 落实默认音轨选择：
-  /// - 无内嵌音轨且有外置 → 默认选中第一条外置；外部轨需播放后重试落实；
-  /// - 其余（有内嵌 / 只有内嵌）→ Auto（首条内嵌音轨），无需重试。
+  /// - 无内嵌音轨且有外置 → 默认选中第一条外置；外部轨异步加载，打开早期
+  ///   setAudioTracks 可能被忽略，故显式选中并进入重试循环兜底；
+  /// - 其余（有内嵌 / 只有内嵌）→ Auto（首条内嵌音轨），**不调用 setAudioTracks**：
+  ///   libmdk 默认即播首条内嵌轨；打开早期用错误/未就绪序号调用会丢弃默认轨→静音，
+  ///   且重试循环反复调用会触发流重配→再现 00c6f5ff 修复的一帧一帧卡顿。
   void _applyDefaultAudioSelection() {
     _audioOff = false;
     final externalTracks = _tracks.audio.where((t) => t.external).toList();
     final embeddedCount = _tracks.audio.length - externalTracks.length;
     if (embeddedCount == 0 && externalTracks.isNotEmpty) {
-      // 无内嵌音轨：默认选中第一条外置轨（合成索引 = 0）。外部音频异步加载，
-      // 播放前 setAudioTracks 可能因轨未就绪被忽略，故启用重试循环，待
-      // libmdk 加载好后由 _ensureAudioSelection 周期性重设落实选中。
+      // 无内嵌音轨：默认选中第一条外置轨。外部音频异步加载，播放前 setAudioTracks
+      // 可能因轨未就绪被忽略，故启用重试循环，待 libmdk 加载好后落实选中。
       _activeAudioIndex = externalTracks.first.index;
-      _pendingExternalSelection = true;
+      _pendingAudioTarget = externalTracks.first.index;
+      _controller?.setAudioTracks([externalTracks.first.index]);
+      _pendingAudioSelection = true;
     } else {
-      // 有内嵌/只有内嵌：Auto（首条内嵌），无需重试。
-      _pendingExternalSelection = false;
-      _activeAudioIndex = null;
-      final firstEmbedded = _tracks.audio.firstWhere(
-        (t) => !t.external,
-        orElse: () => _tracks.audio.first,
-      );
-      _controller?.setAudioTracks([firstEmbedded.index]);
+      // 有内嵌/只有内嵌：Auto（首条内嵌音轨）。不调用 setAudioTracks——交还 libmdk
+      // 默认行为即可出声，且避免重试循环在首开期间反复触发流重配导致卡顿复发。
+      _activeAudioIndex = null; // Auto：交给 libmdk 默认首条内嵌轨
+      _pendingAudioTarget = null;
+      _pendingAudioSelection = false;
     }
   }
 
