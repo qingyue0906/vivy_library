@@ -734,7 +734,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: cover != null
-                        ? Image.memory(cover, fit: BoxFit.cover)
+                        ? Image.memory(cover, fit: BoxFit.cover, cacheWidth: 512)
                         : Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
@@ -1651,6 +1651,8 @@ class _FileLeafState extends State<_FileLeaf> {
                   width: 32,
                   height: 32,
                   fit: BoxFit.cover,
+                  cacheWidth: 64,
+                  cacheHeight: 64,
                   errorBuilder: (_, _, _) => _audioFileIcon(cs, playable, isCurrent),
                 ),
               )

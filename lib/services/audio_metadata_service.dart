@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 
 import '../models/audio_track.dart';
 import 'audio_tag_service.dart';
-import 'fvp_player.dart';
 
 /// 音频标签 + 时长 的渐进探测与跨页面缓存。
 ///
@@ -10,8 +9,8 @@ import 'fvp_player.dart';
 /// - 页面级静默慢扫：单并发、限速、滚动/交互暂停，避免抢占平台线程导致掉帧；
 /// - 按 path 缓存「组合元数据」（标签 + 时长），**跨页面持续有效**：
 ///   重开同一项目时直接回灌命中，封面/时长/标题即时显示，不再全量重探；
-/// - 时长探测结果（来自 fvp 的 getMediaInfo 离屏探测）也写回缓存，避免每次重开都
-///   反复创建临时 controller 重探；
+/// - 标签与时长统一由 [AudioTagService]（底层纯 Dart 的 [audio_metadata_reader]）
+///   一次读取，结果写回缓存，避免每次重开都重复探测；
 /// - [dispose] 只停后台扫描循环、清本轮状态集合，**保留 [_cache]**，使反复打开
 ///   不会持续升高内存，也无需重复探测。
 ///
@@ -71,15 +70,12 @@ class AudioMetadataService {
   /// 置 true 时扫描循环退出（页面 dispose 时调用）。
   static bool _stop = false;
 
-  /// 探测单个音频：标签来自纯 Dart 的 [AudioTagService]，时长来自 fvp 离屏探测；
-  /// 二者合并为一份组合元数据写回缓存。
+  /// 探测单个音频：标签与时长均来自 [AudioTagService]（底层纯 Dart 的
+  /// [audio_metadata_reader] 一次按需读取，不再用 fvp/libmdk 逐个整文件离屏探测）。
+  /// 二者本就合并在 [AudioMeta] 内，直接返回即可，去除原 libmdk 探测造成的大量
+  /// 原生内存驻留（约数百 MB~1GB）。
   static Future<AudioMeta?> probe(String path) async {
-    final tag = await AudioTagService.read(path);
-    Duration? dur;
-    try {
-      dur = (await FvpPlayer.probeVideoMeta(path))?.duration;
-    } catch (_) {}
-    return tag.copyWith(duration: dur ?? tag.duration);
+    return AudioTagService.read(path);
   }
 
   /// 登记当前正在播放的音频：其时长由播放器内核回填，后台扫描排除它，

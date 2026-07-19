@@ -5,7 +5,7 @@ class AudioMeta {
   final String? title;
   final String? artist;
   final String? album;
-  final Uint8List? coverBytes; // 内嵌封面图（APIC / METADATA_BLOCK_PICTURE / covr）
+  final Uint8List? coverBytes; // 内嵌封面「缩略图」(≤512px，由 AudioTagService 解码缩放)，非原图
   final String? lyrics; // 内嵌歌词原始文本（可能含 LRC 时间戳）
   final Duration? duration; // 以播放器权威时长为准，标签仅作兜底
 
