@@ -194,9 +194,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         if (_mediaStarted || !mounted) return;
         _mediaStarted = true;
         _openCurrent();
-        // 启动静默慢扫：后台单并发、限速、可见优先地探测列表全部视频；
-        // 滚动时由 ScrollNotification 暂停，避免抢占平台线程导致卡顿。
-        VideoMetadataService.scanAll(widget.playlist.entries);
+        // 首播解码初始化最吃力的头几秒，避免后台扫描创建的临时 controller 与之
+        // 争用同一平台线程/GPU，导致「一帧一帧」。延迟到首播稳定后再慢扫：
+        // 缓存未命中才会 probe，且服务本身单并发、限速、可见优先。
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            VideoMetadataService.scanAll(widget.playlist.entries);
+          }
+        });
       }
 
       if (anim == null || anim.status == AnimationStatus.completed) {

@@ -89,6 +89,10 @@ class FvpPlayer {
     // 取消上一次打开遗留的外部轨重试循环，避免它作用于新 controller。
     _selectionToken++;
     _pendingExternalSelection = false;
+    // 必须在 initialize()（打开媒体）之前设置解码器，否则本次打开会回退到默认
+    // auto 选择：在 Windows 上可能落到低效解码路径，表现为「一帧一帧」卡顿；
+    // 而重播因前次已写入解码器列表才流畅。
+    c.setVideoDecoders(_useHardwareDecode ? _currentHwList : _swDecoders);
     try {
       await c.initialize();
     } catch (e) {
@@ -115,9 +119,8 @@ class FvpPlayer {
       rethrow; // 让上层提示“无法播放该文件”。
     }
     c.addListener(_onUpdate);
-    // 应用解码偏好（on-the-fly 切换；软件解码需随后重载，由调用方负责 open 当前项）。
-    c.setVideoDecoders(_useHardwareDecode ? _currentHwList : _swDecoders);
     // 应用已暂存的音量/倍速，保证 open 前设置的值不丢失。
+    // 注意：解码器已移至 initialize() 之前设置，勿在此处重复 setVideoDecoders。
     c.setVolume(_volume / 100);
     c.setPlaybackSpeed(_rate);
     _completedFired = false;
@@ -158,6 +161,11 @@ class FvpPlayer {
   }
 
   List<String> get _currentHwList =>
+      _hwDecoders[Platform.operatingSystem] ?? _swDecoders;
+
+  /// 当前平台的硬件解码器列表（默认启用）。供 [fvp.registerWith] 全局预设兜底，
+  /// 让未显式 setVideoDecoders 的离屏探测（如元数据扫描 probeVideoMeta）也走硬件解码。
+  static List<String> get defaultHardwareDecoders =>
       _hwDecoders[Platform.operatingSystem] ?? _swDecoders;
 
   /// 视作「同名外置音频」的扩展名白名单（按常见度排序）。

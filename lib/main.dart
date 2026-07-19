@@ -5,6 +5,7 @@ import 'package:fvp/mdk.dart' as mdk;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
+import 'services/fvp_player.dart';
 import 'services/script_service.dart';
 import 'services/settings_service.dart';
 import 'services/translations.dart';
@@ -17,7 +18,11 @@ void main() async {
   await pdfrxFlutterInitialize();
 
 
-  fvp.registerWith();
+  // 全局预设硬件解码器（兜底）：让未显式 setVideoDecoders 的离屏探测（如元数据扫描）
+  // 也走硬件解码；正常播放在每次 open 时会显式前置 setVideoDecoders，会覆盖此全局预设。
+  fvp.registerWith(options: {
+    'video.decoders': FvpPlayer.defaultHardwareDecoders,
+  });
 
   await AppDataService.migrateIfNeeded();
 
