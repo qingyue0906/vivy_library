@@ -115,6 +115,14 @@ class AudioEntry {
     final p = (int n) => n.toString().padLeft(2, '0');
     return '${d.year}-${p(d.month)}-${p(d.day)} ${p(d.hour)}:${p(d.minute)}';
   }
+
+  /// 音频格式：文件扩展名大写（MP3/FLAC/M4A…），与视频侧 [VideoMeta.codecText]
+  /// 大写风格一致。取 name 的扩展名，构建列表时同步可得，不依赖 [AudioMeta] 异步探测。
+  String get formatText {
+    final dot = name.lastIndexOf('.');
+    if (dot <= 0 || dot == name.length - 1) return '--';
+    return name.substring(dot + 1).toUpperCase();
+  }
 }
 
 /// 文件夹树节点：children 为子文件夹，files 为该文件夹下的音频文件。
