@@ -93,6 +93,22 @@ class AudioTagService {
     }
   }
 
+  /// 仅对「当前播放曲目」按需读取内嵌封面**原图**（不缩放、不重编码，零质量损失）。
+  /// 用于舞台大图高清显示；列表/后台扫描仍用 [read] 的 128px 缩略图以省内存。
+  /// 失败返回 null。
+  static Uint8List? readFullCover(String path) {
+    try {
+      final f = File(path);
+      if (!f.existsSync()) return null;
+      final m = readMetadata(f, getImage: true);
+      if (m.pictures.isEmpty) return null;
+      final bytes = m.pictures.first.bytes;
+      return bytes.isEmpty ? null : Uint8List.fromList(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ===================== 封面缩略图 =====================
   //
   // 内嵌封面原始图常 500–2000px、数百 KB~数 MB（FLAC/高清封面更夸张）。曾直接把原图
@@ -101,8 +117,9 @@ class AudioTagService {
   // 20–60KB，常驻内存从数百 MB 降到 ~12MB。这在概念上对齐开源播放器（Phonograph/
   // VLC 等）"列表只显示小缩略图、大图按需另取"的做法。
 
-  /// 内嵌封面缩略图目标边长。影响内存与正在播放页清晰度，512px 对桌面屏足够。
-  static const int _coverThumbEdge = 512;
+  /// 内嵌封面缩略图目标边长。仅用于列表/卡片等小图（≤128px 足够），
+  /// 舞台大图改用 [readFullCover] 取原图，故此处可尽量小以省内存。
+  static const int _coverThumbEdge = 128;
 
   /// 将内嵌封面解码并等比缩放到 [_coverThumbEdge]，再紧凑重编码；
   /// 失败则退化为原字节，保证至少能显示。返回 null 表示无封面。
@@ -123,11 +140,11 @@ class AudioTagService {
         );
         out = decoded.hasAlpha
             ? img.encodePng(r)
-            : img.encodeJpg(r, quality: 85);
+            : img.encodeJpg(r, quality: 90);
       } else {
         out = decoded.hasAlpha
             ? img.encodePng(decoded)
-            : img.encodeJpg(decoded, quality: 85);
+            : img.encodeJpg(decoded, quality: 90);
       }
       return Uint8List.fromList(out);
     } catch (_) {

@@ -272,17 +272,21 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
       if (!mounted) return;
       final e = _currentEntry;
       if (e == null || e.path != entry.path) return; // 已切走，丢弃结果
+      // 舞台大图额外按需取内嵌封面原图（不缩放，高清显示）。
+      final coverFull = AudioTagService.readFullCover(entry.path);
       // 保留播放器权威时长，回填标签的封面/标题/艺人/专辑/歌词。
       final merged = (e.meta ?? const AudioMeta()).copyWith(
         title: tag.title,
         artist: tag.artist,
         album: tag.album,
         coverBytes: tag.coverBytes,
+        coverFullBytes: coverFull,
         lyrics: tag.lyrics,
       );
       e.setMeta(merged);
-      // 完整组合元数据（含封面）写回跨页面缓存，重开本曲目时直接命中。
-      AudioMetadataService.putCache(entry.path, merged);
+      // 高清原图不进跨页面缓存（防止全部曲目常驻高清字节 → 内存回升）；
+      // 缓存只留 128px 缩略图供列表/重开回灌，重开本曲目时直接命中。
+      AudioMetadataService.putCache(entry.path, merged.copyWith(coverFullBytes: null));
       _onEntryChanged(); // 重新解析歌词（若标签含内嵌歌词）
       if (mounted) setState(() {});
     });
@@ -683,7 +687,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
   /// 中央舞台：大封面 + 标题/艺人–专辑 + 同步歌词面板（含 midi 无声提示）。
   Widget _buildStage(ColorScheme cs) {
     final current = _currentEntry;
-    final cover = current?.meta?.coverBytes;
+    final cover = current?.meta?.coverFullBytes ?? current?.meta?.coverBytes;
     final title =
         current?.displayTitle ?? Strings.t('unknownTitle');
     final artist = current?.displayArtist ?? '';
@@ -734,7 +738,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: cover != null
-                        ? Image.memory(cover, fit: BoxFit.cover, cacheWidth: 512)
+                        ? Image.memory(cover, fit: BoxFit.cover)
                         : Container(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
