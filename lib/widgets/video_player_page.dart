@@ -1692,13 +1692,13 @@ class _FileLeafState extends State<_FileLeaf> {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      '${f.meta?.durationText ?? '--'} · ${f.sizeText}',
+                      '${f.meta?.durationText ?? '--'} · ${f.sizeText} · ${f.dateText}',
                       style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ] else
                     Text(
-                      f.sizeText,
+                      '${f.sizeText} · ${f.dateText}',
                       style: TextStyle(
                         fontSize: 10,
                         color: cs.onSurfaceVariant.withValues(alpha: 0.6),

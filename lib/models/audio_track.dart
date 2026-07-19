@@ -107,6 +107,14 @@ class AudioEntry {
     final gb = mb / 1024;
     return '${gb.toStringAsFixed(2)} GB';
   }
+
+  /// 文件修改日期：与详情面板 _formatDate 一致的「YYYY-MM-DD HH:MM」。
+  /// 由文件 stat 同步可得，不依赖异步探测，故与 [sizeText] 同级直接显示。
+  String get dateText {
+    final d = modifiedTime;
+    final p = (int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${p(d.month)}-${p(d.day)} ${p(d.hour)}:${p(d.minute)}';
+  }
 }
 
 /// 文件夹树节点：children 为子文件夹，files 为该文件夹下的音频文件。

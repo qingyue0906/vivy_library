@@ -159,6 +159,11 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     player.completedStream.listen((_) => _onCompleted());
     player.positionStream.listen((pos) => _updateLyric(pos));
     player.durationStream.listen((_) => _refreshCurrentMetaFromState());
+    // 订阅播放状态流：VideoPlayerController 每帧只更新 player.state，不会触发本页
+    // setState；不订阅则按钮图标会滞后一拍（首次显示暂停、需点两次才刷新）。
+    player.playingStream.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   /// 真正的媒体初始化（open + 元数据探测）推迟到本页入场转场动画【完全结束】后，
@@ -1687,7 +1692,7 @@ class _FileLeafState extends State<_FileLeaf> {
                     ),
                   const SizedBox(height: 1),
                   Text(
-                    '${f.meta?.durationText ?? '--:--'} · ${f.sizeText}',
+                    '${f.meta?.durationText ?? '--:--'} · ${f.sizeText} · ${f.dateText}',
                     style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                     overflow: TextOverflow.ellipsis,
                   ),
