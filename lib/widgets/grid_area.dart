@@ -246,16 +246,27 @@ class _SectionGridLayout extends SliverGridLayout {
       final gi = _colFirstVisible(_colItems[col], scrollOffset);
       if (gi < min) min = gi;
     }
+    // 整行标题占满整行、不在任何列里，但其底边越过视口顶时即为最顶部可见单元。
+    // 若不纳入，位于列表最顶端的标题（如第一组）在 scrollOffset==0 时会被排除在外。
+    for (final h in headerIndices) {
+      if (h < min && _starts[h] + _extents[h] > scrollOffset) min = h;
+    }
     return min < childCount ? min : childCount - 1;
   }
 
   @override
   int getMaxChildIndexForScrollOffset(double scrollOffset) {
+    // 注意：SliverGrid 传入的是 scrollOffset + remainingPaintExtent，即视口底边。
     if (childCount == 0) return 0;
     var max = -1;
     for (var col = 0; col < crossAxisCount; col++) {
       final gi = _colLastVisible(_colItems[col], scrollOffset);
       if (gi > max) max = gi;
+    }
+    // 整行标题若其顶边未越过视口底，也应纳入构建范围，否则标题正好位于视口最
+    // 顶端（上方无旧卡片残留）时会消失。
+    for (final h in headerIndices) {
+      if (h > max && _starts[h] <= scrollOffset) max = h;
     }
     return max >= 0 ? max : 0;
   }
