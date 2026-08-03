@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter_windows/webview_flutter_windows.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../services/edge_html_server.dart';
 import '../services/translations.dart';
@@ -30,7 +33,8 @@ class EdgeHtmlViewerPage extends StatefulWidget {
   State<EdgeHtmlViewerPage> createState() => _EdgeHtmlViewerPageState();
 }
 
-class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
+class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage>
+    with WindowListener {
   final WebviewController _controller = WebviewController();
   EdgeHtmlServer? _server;
   late int _index;
@@ -39,10 +43,20 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
   bool _initFailed = false;
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _isMaximized = false;
+
+  /// 网页内容区长按右键（超过该时长）快捷退出页面。
+  /// 短按右键保留给浏览器原生右键菜单，不做拦截。
+  static const Duration _exitLongPressDelay = Duration(milliseconds: 500);
+  Timer? _exitTimer;
 
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
+    windowManager.isMaximized().then((v) {
+      if (mounted) setState(() => _isMaximized = v);
+    });
     _index = widget.htmlFiles.isEmpty
         ? 0
         : widget.initialIndex.clamp(0, widget.htmlFiles.length - 1);
@@ -51,9 +65,45 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
 
   @override
   void dispose() {
+    _exitTimer?.cancel();
+    windowManager.removeListener(this);
     _controller.dispose();
     _server?.stop();
     super.dispose();
+  }
+
+  @override
+  void onWindowMaximize() {
+    if (mounted) setState(() => _isMaximized = true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    if (mounted) setState(() => _isMaximized = false);
+  }
+
+  Future<void> _toggleMaximize() async {
+    if (_isMaximized) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+
+  /// 网页内容区右键按下时启动长按计时；短按右键不拦截，
+  /// 保持 WebView2 原生右键菜单可用。
+  void _onWebPointerDown(PointerDownEvent event) {
+    if (event.kind != PointerDeviceKind.mouse) return;
+    if (event.buttons != kSecondaryMouseButton) return;
+    _exitTimer?.cancel();
+    _exitTimer = Timer(_exitLongPressDelay, () {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  void _cancelExitTimer() {
+    _exitTimer?.cancel();
+    _exitTimer = null;
   }
 
   Future<void> _init() async {
@@ -117,7 +167,14 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
               color: cs.primary,
               backgroundColor: Colors.transparent,
             ),
-          Expanded(child: _buildBody(context, c, cs)),
+          Expanded(
+            child: Listener(
+              onPointerDown: _onWebPointerDown,
+              onPointerUp: (_) => _cancelExitTimer(),
+              onPointerCancel: (_) => _cancelExitTimer(),
+              child: _buildBody(context, c, cs),
+            ),
+          ),
         ],
       ),
     );
@@ -126,67 +183,99 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
   Widget _buildToolbar(BuildContext context, double c, ColorScheme cs) {
     return Container(
       height: 36 * c,
-      padding: EdgeInsets.symmetric(horizontal: 8 * c),
+      // 仅左侧留内边距，让最小化/最大化/关闭贴到最右边缘（窗口控制惯例）
+      padding: EdgeInsets.only(left: 8 * c),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: Row(
-        children: [
-          _toolbarIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.close,
-            tooltip: Strings.t('closePanel'),
-            onTap: () => Navigator.of(context).pop(),
-            color: Colors.red.shade400,
-          ),
-          SizedBox(width: 6 * c),
-          _toolbarIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.arrow_back,
-            tooltip: Strings.t('browserBack'),
-            enabled: _initialized && _canGoBack,
-            onTap: () => _controller.goBack(),
-          ),
-          _toolbarIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.arrow_forward,
-            tooltip: Strings.t('browserForward'),
-            enabled: _initialized && _canGoForward,
-            onTap: () => _controller.goForward(),
-          ),
-          _toolbarIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.refresh,
-            tooltip: Strings.t('browserReload'),
-            enabled: _initialized,
-            onTap: () => _controller.reload(),
-          ),
-          SizedBox(width: 10 * c),
-          Expanded(
-            child: Text(
-              widget.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12 * c, color: cs.onSurface),
+      // 整条标题栏可拖拽移动窗口；按钮/下拉框的快速点击在手势竞技场中
+      // 仍归 tap 胜出，不影响交互，仅拖动（pan）用于移动窗口。
+      child: DragToMoveArea(
+        child: Row(
+          children: [
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.arrow_back,
+              tooltip: Strings.t('browserBack'),
+              enabled: _initialized && _canGoBack,
+              onTap: () => _controller.goBack(),
             ),
-          ),
-          if (widget.htmlFiles.length > 1)
-            _buildHtmlDropdown(context, c, cs),
-          SizedBox(width: 6 * c),
-          _toolbarIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.open_in_new,
-            tooltip: Strings.t('openInSystemBrowser'),
-            enabled: _initialized,
-            onTap: _openInSystemBrowser,
-          ),
-        ],
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.arrow_forward,
+              tooltip: Strings.t('browserForward'),
+              enabled: _initialized && _canGoForward,
+              onTap: () => _controller.goForward(),
+            ),
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.refresh,
+              tooltip: Strings.t('browserReload'),
+              enabled: _initialized,
+              onTap: () => _controller.reload(),
+            ),
+            SizedBox(width: 10 * c),
+            Expanded(
+              child: Container(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12 * c, color: cs.onSurface),
+                ),
+              ),
+            ),
+            SizedBox(width: 10 * c),
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.horizontal_rule,
+              tooltip: Strings.t('minimize'),
+              padding: 8,
+              iconSize: 16,
+              onTap: () => windowManager.minimize(),
+            ),
+            SizedBox(width: 4 * c),
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+              tooltip: Strings.t('maximize'),
+              padding: 8,
+              iconSize: 16,
+              onTap: _toggleMaximize,
+            ),
+            SizedBox(width: 4 * c),
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.close,
+              tooltip: Strings.t('closePanel'),
+              padding: 8,
+              iconSize: 16,
+              onTap: () => Navigator.of(context).pop(),
+              color: Colors.red.shade400,
+            ),
+            if (widget.htmlFiles.length > 1) ...[
+              SizedBox(width: 6 * c),
+              _buildHtmlDropdown(context, c, cs),
+            ],
+            SizedBox(width: 6 * c),
+            _toolbarIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.open_in_new,
+              tooltip: Strings.t('openInSystemBrowser'),
+              enabled: _initialized,
+              onTap: _openInSystemBrowser,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -203,6 +292,8 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
         child: DropdownButton<int>(
           value: _index,
           isDense: true,
+          // 有界宽度内省略长文件名，避免按钮内部 Row 溢出（像素警告）
+          isExpanded: true,
           dropdownColor: cs.surfaceContainerHigh,
           style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
           icon: Icon(Icons.expand_more, size: 16 * c, color: cs.onSurfaceVariant),
@@ -235,6 +326,8 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
     required VoidCallback onTap,
     bool enabled = true,
     Color? color,
+    double padding = 5,
+    double iconSize = 15,
   }) {
     final iconColor = enabled
         ? (color ?? cs.onSurfaceVariant)
@@ -250,8 +343,8 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage> {
           borderRadius: BorderRadius.circular(6 * c),
           hoverColor: cs.onSurface.withValues(alpha: 0.08),
           child: Padding(
-            padding: EdgeInsets.all(5 * c),
-            child: Icon(icon, size: 15 * c, color: iconColor),
+            padding: EdgeInsets.all(padding * c),
+            child: Icon(icon, size: iconSize * c, color: iconColor),
           ),
         ),
       ),
