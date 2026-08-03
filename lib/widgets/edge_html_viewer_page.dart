@@ -197,93 +197,109 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage>
         color: cs.surfaceContainerLow,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      // 整条标题栏可拖拽移动窗口；按钮/下拉框的快速点击在手势竞技场中
-      // 仍归 tap 胜出，不影响交互，仅拖动（pan）用于移动窗口。
-      child: DragToMoveArea(
-        child: Row(
-          children: [
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.arrow_back,
-              tooltip: Strings.t('browserBack'),
-              enabled: _initialized && _canGoBack,
-              onTap: () => _controller.goBack(),
+      // 两层结构（与主界面标题栏一致）：底层全幅拖拽层负责空白处的
+      // 拖动与双击最大化；上层透明交互层中按钮/下拉框吸收事件，不进
+      // 拖拽竞技场，避免 DragToMoveArea 自带 onDoubleTap 的 300ms
+      // 竞技场持有导致点击延迟。
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DragToMoveArea(
+              child: const SizedBox.expand(),
             ),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.arrow_forward,
-              tooltip: Strings.t('browserForward'),
-              enabled: _initialized && _canGoForward,
-              onTap: () => _controller.goForward(),
-            ),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.refresh,
-              tooltip: Strings.t('browserReload'),
-              enabled: _initialized,
-              onTap: () => _controller.reload(),
-            ),
-            SizedBox(width: 10 * c),
-            Expanded(
-              child: Container(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  widget.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12 * c, color: cs.onSurface),
+          ),
+          Positioned.fill(
+            child: Row(
+              children: [
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.arrow_back,
+                  tooltip: Strings.t('browserBack'),
+                  enabled: _initialized && _canGoBack,
+                  onTap: () => _controller.goBack(),
                 ),
-              ),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.arrow_forward,
+                  tooltip: Strings.t('browserForward'),
+                  enabled: _initialized && _canGoForward,
+                  onTap: () => _controller.goForward(),
+                ),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.refresh,
+                  tooltip: Strings.t('browserReload'),
+                  enabled: _initialized,
+                  onTap: () => _controller.reload(),
+                ),
+                SizedBox(width: 10 * c),
+                // 标题 Text 会吸收指针事件，需显式包 DragToMoveArea
+                // 才能从标题处拖动窗口/双击最大化
+                Expanded(
+                  child: DragToMoveArea(
+                    child: Container(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(fontSize: 12 * c, color: cs.onSurface),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 10 * c),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.horizontal_rule,
+                  tooltip: Strings.t('minimize'),
+                  padding: 8,
+                  iconSize: 16,
+                  onTap: () => windowManager.minimize(),
+                ),
+                SizedBox(width: 4 * c),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
+                  tooltip: Strings.t('maximize'),
+                  padding: 8,
+                  iconSize: 16,
+                  onTap: _toggleMaximize,
+                ),
+                SizedBox(width: 4 * c),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.close,
+                  tooltip: Strings.t('closePanel'),
+                  padding: 8,
+                  iconSize: 16,
+                  onTap: () => Navigator.of(context).pop(),
+                  color: Colors.red.shade400,
+                ),
+                if (widget.htmlFiles.length > 1) ...[
+                  SizedBox(width: 6 * c),
+                  _buildHtmlDropdown(context, c, cs),
+                ],
+                SizedBox(width: 6 * c),
+                _toolbarIconButton(
+                  c: c,
+                  cs: cs,
+                  icon: Icons.open_in_new,
+                  tooltip: Strings.t('openInSystemBrowser'),
+                  enabled: _initialized,
+                  onTap: _openInSystemBrowser,
+                ),
+              ],
             ),
-            SizedBox(width: 10 * c),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.horizontal_rule,
-              tooltip: Strings.t('minimize'),
-              padding: 8,
-              iconSize: 16,
-              onTap: () => windowManager.minimize(),
-            ),
-            SizedBox(width: 4 * c),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: _isMaximized ? Icons.crop_square : Icons.crop_16_9,
-              tooltip: Strings.t('maximize'),
-              padding: 8,
-              iconSize: 16,
-              onTap: _toggleMaximize,
-            ),
-            SizedBox(width: 4 * c),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.close,
-              tooltip: Strings.t('closePanel'),
-              padding: 8,
-              iconSize: 16,
-              onTap: () => Navigator.of(context).pop(),
-              color: Colors.red.shade400,
-            ),
-            if (widget.htmlFiles.length > 1) ...[
-              SizedBox(width: 6 * c),
-              _buildHtmlDropdown(context, c, cs),
-            ],
-            SizedBox(width: 6 * c),
-            _toolbarIconButton(
-              c: c,
-              cs: cs,
-              icon: Icons.open_in_new,
-              tooltip: Strings.t('openInSystemBrowser'),
-              enabled: _initialized,
-              onTap: _openInSystemBrowser,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
