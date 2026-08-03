@@ -142,8 +142,16 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage>
       path.split(RegExp(r'[\\/]')).last;
 
   Future<void> _loadAt(int index) async {
-    final name = _baseName(widget.htmlFiles[index]);
-    await _controller.loadUrl(_server!.urlFor(name));
+    final path = widget.htmlFiles[index];
+    final lower = path.toLowerCase();
+    // mhtml 为单文件自包含格式，file:// 直开即可由 WebView2 原生渲染
+    // （与 Edge 双击打开同一机制，资源全部内嵌，无需 HTTP 服务）；
+    // html 系列仍走本地同源服务以规避 CORS 与 MIME 问题。
+    final isMhtml = lower.endsWith('.mhtml') || lower.endsWith('.mht');
+    final url = isMhtml
+        ? Uri.file(path).toString()
+        : _server!.urlFor(_baseName(path));
+    await _controller.loadUrl(url);
     if (mounted) setState(() => _index = index);
   }
 

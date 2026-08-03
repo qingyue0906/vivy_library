@@ -811,8 +811,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     );
   }
 
-  /// 打开内置网页浏览器：收集项目顶层 html 文件，
-  /// [startPath] 指定从哪个 html 开始（底部面板双击 html 文件时传入）。
+  /// 打开内置网页浏览器：收集项目顶层 html/mhtml 文件，
+  /// [startPath] 指定从哪个网页开始（底部面板双击网页文件时传入）。
   Future<void> _openEdgeHtml(LibraryItem item, {String? startPath}) async {
     final dir = Directory(item.path);
     final htmlFiles = <String>[];
@@ -821,7 +821,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         for (final e in dir.listSync()) {
           if (e is! File) continue;
           final name = e.path.toLowerCase();
-          if (name.endsWith('.html') || name.endsWith('.htm')) {
+          if (name.endsWith('.html') ||
+              name.endsWith('.htm') ||
+              name.endsWith('.mhtml') ||
+              name.endsWith('.mht')) {
             htmlFiles.add(e.path);
           }
         }

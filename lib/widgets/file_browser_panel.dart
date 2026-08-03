@@ -677,10 +677,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     Process.run('cmd', ['/c', 'start', '', path]);
   }
 
-  /// 判断是否为网页文件（.html/.htm），供 edgehtml 类型的双击与"打开"路由。
+  /// 判断是否为网页文件（.html/.htm/.mhtml/.mht），供 edgehtml 类型的
+  /// 双击与"打开"路由到内置浏览器。
   bool isHtmlFile(String path) {
     final lower = path.toLowerCase();
-    return lower.endsWith('.html') || lower.endsWith('.htm');
+    return lower.endsWith('.html') ||
+        lower.endsWith('.htm') ||
+        lower.endsWith('.mhtml') ||
+        lower.endsWith('.mht');
   }
 
   /// 导出选中项到用户选择的目录（替代原"拖出"能力）。
