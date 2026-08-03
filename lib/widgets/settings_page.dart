@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:window_manager/window_manager.dart';
 import '../services/app_data_service.dart';
 import '../services/script_service.dart';
@@ -838,7 +839,18 @@ class _SettingsPageState extends State<SettingsPage>
         children: [
           const Text('Vivy Library', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text(Strings.t('appVersion'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.data?.version ?? '';
+              final build = Strings.buildVersion;
+              final display = '$version${build.isEmpty ? '' : ' $build'}';
+              return Text(
+                Strings.tn('appVersion', {'version': display}),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              );
+            },
+          ),
           const SizedBox(height: 16),
           Text(Strings.t('projectUrl'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),

@@ -15,6 +15,10 @@ extension AppLocaleX on AppLocale {
 class Strings {
   static AppLocale _locale = AppLocale.zhHans;
 
+  /// 构建日期后缀（如 Build260803），由构建脚本经
+  /// --dart-define=APP_VERSION=BuildyyMMdd 注入；未注入时为空。
+  static const String buildVersion = String.fromEnvironment('APP_VERSION');
+
   static void setLocale(AppLocale locale) { _locale = locale; }
   static AppLocale get currentLocale => _locale;
 
@@ -193,10 +197,10 @@ class Strings {
       AppLocale.ja: 'サイレント',
     },
     'appVersion': {
-      AppLocale.zhHans: '版本 0.1.0 Build260719',
-      AppLocale.zhHant: '版本 0.1.0 Build260719',
-      AppLocale.en: 'Version 0.1.0 Build260719',
-      AppLocale.ja: 'バージョン 0.1.0 Build260719',
+      AppLocale.zhHans: '版本 {version}',
+      AppLocale.zhHant: '版本 {version}',
+      AppLocale.en: 'Version {version}',
+      AppLocale.ja: 'バージョン {version}',
     },
     'projectUrl': {
       AppLocale.zhHans: '项目地址',
