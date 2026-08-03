@@ -2296,5 +2296,18 @@ class Strings {
       AppLocale.en: 'Browser init failed, check the WebView2 Runtime',
       AppLocale.ja: 'ブラウザ初期化に失敗しました。WebView2 Runtime を確認してください',
     },
+    // ======== Markdown 文档 (markdown) ========
+    'openProjectMarkdown': {
+      AppLocale.zhHans: '浏览项目内文档',
+      AppLocale.zhHant: '瀏覽項目內文件',
+      AppLocale.en: 'Browse Project Markdown',
+      AppLocale.ja: 'プロジェクトのMarkdownを閲覧',
+    },
+    'noMarkdownFiles': {
+      AppLocale.zhHans: '未找到 Markdown 文件',
+      AppLocale.zhHant: '未找到 Markdown 檔案',
+      AppLocale.en: 'No Markdown files found',
+      AppLocale.ja: 'Markdown ファイルが見つかりません',
+    },
   };
 }

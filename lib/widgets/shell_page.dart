@@ -558,6 +558,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 onOpenComicReader: _openComicReader,
                 onOpenEbookReader: _openEbookReader,
                 onOpenEdgeHtml: _openEdgeHtml,
+                onOpenMarkdown: _openMarkdown,
               );
             },
           ),
@@ -811,31 +812,34 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     );
   }
 
-  /// 打开内置网页浏览器：收集项目顶层 html/mhtml 文件，
-  /// [startPath] 指定从哪个网页开始（底部面板双击网页文件时传入）。
-  Future<void> _openEdgeHtml(LibraryItem item, {String? startPath}) async {
+  /// 打开内置网页浏览器：收集项目顶层指定扩展名的文件构建打开流程，
+  /// [noFilesKey] 为无文件时的提示文案键，[startPath] 指定从哪个文件
+  /// 开始（底部面板双击文件时传入）。
+  Future<void> _openWebPage(
+    LibraryItem item, {
+    required List<String> extensions,
+    required String noFilesKey,
+    String? startPath,
+  }) async {
     final dir = Directory(item.path);
-    final htmlFiles = <String>[];
+    final files = <String>[];
     if (dir.existsSync()) {
       try {
         for (final e in dir.listSync()) {
           if (e is! File) continue;
           final name = e.path.toLowerCase();
-          if (name.endsWith('.html') ||
-              name.endsWith('.htm') ||
-              name.endsWith('.mhtml') ||
-              name.endsWith('.mht')) {
-            htmlFiles.add(e.path);
+          if (extensions.any(name.endsWith)) {
+            files.add(e.path);
           }
         }
-        htmlFiles.sort();
+        files.sort();
       } catch (_) {}
     }
     if (!mounted) return;
-    if (htmlFiles.isEmpty) {
+    if (files.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(Strings.t('noHtmlFiles')),
+          content: Text(Strings.t(noFilesKey)),
           backgroundColor: Colors.orange.shade700,
         ),
       );
@@ -844,8 +848,8 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     var startIndex = 0;
     if (startPath != null) {
       final norm = startPath.replaceAll('\\', '/').toLowerCase();
-      startIndex = htmlFiles.indexWhere(
-          (e) => e.replaceAll('\\', '/').toLowerCase() == norm);
+      startIndex = files
+          .indexWhere((e) => e.replaceAll('\\', '/').toLowerCase() == norm);
       if (startIndex < 0) startIndex = 0;
     }
     await Navigator.of(context).push(
@@ -854,12 +858,32 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         builder: (_) => EdgeHtmlViewerPage(
           title: item.info.title,
           rootPath: item.path,
-          htmlFiles: htmlFiles,
+          htmlFiles: files,
           initialIndex: startIndex,
         ),
       ),
     );
   }
+
+  /// 打开内置网页浏览器：收集项目顶层 html/mhtml 文件，
+  /// [startPath] 指定从哪个网页开始（底部面板双击网页文件时传入）。
+  Future<void> _openEdgeHtml(LibraryItem item, {String? startPath}) =>
+      _openWebPage(
+        item,
+        extensions: const ['.html', '.htm', '.mhtml', '.mht'],
+        noFilesKey: 'noHtmlFiles',
+        startPath: startPath,
+      );
+
+  /// 打开内置网页浏览器：收集项目顶层 markdown 文件，
+  /// [startPath] 指定从哪个文档开始（底部面板双击文档文件时传入）。
+  Future<void> _openMarkdown(LibraryItem item, {String? startPath}) =>
+      _openWebPage(
+        item,
+        extensions: const ['.md', '.markdown'],
+        noFilesKey: 'noMarkdownFiles',
+        startPath: startPath,
+      );
 }
 
 class _CaptionButton extends StatefulWidget {

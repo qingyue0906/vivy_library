@@ -317,6 +317,7 @@ class GridArea extends StatefulWidget {
   final void Function(LibraryItem item, {String? startPath}) onOpenComicReader;
   final void Function(LibraryItem item, {String? startPath}) onOpenEbookReader;
   final void Function(LibraryItem item, {String? startPath}) onOpenEdgeHtml;
+  final void Function(LibraryItem item, {String? startPath}) onOpenMarkdown;
 
   const GridArea({
     super.key,
@@ -340,6 +341,7 @@ class GridArea extends StatefulWidget {
     required this.onOpenComicReader,
     required this.onOpenEbookReader,
     required this.onOpenEdgeHtml,
+    required this.onOpenMarkdown,
   });
 
   @override
@@ -372,6 +374,8 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
       widget.onOpenEbookReader;
   void Function(LibraryItem item, {String? startPath}) get onOpenEdgeHtml =>
       widget.onOpenEdgeHtml;
+  void Function(LibraryItem item, {String? startPath}) get onOpenMarkdown =>
+      widget.onOpenMarkdown;
   double get middleOpacity => widget.middleOpacity;
 
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
@@ -604,6 +608,13 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                                     widget.onOpenEdgeHtml(_panelItem!),
                                 onBrowseHtmlFile: (path) =>
                                     widget.onOpenEdgeHtml(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
+                                onBrowseMarkdownProject: () =>
+                                    widget.onOpenMarkdown(_panelItem!),
+                                onBrowseMarkdownFile: (path) =>
+                                    widget.onOpenMarkdown(
                                   _panelItem!,
                                   startPath: path,
                                 ),
@@ -1041,6 +1052,8 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
           widget.onOpenEbookReader(item);
         } else if (type == 'edgehtml') {
           widget.onOpenEdgeHtml(item);
+        } else if (type == 'markdown') {
+          widget.onOpenMarkdown(item);
         }
       },
       onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),

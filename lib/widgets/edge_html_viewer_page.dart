@@ -146,11 +146,19 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage>
     final lower = path.toLowerCase();
     // mhtml 为单文件自包含格式，file:// 直开即可由 WebView2 原生渲染
     // （与 Edge 双击打开同一机制，资源全部内嵌，无需 HTTP 服务）；
-    // html 系列仍走本地同源服务以规避 CORS 与 MIME 问题。
+    // html 系列仍走本地同源服务以规避 CORS 与 MIME 问题；
+    // markdown 由服务端转 HTML，附主题参数以跟随应用浅色/暗色主题。
     final isMhtml = lower.endsWith('.mhtml') || lower.endsWith('.mht');
+    final isMd = lower.endsWith('.md') || lower.endsWith('.markdown');
+    final theme = Theme.of(context).brightness == Brightness.dark
+        ? 'dark'
+        : 'light';
     final url = isMhtml
         ? Uri.file(path).toString()
-        : _server!.urlFor(_baseName(path));
+        : _server!.urlFor(
+            _baseName(path),
+            theme: isMd ? theme : null,
+          );
     await _controller.loadUrl(url);
     if (mounted) setState(() => _index = index);
   }

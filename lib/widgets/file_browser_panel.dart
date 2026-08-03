@@ -39,6 +39,8 @@ class FileBrowserPanel extends StatefulWidget {
   final void Function(String path)? onReadEbookFile;
   final VoidCallback? onBrowseHtmlProject;
   final void Function(String path)? onBrowseHtmlFile;
+  final VoidCallback? onBrowseMarkdownProject;
+  final void Function(String path)? onBrowseMarkdownFile;
 
   const FileBrowserPanel({
     super.key,
@@ -58,6 +60,8 @@ class FileBrowserPanel extends StatefulWidget {
     this.onReadEbookFile,
     this.onBrowseHtmlProject,
     this.onBrowseHtmlFile,
+    this.onBrowseMarkdownProject,
+    this.onBrowseMarkdownFile,
   });
 
   @override
@@ -220,6 +224,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               icon: Icons.html,
               tooltip: Strings.t('openProjectHtml'),
               onTap: widget.onBrowseHtmlProject ?? () {},
+            ),
+          if (itemType == 'markdown')
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.article,
+              tooltip: Strings.t('openProjectMarkdown'),
+              onTap: widget.onBrowseMarkdownProject ?? () {},
             ),
           _headerIconButton(
             c: c,
@@ -398,7 +410,10 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         final isAud = AudioTagService.isAudioFile(file.path);
         final itemType =
             widget.state.effectiveInfo(widget.item).type.toLowerCase();
-        if (EbookService.isReadableFile(file.path)) {
+        if (itemType == 'markdown' && isMarkdownFile(file.path)) {
+          // markdown 类型下的文档文件双击用内置浏览器打开（优先于电子书阅读器）
+          widget.onBrowseMarkdownFile?.call(file.path);
+        } else if (EbookService.isReadableFile(file.path)) {
           // 电子书文件（txt/epub/pdf/md）双击直接用内置阅读器打开。
           widget.onReadEbookFile?.call(file.path);
         } else if ((itemType == 'video' || itemType == 'anime') && isVid) {
@@ -541,17 +556,17 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       }
       switch (value) {
         case 'open':
-          for (final p in paths) {
-            final isEdgeItem = widget
-                    .state
-                    .effectiveInfo(widget.item)
-                    .type
-                    .toLowerCase() ==
-                'edgehtml';
-            if (isEdgeItem && isHtmlFile(p)) {
-              widget.onBrowseHtmlFile?.call(p);
-            } else {
-              _openFile(p);
+          {
+            final type =
+                widget.state.effectiveInfo(widget.item).type.toLowerCase();
+            for (final p in paths) {
+              if (type == 'edgehtml' && isHtmlFile(p)) {
+                widget.onBrowseHtmlFile?.call(p);
+              } else if (type == 'markdown' && isMarkdownFile(p)) {
+                widget.onBrowseMarkdownFile?.call(p);
+              } else {
+                _openFile(p);
+              }
             }
           }
         case 'open_as':
@@ -685,6 +700,13 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         lower.endsWith('.htm') ||
         lower.endsWith('.mhtml') ||
         lower.endsWith('.mht');
+  }
+
+  /// 判断是否为 markdown 文档（.md/.markdown），供 markdown 类型的
+  /// 双击与"打开"路由到内置浏览器。
+  bool isMarkdownFile(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.md') || lower.endsWith('.markdown');
   }
 
   /// 导出选中项到用户选择的目录（替代原"拖出"能力）。
