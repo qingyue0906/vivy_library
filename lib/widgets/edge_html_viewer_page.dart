@@ -47,7 +47,7 @@ class _EdgeHtmlViewerPageState extends State<EdgeHtmlViewerPage>
 
   /// 网页内容区长按右键（超过该时长）快捷退出页面。
   /// 短按右键保留给浏览器原生右键菜单，不做拦截。
-  static const Duration _exitLongPressDelay = Duration(milliseconds: 500);
+  static const Duration _exitLongPressDelay = Duration(milliseconds: 300);
   Timer? _exitTimer;
 
   @override
