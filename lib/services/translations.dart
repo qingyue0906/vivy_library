@@ -2247,5 +2247,54 @@ class Strings {
       AppLocale.en: 'Page {cur} / {total}',
       AppLocale.ja: 'ページ {cur} / {total}',
     },
+    // ======== 内置网页浏览器 (edgehtml) ========
+    'openProjectHtml': {
+      AppLocale.zhHans: '浏览项目内网页',
+      AppLocale.zhHant: '瀏覽項目內網頁',
+      AppLocale.en: 'Browse Project HTML',
+      AppLocale.ja: 'プロジェクトのHTMLを閲覧',
+    },
+    'htmlBrowser': {
+      AppLocale.zhHans: '网页浏览器',
+      AppLocale.zhHant: '網頁瀏覽器',
+      AppLocale.en: 'Web Browser',
+      AppLocale.ja: 'Webブラウザ',
+    },
+    'noHtmlFiles': {
+      AppLocale.zhHans: '未找到网页文件',
+      AppLocale.zhHant: '未找到網頁文件',
+      AppLocale.en: 'No HTML files found',
+      AppLocale.ja: 'HTMLファイルが見つかりません',
+    },
+    'openInSystemBrowser': {
+      AppLocale.zhHans: '系统浏览器打开',
+      AppLocale.zhHant: '系統瀏覽器打開',
+      AppLocale.en: 'Open in System Browser',
+      AppLocale.ja: 'システムブラウザで開く',
+    },
+    'browserBack': {
+      AppLocale.zhHans: '后退',
+      AppLocale.zhHant: '後退',
+      AppLocale.en: 'Back',
+      AppLocale.ja: '戻る',
+    },
+    'browserForward': {
+      AppLocale.zhHans: '前进',
+      AppLocale.zhHant: '前進',
+      AppLocale.en: 'Forward',
+      AppLocale.ja: '進む',
+    },
+    'browserReload': {
+      AppLocale.zhHans: '刷新',
+      AppLocale.zhHant: '刷新',
+      AppLocale.en: 'Reload',
+      AppLocale.ja: '再読み込み',
+    },
+    'browserInitFailed': {
+      AppLocale.zhHans: '浏览器初始化失败，请确认已安装 WebView2 运行时',
+      AppLocale.zhHant: '瀏覽器初始化失敗，請確認已安裝 WebView2 運行時',
+      AppLocale.en: 'Browser init failed, check the WebView2 Runtime',
+      AppLocale.ja: 'ブラウザ初期化に失敗しました。WebView2 Runtime を確認してください',
+    },
   };
 }

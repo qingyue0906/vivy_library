@@ -316,6 +316,7 @@ class GridArea extends StatefulWidget {
   final void Function(LibraryItem item, {String? startPath}) onOpenAudioPlayer;
   final void Function(LibraryItem item, {String? startPath}) onOpenComicReader;
   final void Function(LibraryItem item, {String? startPath}) onOpenEbookReader;
+  final void Function(LibraryItem item, {String? startPath}) onOpenEdgeHtml;
 
   const GridArea({
     super.key,
@@ -338,6 +339,7 @@ class GridArea extends StatefulWidget {
     required this.onOpenAudioPlayer,
     required this.onOpenComicReader,
     required this.onOpenEbookReader,
+    required this.onOpenEdgeHtml,
   });
 
   @override
@@ -368,6 +370,8 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
       widget.onOpenComicReader;
   void Function(LibraryItem item, {String? startPath}) get onOpenEbookReader =>
       widget.onOpenEbookReader;
+  void Function(LibraryItem item, {String? startPath}) get onOpenEdgeHtml =>
+      widget.onOpenEdgeHtml;
   double get middleOpacity => widget.middleOpacity;
 
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
@@ -593,6 +597,13 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                                     widget.onOpenEbookReader(_panelItem!),
                                 onReadEbookFile: (path) =>
                                     widget.onOpenEbookReader(
+                                  _panelItem!,
+                                  startPath: path,
+                                ),
+                                onBrowseHtmlProject: () =>
+                                    widget.onOpenEdgeHtml(_panelItem!),
+                                onBrowseHtmlFile: (path) =>
+                                    widget.onOpenEdgeHtml(
                                   _panelItem!,
                                   startPath: path,
                                 ),
@@ -1028,6 +1039,8 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
           widget.onOpenComicReader(item);
         } else if (type == 'novel' || type == 'book') {
           widget.onOpenEbookReader(item);
+        } else if (type == 'edgehtml') {
+          widget.onOpenEdgeHtml(item);
         }
       },
       onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),

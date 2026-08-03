@@ -172,6 +172,8 @@ class _ItemCardState extends State<ItemCard> {
         return Icons.mic;
       case 'music':
         return Icons.music_note;
+      case 'edgehtml':
+        return Icons.html;
       default:
         return Icons.label;
     }
@@ -199,6 +201,8 @@ class _ItemCardState extends State<ItemCard> {
         return Colors.orangeAccent;
       case 'music':
         return Colors.cyanAccent;
+      case 'edgehtml':
+        return Colors.orange;
       default:
         return Colors.grey;
     }

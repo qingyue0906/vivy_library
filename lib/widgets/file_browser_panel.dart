@@ -37,6 +37,8 @@ class FileBrowserPanel extends StatefulWidget {
   final void Function(String path)? onReadImageFile;
   final VoidCallback? onReadEbookProject;
   final void Function(String path)? onReadEbookFile;
+  final VoidCallback? onBrowseHtmlProject;
+  final void Function(String path)? onBrowseHtmlFile;
 
   const FileBrowserPanel({
     super.key,
@@ -54,6 +56,8 @@ class FileBrowserPanel extends StatefulWidget {
     this.onReadImageFile,
     this.onReadEbookProject,
     this.onReadEbookFile,
+    this.onBrowseHtmlProject,
+    this.onBrowseHtmlFile,
   });
 
   @override
@@ -208,6 +212,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               icon: Icons.audiotrack,
               tooltip: Strings.t('openProjectAudio'),
               onTap: widget.onPlayAudioProject ?? () {},
+            ),
+          if (itemType == 'edgehtml')
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.html,
+              tooltip: Strings.t('openProjectHtml'),
+              onTap: widget.onBrowseHtmlProject ?? () {},
             ),
           _headerIconButton(
             c: c,
@@ -396,6 +408,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         } else if ((itemType == 'comic' || itemType == 'picture') &&
             ComicPlaylistService.isReadableFile(file.path)) {
           widget.onReadImageFile?.call(file.path);
+        } else if (itemType == 'edgehtml' && isHtmlFile(file.path)) {
+          widget.onBrowseHtmlFile?.call(file.path);
         } else {
           _openFile(file.path);
         }
@@ -528,7 +542,17 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       switch (value) {
         case 'open':
           for (final p in paths) {
-            _openFile(p);
+            final isEdgeItem = widget
+                    .state
+                    .effectiveInfo(widget.item)
+                    .type
+                    .toLowerCase() ==
+                'edgehtml';
+            if (isEdgeItem && isHtmlFile(p)) {
+              widget.onBrowseHtmlFile?.call(p);
+            } else {
+              _openFile(p);
+            }
           }
         case 'open_as':
           final record = await showDialog<ExeRecord>(
@@ -651,6 +675,12 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
 
   void _openFile(String path) {
     Process.run('cmd', ['/c', 'start', '', path]);
+  }
+
+  /// 判断是否为网页文件（.html/.htm），供 edgehtml 类型的双击与"打开"路由。
+  bool isHtmlFile(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.html') || lower.endsWith('.htm');
   }
 
   /// 导出选中项到用户选择的目录（替代原"拖出"能力）。

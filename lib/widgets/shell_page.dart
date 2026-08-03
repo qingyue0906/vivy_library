@@ -11,6 +11,7 @@ import '../widgets/comic_reader_page.dart';
 import '../services/comic_playlist_service.dart';
 import '../widgets/ebook_reader_page.dart';
 import '../services/ebook_playlist_service.dart';
+import '../widgets/edge_html_viewer_page.dart';
 import 'category_panel.dart';
 import 'detail_panel.dart';
 import 'grid_area.dart';
@@ -556,6 +557,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 onOpenAudioPlayer: _openAudioPlayer,
                 onOpenComicReader: _openComicReader,
                 onOpenEbookReader: _openEbookReader,
+                onOpenEdgeHtml: _openEdgeHtml,
               );
             },
           ),
@@ -804,6 +806,53 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
           playlist: playlist,
           initialIndex: startIndex,
           title: item.info.title,
+        ),
+      ),
+    );
+  }
+
+  /// 打开内置网页浏览器：收集项目顶层 html 文件，
+  /// [startPath] 指定从哪个 html 开始（底部面板双击 html 文件时传入）。
+  Future<void> _openEdgeHtml(LibraryItem item, {String? startPath}) async {
+    final dir = Directory(item.path);
+    final htmlFiles = <String>[];
+    if (dir.existsSync()) {
+      try {
+        for (final e in dir.listSync()) {
+          if (e is! File) continue;
+          final name = e.path.toLowerCase();
+          if (name.endsWith('.html') || name.endsWith('.htm')) {
+            htmlFiles.add(e.path);
+          }
+        }
+        htmlFiles.sort();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (htmlFiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Strings.t('noHtmlFiles')),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+      return;
+    }
+    var startIndex = 0;
+    if (startPath != null) {
+      final norm = startPath.replaceAll('\\', '/').toLowerCase();
+      startIndex = htmlFiles.indexWhere(
+          (e) => e.replaceAll('\\', '/').toLowerCase() == norm);
+      if (startIndex < 0) startIndex = 0;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => EdgeHtmlViewerPage(
+          title: item.info.title,
+          rootPath: item.path,
+          htmlFiles: htmlFiles,
+          initialIndex: startIndex,
         ),
       ),
     );
