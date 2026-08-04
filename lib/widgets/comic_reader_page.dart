@@ -50,7 +50,8 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   final ScrollController _thumbScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
-  /// 缩略图树中已展开的文件夹/压缩包节点路径集合（默认全展开）。
+  /// 缩略图树中已展开的文件夹/压缩包节点路径集合（默认仅项目根节点展开，
+  /// 压缩包与子文件夹收起；当前页所在链路会自动展开保证可见）。
   final Set<String> _expandedNodes = {};
 
   /// 页码（扁平 entry）按 id 查索引，供树渲染 O(1) 定位高亮与跳转。
@@ -76,7 +77,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
       _pageIndexById[_entries[i].id] = i;
     }
     _spreads = _buildSpreads();
-    _initExpandedAll();
+    _initDefaultExpanded();
     if (widget.initialThumbnailWidth != null) {
       _thumbWidth = widget.initialThumbnailWidth!;
     }
@@ -233,29 +234,34 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
 
   // ===== 缩略图文件夹/压缩包树 =====
 
-  /// 默认展开全部节点（保持旧版“全部可见”的体验，同时提供折叠分组）。
-  void _initExpandedAll() {
-    for (final root in widget.playlist.tree) _collectPaths(root);
+  /// 默认展开项目根节点与当前页所在链路；压缩包和子文件夹默认收起，
+  /// 保持列表简洁（可点击表头展开）。
+  void _initDefaultExpanded() {
+    for (final root in widget.playlist.tree) {
+      _expandedNodes.add(root.path);
+    }
+    if (_entries.isNotEmpty) _addAncestorChain(_entries[_currentIndex]);
   }
 
-  void _collectPaths(ComicFolderNode node) {
-    _expandedNodes.add(node.path);
-    for (final c in node.children) _collectPaths(c);
+  /// 把 [page] 所在链路的全部节点加入展开集合（不触发重建，
+  /// 供初始化与翻页共用）。
+  void _addAncestorChain(ComicPage page) {
+    for (final root in widget.playlist.tree) {
+      final chain = <ComicFolderNode>[];
+      if (_nodeContains(root, page, chain)) {
+        for (final n in chain) {
+          _expandedNodes.add(n.path);
+        }
+        return;
+      }
+    }
   }
 
   /// 确保包含 [page] 的所有祖先节点已展开，使当前页在树中可见。
   void _expandAncestors(ComicPage page) {
-    for (final root in widget.playlist.tree) {
-      final chain = <ComicFolderNode>[];
-      if (_nodeContains(root, page, chain)) {
-        var changed = false;
-        for (final n in chain) {
-          if (_expandedNodes.add(n.path)) changed = true;
-        }
-        if (changed) setState(() {});
-        return;
-      }
-    }
+    final before = _expandedNodes.length;
+    _addAncestorChain(page);
+    if (_expandedNodes.length != before) setState(() {});
   }
 
   bool _nodeContains(
