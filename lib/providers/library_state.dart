@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -55,6 +56,18 @@ class LibraryState extends ChangeNotifier {
   bool _showSystemFiles = false;
   double _copyProgress = -1;
   String _copyStatus = '';
+
+  /// 复制进度条显示控制：延迟显示（快速复制不弹条）、完成态短暂停留。
+  /// [_copyBarShown] 为进度条是否已真正显示；[_lastCopyValue] 记录
+  /// 延迟显示期间的最新进度值；[_copySeq] 防止旧的延迟隐藏回调
+  /// 误隐藏新一轮复制的进度条。
+  bool _copyBarShown = false;
+  double _lastCopyValue = 0.0;
+  int _copySeq = 0;
+  Timer? _copyShowTimer;
+  static const Duration _copyShowDelay = Duration(milliseconds: 200);
+  static const Duration _copyCompleteDelay = Duration(seconds: 1);
+  bool _disposed = false;
 
   /// 是否有带自身 DropTarget 的模态对话框（如创建项目对话框）正处于打开状态。
   /// 打开时，底层的网格区/底部文件面板不应再显示拖放高亮或接收拖放。
@@ -1031,22 +1044,8 @@ class LibraryState extends ChangeNotifier {
     }).toList();
     if (filtered.isEmpty) return;
     startCopy('Copying ${filtered.length} item(s)...');
-    for (int i = 0; i < filtered.length; i++) {
-      final src = filtered[i];
-      final srcName = src.replaceAll('\\', '/').split('/').last;
-      updateCopyProgress(
-        i / filtered.length,
-        'Copying $srcName (${i + 1}/${filtered.length})',
-      );
-      final dest = _uniqueName(destDir, srcName);
-      try {
-        await _copySingle(src, dest);
-      } catch (e) {
-        debugPrint('copy error for $src: $e');
-      }
-    }
+    await _copyAll(filtered, destDir);
     showCopyComplete('Copy complete');
-    notifyListeners();
   }
 
   /// 閫氳繃 uuid 閫変腑椤圭洰锛坓oto 鐐瑰嚮锛夈€傛壘涓嶅埌杩斿洖 false锛岃皟鐢ㄦ柟鎻愮ず銆?
@@ -1192,51 +1191,145 @@ class LibraryState extends ChangeNotifier {
     return defineChanged;
   }
 
-  /// Create a new item: creates folder, writes info.json, saves preview, rescans.
+  /// 延迟显示复制进度条：几十毫秒内完成的快速复制不弹进度条
+  /// （文件直接出现在网格/面板里即为反馈），只有复制持续超过
+  /// [_copyShowDelay] 才真正显示。
   void startCopy(String message) {
-    _copyProgress = 0.0;
+    _copySeq++;
     _copyStatus = message;
+    _copyBarShown = false;
+    _lastCopyValue = 0.0;
+    _copyProgress = -1;
+    final seq = _copySeq;
+    _copyShowTimer?.cancel();
+    _copyShowTimer = Timer(_copyShowDelay, () {
+      if (_disposed || seq != _copySeq) return;
+      _copyBarShown = true;
+      _copyProgress = _lastCopyValue;
+      notifyListeners();
+    });
     notifyListeners();
   }
 
   void updateCopyProgress(double value, String message) {
-    _copyProgress = value;
     _copyStatus = message;
-    notifyListeners();
+    _lastCopyValue = value;
+    // 进度条尚未显示（延迟期内）时保持隐藏，由定时器统一置为可见
+    if (_copyBarShown) {
+      _copyProgress = value;
+      notifyListeners();
+    }
   }
 
   void showCopyComplete(String message) {
+    _copyShowTimer?.cancel();
+    if (_disposed) return;
+    if (!_copyBarShown) {
+      // 快速复制：进度条从未显示，直接隐藏，不打扰
+      _copyProgress = -1;
+      _copyStatus = '';
+      notifyListeners();
+      return;
+    }
+    final seq = _copySeq;
     _copyProgress = 1.0;
     _copyStatus = message;
     notifyListeners();
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(_copyCompleteDelay, () {
+      if (_disposed || seq != _copySeq) return;
       _copyProgress = -1;
       _copyStatus = '';
       notifyListeners();
     });
   }
 
-  Future<void> _copySingle(String src, String dest) async {
+  @override
+  void dispose() {
+    _disposed = true;
+    _copyShowTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copySingle(
+    String src,
+    String dest, {
+    void Function()? onFileDone,
+  }) async {
     final entity = FileSystemEntity.typeSync(src);
     if (entity == FileSystemEntityType.directory) {
-      await _copyDirectory(Directory(src), Directory(dest));
+      await _copyDirectory(
+        Directory(src),
+        Directory(dest),
+        onFileDone: onFileDone,
+      );
     } else {
       await File(src).copy(dest);
+      onFileDone?.call();
     }
   }
 
-  Future<void> _copyDirectory(Directory src, Directory dest) async {
+  Future<void> _copyDirectory(
+    Directory src,
+    Directory dest, {
+    void Function()? onFileDone,
+  }) async {
     await dest.create(recursive: true);
     await for (final entity in src.list()) {
       if (entity is File) {
         final relative = entity.path.substring(src.path.length + 1);
         await entity.copy("${dest.path}${Platform.pathSeparator}$relative");
+        onFileDone?.call();
       } else if (entity is Directory) {
         final relative = entity.path.substring(src.path.length + 1);
         await _copyDirectory(
           entity,
           Directory("${dest.path}${Platform.pathSeparator}$relative"),
+          onFileDone: onFileDone,
         );
+      }
+    }
+  }
+
+  /// 统计路径下的文件总数（目录递归统计；单文件计 1）。
+  Future<int> _countFiles(String path) async {
+    if (FileSystemEntity.typeSync(path) != FileSystemEntityType.directory) {
+      return 1;
+    }
+    var count = 0;
+    try {
+      await for (final entity in Directory(path).list()) {
+        if (entity is File) {
+          count++;
+        } else if (entity is Directory) {
+          count += await _countFiles(entity.path);
+        }
+      }
+    } catch (_) {}
+    return count;
+  }
+
+  /// 复制全部导入项到 [destDir]：先统计总文件数，按文件粒度汇报进度
+  /// （文件夹内逐文件推进，进度 = 已完成文件 / 总文件数）。
+  Future<void> _copyAll(List<String> srcPaths, String destDir) async {
+    var total = 0;
+    for (final src in srcPaths) {
+      total += await _countFiles(src);
+    }
+    if (total <= 0) total = 1;
+    var done = 0;
+    for (final src in srcPaths) {
+      final srcName = src.replaceAll('\\', '/').split('/').last;
+      final dest = _uniqueName(destDir, srcName);
+      try {
+        await _copySingle(src, dest, onFileDone: () {
+          done++;
+          updateCopyProgress(
+            done / total,
+            'Copying $srcName ($done/$total)',
+          );
+        });
+      } catch (e) {
+        debugPrint('copy error for $src: $e');
       }
     }
   }
@@ -1290,20 +1383,7 @@ class LibraryState extends ChangeNotifier {
       );
       if (importedPaths.isNotEmpty) {
         startCopy("Copying ${importedPaths.length} item(s)...");
-        for (int i = 0; i < importedPaths.length; i++) {
-          final src = importedPaths[i];
-          final srcName = src.replaceAll("\\", "/").split("/").last;
-          updateCopyProgress(
-            i / importedPaths.length,
-            "Copying $srcName (${i + 1}/${importedPaths.length})",
-          );
-          final dest = _uniqueName(itemPath, srcName);
-          try {
-            await _copySingle(src, dest);
-          } catch (e) {
-            debugPrint("copy error for $src: $e");
-          }
-        }
+        await _copyAll(importedPaths, itemPath);
         showCopyComplete("Copy complete");
       }
       await rescan();

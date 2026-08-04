@@ -264,7 +264,11 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                             width: 160,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: LinearProgressIndicator(value: _state.copyProgress >= 1.0 ? null : _state.copyProgress),
+                              child: LinearProgressIndicator(
+                                value: _state.copyProgress >= 1.0
+                                    ? 1.0
+                                    : _state.copyProgress,
+                              ),
                             ),
                           ),
                           Expanded(
