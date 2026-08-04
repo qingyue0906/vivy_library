@@ -206,7 +206,8 @@ class ScriptService extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    final raw = jsonEncode(_scripts.map((s) => s.toJson()).toList());
+    final raw = const JsonEncoder.withIndent('  ')
+        .convert(_scripts.map((s) => s.toJson()).toList());
     await AppDataService.writeScriptsMeta(raw);
   }
 

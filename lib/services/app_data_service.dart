@@ -74,7 +74,10 @@ class AppDataService {
   }
 
   static Future<void> saveSettings(Map<String, dynamic> data) async {
-    await _atomicWrite(settingsPath, jsonEncode(data));
+    await _atomicWrite(
+      settingsPath,
+      const JsonEncoder.withIndent('  ').convert(data),
+    );
   }
 
   static Future<String?> getString(String key) async {

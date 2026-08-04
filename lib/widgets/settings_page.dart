@@ -1160,11 +1160,15 @@ class _SettingsPageState extends State<SettingsPage>
       };
 
       final archive = Archive();
-      final dataBytes = utf8.encode(jsonEncode(export));
+      final dataBytes = utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(export),
+      );
       archive.addFile(ArchiveFile('settings.json', dataBytes.length, dataBytes));
 
       final scriptsMeta = widget.scriptService.scripts.map((s) => s.toJson()).toList();
-      final scriptsBytes = utf8.encode(jsonEncode(scriptsMeta));
+      final scriptsBytes = utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(scriptsMeta),
+      );
       archive.addFile(ArchiveFile('scripts.json', scriptsBytes.length, scriptsBytes));
 
       final scriptsDir = _resolveScriptsDir();
