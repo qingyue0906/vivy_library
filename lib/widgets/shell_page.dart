@@ -732,6 +732,12 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// [startPath] 指定从哪张图片/压缩包开始阅读（底部面板双击图片/压缩包时传入）。
   Future<void> _openComicReader(LibraryItem item, {String? startPath}) async {
     final playlist = await ComicPlaylistService.build(item);
+    // 预加载阅读偏好以填充同步缓存，避免首帧按默认闪现后跳变。
+    await SettingsService.loadReaderLayoutMode();
+    await SettingsService.loadReaderDirection();
+    await SettingsService.loadReaderFitMode();
+    await SettingsService.loadReaderShowThumbnails();
+    await SettingsService.loadReaderShowPageNumber();
     final thumbWidth = await SettingsService.loadReaderThumbnailWidth();
     if (!mounted) return;
     if (playlist.entries.isEmpty) {
