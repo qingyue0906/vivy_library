@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:archive/archive.dart';
+import 'package:archive/archive.dart' show Archive, ZipDecoder;
 import 'package:path/path.dart' as p;
 import '../models/library_item.dart';
 import '../models/comic_page.dart';
@@ -27,10 +28,153 @@ class ComicPlaylistService {
   static bool isReadableFile(String path) =>
       isImageFile(path) || isArchiveFile(path);
 
-  // ===== 压缩包解码缓存（LRU，最多保留数个已解码的 Archive 目录）=====
+  // ===== 压缩包中心目录索引缓存（LRU）=====
+  // 只保存条目元数据（名称/压缩方法/大小/本地头偏移），不持有整包内容；
+  // 单页读取时按偏移只解压该条目，避免整包解压内容常驻内存。
+  static final Map<String, _ZipIndex> _indexCache = {};
+  static final List<String> _indexLru = [];
+  static const _maxCachedIndexes = 4;
+
+  /// 回退路径用的整包解码缓存（zip 中心目录解析失败时使用）。
   static final Map<String, Archive> _archiveCache = {};
   static final List<String> _archiveLru = [];
   static const _maxCachedArchives = 4;
+
+  // ===== 已解压页字节缓存（LRU，页数与字节数双上限）=====
+  static final Map<String, Uint8List> _pageBytes = {};
+  static final List<String> _pageLru = [];
+  static const _maxCachedPages = 12;
+  static const _maxCachedPageBytes = 192 * 1024 * 1024;
+  static int _cachedPageBytes = 0;
+
+  /// 读取压缩包中心目录索引：只读包尾 EOCD + 中央目录（不读整包）。
+  /// 标准 zip/cbz 成功返回索引；zip64 或格式异常返回 null（调用方回退整包解码）。
+  static Future<_ZipIndex?> _readZipIndex(String archivePath) async {
+    final file = File(archivePath);
+    final length = await file.length();
+    const eocdMin = 22;
+    if (length < eocdMin) return null;
+    final raf = await file.open();
+    try {
+      // EOCD 在文件末尾 22 字节处（可带最长 65535 字节注释），
+      // 读取尾部在最后 64KB+22 字节内倒查签名 0x06054b50。
+      final tailLen = length > eocdMin + 0xFFFF ? eocdMin + 0xFFFF : length;
+      await raf.setPosition(length - tailLen);
+      final tail = await raf.read(tailLen);
+      var eocdPos = -1;
+      for (var i = tailLen - eocdMin; i >= 0; i--) {
+        if (_u32(tail, i) == 0x06054b50) {
+          eocdPos = i;
+          break;
+        }
+      }
+      if (eocdPos < 0) return null;
+
+      final totalEntries = _u16(tail, eocdPos + 10);
+      final cdSize = _u32(tail, eocdPos + 12);
+      final cdOffset = _u32(tail, eocdPos + 16);
+      // zip64 标志：回退旧路径
+      if (totalEntries == 0xFFFF || cdSize == 0xFFFFFFFF ||
+          cdOffset == 0xFFFFFFFF) {
+        return null;
+      }
+
+      await raf.setPosition(cdOffset);
+      final cd = await raf.read(cdSize);
+      if (cd.length != cdSize) return null;
+      final entries = <_ZipEntry>[];
+      var pos = 0;
+      while (pos + 46 <= cd.length) {
+        if (_u32(cd, pos) != 0x02014b50) break;
+        final method = _u16(cd, pos + 10);
+        final compressedSize = _u32(cd, pos + 20);
+        final uncompressedSize = _u32(cd, pos + 24);
+        final nameLen = _u16(cd, pos + 28);
+        final extraLen = _u16(cd, pos + 30);
+        final commentLen = _u16(cd, pos + 32);
+        final localHeaderOffset = _u32(cd, pos + 42);
+        final name = utf8.decode(
+          cd.sublist(pos + 46, pos + 46 + nameLen),
+          allowMalformed: true,
+        );
+        // 跳过目录条目（名称以 / 或 \ 结尾）
+        if (!name.endsWith('/') && !name.endsWith('\\')) {
+          entries.add(_ZipEntry(
+            name: name,
+            method: method,
+            compressedSize: compressedSize,
+            uncompressedSize: uncompressedSize,
+            localHeaderOffset: localHeaderOffset,
+          ));
+        }
+        pos += 46 + nameLen + extraLen + commentLen;
+      }
+      if (entries.isEmpty) return null;
+      return _ZipIndex(entries);
+    } catch (_) {
+      return null;
+    } finally {
+      await raf.close();
+    }
+  }
+
+  static Future<_ZipIndex?> _getZipIndex(String archivePath) async {
+    final cached = _indexCache[archivePath];
+    if (cached != null) {
+      _indexLru
+        ..remove(archivePath)
+        ..add(archivePath);
+      return cached;
+    }
+    final index = await _readZipIndex(archivePath);
+    if (index == null) return null;
+    _indexCache[archivePath] = index;
+    _indexLru.add(archivePath);
+    while (_indexLru.length > _maxCachedIndexes) {
+      _indexCache.remove(_indexLru.removeAt(0));
+    }
+    return index;
+  }
+
+  /// 按中心目录条目读取并解压单个文件：seek 到本地头，只读该条目
+  /// 的压缩字节后解压，整包内容不进入内存。
+  /// stored（0）直接返回压缩字节；deflate（8）用 raw zlib 解压。
+  static Future<Uint8List?> _readEntryBytes(
+    String archivePath,
+    _ZipEntry entry,
+  ) async {
+    try {
+      final raf = await File(archivePath).open();
+      try {
+        await raf.setPosition(entry.localHeaderOffset);
+        final header = await raf.read(30);
+        if (header.length != 30 || _u32(header, 0) != 0x04034b50) {
+          return null;
+        }
+        final nameLen = _u16(header, 26);
+        final extraLen = _u16(header, 28);
+        final dataOffset =
+            entry.localHeaderOffset + 30 + nameLen + extraLen;
+        await raf.setPosition(dataOffset);
+        final compressed = await raf.read(entry.compressedSize);
+        if (compressed.length != entry.compressedSize) return null;
+        if (entry.method == 0) {
+          // stored：压缩即原文
+          return compressed;
+        }
+        if (entry.method == 8) {
+          // deflate：raw zlib 解压（zip 条目为无头部 deflate 流）
+          final z = ZLibDecoder(raw: true);
+          return Uint8List.fromList(z.convert(compressed));
+        }
+        return null;
+      } finally {
+        await raf.close();
+      }
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<Archive> _getArchive(String archivePath) async {
     final cached = _archiveCache[archivePath];
@@ -51,25 +195,27 @@ class ComicPlaylistService {
     return archive;
   }
 
-  // ===== 已解压页字节缓存（LRU，供主图与缩略图共享，避免重复解压）=====
-  static final Map<String, Uint8List> _pageBytes = {};
-  static final List<String> _pageLru = [];
-  static const _maxCachedPages = 12;
-
   static void _cachePage(String id, Uint8List bytes) {
+    final old = _pageBytes[id];
+    if (old != null) _cachedPageBytes -= old.length;
     _pageBytes[id] = bytes;
+    _cachedPageBytes += bytes.length;
     _pageLru
       ..remove(id)
       ..add(id);
-    while (_pageLru.length > _maxCachedPages) {
-      _pageBytes.remove(_pageLru.removeAt(0));
+    while (_pageLru.length > _maxCachedPages ||
+        _cachedPageBytes > _maxCachedPageBytes) {
+      if (_pageLru.isEmpty) break;
+      final removed = _pageBytes.remove(_pageLru.removeAt(0));
+      if (removed != null) _cachedPageBytes -= removed.length;
     }
   }
 
   /// 同步窥探已缓存的页字节（未缓存返回 null，用于避免已解压页的重复异步与闪烁）。
   static Uint8List? peekPageBytes(String id) => _pageBytes[id];
 
-  /// 读取单页的图片字节：直接图从磁盘读取；压缩包内条目解压后返回（带缓存）。失败返回 null。
+  /// 读取单页的图片字节：直接图从磁盘读取；压缩包内条目经中心目录
+  /// 按偏移只读该条目并解压（带缓存）。失败返回 null。
   static Future<Uint8List?> readPageBytes(ComicPage page) async {
     final cached = _pageBytes[page.id];
     if (cached != null) {
@@ -84,6 +230,21 @@ class ComicPlaylistService {
         _cachePage(page.id, bytes);
         return bytes;
       }
+      // 优先：中心目录索引按条目读取（整包不常驻内存）
+      final index = await _getZipIndex(page.archivePath!);
+      if (index != null) {
+        for (final e in index.entries) {
+          if (e.name == page.entryName) {
+            final bytes = await _readEntryBytes(page.archivePath!, e);
+            if (bytes != null) {
+              _cachePage(page.id, bytes);
+              return bytes;
+            }
+            break;
+          }
+        }
+      }
+      // 回退：整包解码后找条目（zip64 等解析失败场景）
       final archive = await _getArchive(page.archivePath!);
       for (final f in archive.files) {
         if (f.isFile && f.name == page.entryName) {
@@ -99,6 +260,22 @@ class ComicPlaylistService {
       return null;
     }
   }
+
+  /// 清理全部静态缓存（关闭阅读器时调用，避免跨项目累积内存）。
+  static void clearCache() {
+    _pageBytes.clear();
+    _pageLru.clear();
+    _cachedPageBytes = 0;
+    _indexCache.clear();
+    _indexLru.clear();
+    _archiveCache.clear();
+    _archiveLru.clear();
+  }
+
+  static int _u16(List<int> b, int o) => b[o] | (b[o + 1] << 8);
+
+  static int _u32(List<int> b, int o) =>
+      b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24);
 
   /// 构建项目内全部图片/压缩包的阅读列表。
   static Future<ComicPlaylist> build(LibraryItem item) =>
@@ -161,7 +338,31 @@ class ComicPlaylistService {
   }
 
   /// 将 zip/cbz 解析为一个“虚拟文件夹”节点，列出其内的图片条目。
+  /// 优先用中心目录索引（只读包尾，不加载整包）；解析失败回退整包解码。
   static Future<ComicFolderNode?> _buildArchiveNode(String archivePath) async {
+    final index = await _getZipIndex(archivePath);
+    if (index != null) {
+      final node = ComicFolderNode(
+        p.basename(archivePath),
+        archivePath,
+        isArchive: true,
+      );
+      for (final e in index.entries) {
+        if (isImageFile(e.name)) {
+          final normalized = e.name.replaceAll('\\', '/');
+          node.files.add(ComicPage(
+            id: '$archivePath::${e.name}',
+            archivePath: archivePath,
+            entryName: e.name,
+            name: normalized.split('/').last,
+            dirPath: archivePath,
+            sizeInBytes: e.uncompressedSize,
+          ));
+        }
+      }
+      node.files.sort((a, b) => _naturalCompare(a.entryName!, b.entryName!));
+      return node.files.isEmpty ? null : node;
+    }
     try {
       final archive = await _getArchive(archivePath);
       final node = ComicFolderNode(
@@ -183,7 +384,7 @@ class ComicPlaylistService {
         }
       }
       node.files.sort((a, b) => _naturalCompare(a.entryName!, b.entryName!));
-      return node;
+      return node.files.isEmpty ? null : node;
     } catch (_) {
       return null;
     }
@@ -242,4 +443,26 @@ class ComicPlaylistService {
     }
     return (sa.length - ia) - (sb.length - ib);
   }
+}
+
+/// zip/cbz 中心目录索引（仅条目元数据，不持有包内容）。
+class _ZipIndex {
+  final List<_ZipEntry> entries;
+  const _ZipIndex(this.entries);
+}
+
+/// 中心目录中的单个文件条目。
+class _ZipEntry {
+  final String name;
+  final int method; // 0=stored, 8=deflate
+  final int compressedSize;
+  final int uncompressedSize;
+  final int localHeaderOffset;
+  const _ZipEntry({
+    required this.name,
+    required this.method,
+    required this.compressedSize,
+    required this.uncompressedSize,
+    required this.localHeaderOffset,
+  });
 }

@@ -95,6 +95,8 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
     }
     _thumbScrollController.dispose();
     _verticalScrollController.dispose();
+    // 释放静态页字节/压缩包索引缓存，避免跨项目累积内存
+    ComicPlaylistService.clearCache();
     super.dispose();
   }
 
