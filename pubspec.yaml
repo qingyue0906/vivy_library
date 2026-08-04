@@ -52,6 +52,8 @@ dependencies:
   audio_metadata_reader: ^1.6.0
   webview_flutter_windows: ^1.1.1
   package_info_plus: ^9.0.1
+  win32: ^5.15.0
+  ffi: ^2.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
