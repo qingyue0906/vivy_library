@@ -1300,6 +1300,43 @@ class Strings {
       AppLocale.en: 'Related Items',
       AppLocale.ja: '関連項目',
     },
+    // ======== detail_panel 标签页 ========
+    'tabOverview': {
+      AppLocale.zhHans: '概览',
+      AppLocale.zhHant: '概覽',
+      AppLocale.en: 'Overview',
+      AppLocale.ja: '概要',
+    },
+    'tabMetadata': {
+      AppLocale.zhHans: '元数据',
+      AppLocale.zhHant: '元數據',
+      AppLocale.en: 'Metadata',
+      AppLocale.ja: 'メタデータ',
+    },
+    'tabFiles': {
+      AppLocale.zhHans: '文件',
+      AppLocale.zhHant: '檔案',
+      AppLocale.en: 'Files',
+      AppLocale.ja: 'ファイル',
+    },
+    'tabRelated': {
+      AppLocale.zhHans: '关联',
+      AppLocale.zhHant: '關聯',
+      AppLocale.en: 'Related',
+      AppLocale.ja: '関連',
+    },
+    'noRelated': {
+      AppLocale.zhHans: '暂无关联项目',
+      AppLocale.zhHant: '暫無關聯項目',
+      AppLocale.en: 'No related items',
+      AppLocale.ja: '関連項目はありません',
+    },
+    'copied': {
+      AppLocale.zhHans: '已复制',
+      AppLocale.zhHant: '已複製',
+      AppLocale.en: 'Copied',
+      AppLocale.ja: 'コピーしました',
+    },
 
     // ======== top_bar ========
     'settingsTooltip': {
