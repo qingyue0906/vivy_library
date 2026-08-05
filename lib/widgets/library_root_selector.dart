@@ -218,6 +218,37 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
     });
   }
 
+  /// 搜索过滤生效时禁止拖拽（过滤后索引与底层列表不对应，避免误排）。
+  bool get _draggingEnabled => _searchCtrl.text.trim().isEmpty;
+
+  /// 拖拽重排：移动底层列表后立即持久化（saveAll 按数组顺序写入）。
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final item = _allRoots.removeAt(oldIndex);
+    _allRoots.insert(newIndex, item);
+    await _service.saveAll(_allRoots);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildTile(LibraryRoot root, {Widget? dragHandle}) {
+    return _RootListTile(
+      key: ValueKey(root.path),
+      root: root,
+      isCurrent: root.path == widget.currentPath,
+      isExpanded: _expandedPath == root.path,
+      isRenaming: _renamingPath == root.path,
+      renameController: _renameCtrl,
+      dragHandle: dragHandle,
+      onSelect: () => widget.onSelect(root.path),
+      onToggleExpanded: () => _toggleExpanded(root.path),
+      onStartRename: () => _startRename(root),
+      onConfirmRename: () => _confirmRename(root),
+      onCancelRename: _cancelRename,
+      onRemove: () => _removeRoot(root),
+      onOpenExplorer: () => Process.run('explorer', [root.path]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -269,33 +300,52 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
                                   fontSize: 11, color: Colors.grey.shade500),
                             ),
                           )
-                        // 用普通 ListView(非 builder)+ Column 拼装,
-                        // 因为现在每一项可能带展开的子菜单,高度不固定,
-                        // 数据量本身也不大(用户添加的资源库数量通常很少),
-                        // 不需要 builder 的按需渲染优化,用最简单可靠的方式拼装
+                        // 搜索过滤时用普通 ListView（禁拖拽）；否则用
+                        // ReorderableListView.builder 支持拖拽手柄重排
                         : SmoothScroll(
-                            builder: (context, controller, physics) => ListView(
-                              controller: controller,
-                              physics: physics,
-                              shrinkWrap: true,
-                              children: _filteredRoots
-                                  .map((root) => _RootListTile(
-                                        key: ValueKey(root.path),
-                                        root: root,
-                                        isCurrent: root.path == widget.currentPath,
-                                        isExpanded: _expandedPath == root.path,
-                                        isRenaming: _renamingPath == root.path,
-                                        renameController: _renameCtrl,
-                                        onSelect: () => widget.onSelect(root.path),
-                                        onToggleExpanded: () => _toggleExpanded(root.path),
-                                        onStartRename: () => _startRename(root),
-                                        onConfirmRename: () => _confirmRename(root),
-                                        onCancelRename: _cancelRename,
-                                        onRemove: () => _removeRoot(root),
-                                        onOpenExplorer: () => Process.run('explorer', [root.path]),
-                                      ))
-                                  .toList(),
-                            ),
+                            builder: (context, controller, physics) =>
+                                _draggingEnabled
+                                    ? ReorderableListView.builder(
+                                        scrollController: controller,
+                                        physics: physics,
+                                        buildDefaultDragHandles: false,
+                                        onReorder: _onReorder,
+                                        proxyDecorator:
+                                            (child, index, animation) {
+                                          final cs =
+                                              Theme.of(context).colorScheme;
+                                          return Material(
+                                            color: cs.surfaceContainerHigh,
+                                            elevation: 4,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: child,
+                                          );
+                                        },
+                                        itemCount: _filteredRoots.length,
+                                        itemBuilder: (context, i) =>
+                                            _buildTile(
+                                          _filteredRoots[i],
+                                          dragHandle:
+                                              ReorderableDragStartListener(
+                                            index: i,
+                                            child: Icon(
+                                              Icons.folder,
+                                              size: 16,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : ListView(
+                                        controller: controller,
+                                        physics: physics,
+                                        shrinkWrap: true,
+                                        children: [
+                                          for (final root in _filteredRoots)
+                                            _buildTile(root),
+                                        ],
+                                      ),
                           ),
                   ),
                   const Divider(height: 1),
@@ -323,12 +373,14 @@ class _LibraryRootPanelState extends State<_LibraryRootPanel> {
 
 /// 单个资源库列表项。点击 more 按钮时,在这一项下方原地展开菜单选项,
 /// 不依赖 Overlay/LayerLink,彻底规避列表项被回收导致的渲染崩溃问题。
+/// [dragHandle] 为拖拽重排手柄（搜索过滤时为空，该项不可拖）。
 class _RootListTile extends StatelessWidget {
   final LibraryRoot root;
   final bool isCurrent;
   final bool isExpanded;
   final bool isRenaming;
   final TextEditingController renameController;
+  final Widget? dragHandle;
   final VoidCallback onSelect;
   final VoidCallback onToggleExpanded;
   final VoidCallback onStartRename;
@@ -344,6 +396,7 @@ class _RootListTile extends StatelessWidget {
     required this.isExpanded,
     required this.isRenaming,
     required this.renameController,
+    this.dragHandle,
     required this.onSelect,
     required this.onToggleExpanded,
     required this.onStartRename,
@@ -362,7 +415,9 @@ class _RootListTile extends StatelessWidget {
             dense: true,
             selected: isCurrent,
             selectedTileColor: cs.primaryContainer.withValues(alpha: 0.4),
-            leading: const Icon(Icons.folder, size: 16),
+            // 有拖拽手柄时文件夹图标即手柄（仅按住可拖），无手柄时恢复普通图标
+            leading: dragHandle ??
+                Icon(Icons.folder, size: 16, color: cs.onSurfaceVariant),
             title: Text(root.name, style: const TextStyle(fontSize: 12.5)),
             subtitle: Text(
               root.path,

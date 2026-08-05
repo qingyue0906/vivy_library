@@ -4,8 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Flutter-3.x-blue" alt="Flutter">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/Platform-Windows-green" alt="Platform">
 </p>
 
 > **⚠️ 免责声明:** 本项目几乎完全由 AI 生成。代码、文档与设计决策均来自 AI 辅助对话。虽然功能可用，但可能存在怪癖、不地道的写法或值得人工重构之处，请自行斟酌使用。
