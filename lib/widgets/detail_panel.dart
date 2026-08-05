@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -911,9 +912,10 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
           spacing: 6 * c,
           runSpacing: 4 * c,
           children: goto.map((entry) {
-            final color = _chipColor(entry.name);
+            final label = _gotoLabel(entry);
+            final color = _chipColor(label);
             return ActionChip(
-              label: Text(entry.name, style: TextStyle(fontSize: 11 * c)),
+              label: Text(label, style: TextStyle(fontSize: 11 * c)),
               avatar: Icon(Icons.link, size: 12 * c, color: color),
               backgroundColor: color.withValues(alpha: 0.16),
               labelStyle: TextStyle(fontSize: 11 * c, color: color),
@@ -925,6 +927,39 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
         ),
       ],
     );
+  }
+
+  /// 关联条目的展示名：name 非空直接用；
+  /// name 为空时回退目标标题——uuid 型查库内项目 title，
+  /// path 型读目标目录 info.json 的 title（读不到回退子文件夹名）。
+  String _gotoLabel(GotoEntry entry) {
+    if (entry.name.isNotEmpty) return entry.name;
+    if (entry.uuid.isNotEmpty) {
+      final item = widget.state?.itemByUuid(entry.uuid);
+      if (item != null) {
+        final title = widget.state!.effectiveInfo(item).title.trim();
+        if (title.isNotEmpty) return title;
+      }
+      return '';
+    }
+    final relative = entry.path;
+    if (relative != null && relative.isNotEmpty && _isItem) {
+      final sep = Platform.pathSeparator;
+      final targetDir = '${widget.item!.path}$sep$relative';
+      try {
+        final infoFile = File('$targetDir$sep${'info.json'}');
+        if (infoFile.existsSync()) {
+          final raw = jsonDecode(infoFile.readAsStringSync());
+          if (raw is Map && raw['title'] is String) {
+            final title = (raw['title'] as String).trim();
+            if (title.isNotEmpty) return title;
+          }
+        }
+      } catch (_) {}
+      final parts = relative.replaceAll('\\', '/').split('/');
+      if (parts.isNotEmpty && parts.last.isNotEmpty) return parts.last;
+    }
+    return '';
   }
 
   Widget _buildEmpty(BuildContext context, double c) {

@@ -1058,6 +1058,9 @@ class LibraryState extends ChangeNotifier {
     return true;
   }
 
+  /// 閫氳繃 uuid 鏌ユ壘椤圭洰锛坓oto name 涓虹┖鏃舵樉绀烘爣棰樼敤锛夈€?
+  LibraryItem? itemByUuid(String uuid) => _itemByUuid[uuid];
+
   /// 閫氳繃鐩稿璺緞閫変腑宓屽 item锛坓oto 鐐瑰嚮 path 鍨嬶級銆?
   /// [currentItemPath] 鏄綋鍓嶉€変腑椤圭洰鐨勭粷瀵硅矾寰勶紝[relativePath] 鏄浉瀵瑰畠鐨勮矾寰勩€?
   /// 鍗虫椂鎵弿鏋勫缓涓存椂 LibraryItem 鏄剧ず銆傛壘涓嶅埌杩斿洖 false銆?
