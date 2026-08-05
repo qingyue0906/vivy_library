@@ -651,6 +651,8 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
     final maxCardWidth = gridSettings.maxCardWidth;
     final spacing = 8.0 * c;
     final fixedPerRow = gridSettings.itemsPerRow;
+    final minPerRow = gridSettings.minItemsPerRow;
+    final maxPerRow = gridSettings.maxItemsPerRow;
     final aspectRatio = gridSettings.aspectRatioValue;
     _defaultAspect = aspectRatio;
     final mode = gridSettings.displayMode;
@@ -670,13 +672,15 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
               (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
               crossAxisCount;
         } else {
+          // 自动模式：按目标卡片宽度推算列数，并钳制在
+          // 每行最少/最多数量范围内
           crossAxisCount = (constraints.maxWidth / (maxCardWidth + spacing))
               .floor()
-              .clamp(1, 999);
+              .clamp(minPerRow, maxPerRow);
           cardWidth =
               (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
               crossAxisCount;
-          if (cardWidth < minCardWidth && crossAxisCount > 1) {
+          if (cardWidth < minCardWidth && crossAxisCount > minPerRow) {
             crossAxisCount--;
             cardWidth =
                 (constraints.maxWidth - spacing * (crossAxisCount - 1)) /

@@ -177,6 +177,8 @@ class GridSettings {
   final double maxCardWidth;
   final String aspectRatio; // "1:1", "4:3", "16:9"
   final int itemsPerRow; // 0 = auto
+  final int minItemsPerRow; // 自动模式每行最少数量
+  final int maxItemsPerRow; // 自动模式每行最多数量
   final double compactLevel; // 0.5~2.0, 1.0 = current baseline
   final GifDisplayMode cardGifMode;
   final GifDisplayMode fileGifMode;
@@ -198,6 +200,8 @@ class GridSettings {
     this.maxCardWidth = 200,
     this.aspectRatio = '4:3',
     this.itemsPerRow = 0,
+    this.minItemsPerRow = 1,
+    this.maxItemsPerRow = 12,
     this.compactLevel = 1.0,
     this.cardGifMode = GifDisplayMode.hover,
     this.fileGifMode = GifDisplayMode.hover,
@@ -210,6 +214,8 @@ class GridSettings {
     double? maxCardWidth,
     String? aspectRatio,
     int? itemsPerRow,
+    int? minItemsPerRow,
+    int? maxItemsPerRow,
     double? compactLevel,
     GifDisplayMode? cardGifMode,
     GifDisplayMode? fileGifMode,
@@ -221,6 +227,8 @@ class GridSettings {
       maxCardWidth: maxCardWidth ?? this.maxCardWidth,
       aspectRatio: aspectRatio ?? this.aspectRatio,
       itemsPerRow: itemsPerRow ?? this.itemsPerRow,
+      minItemsPerRow: minItemsPerRow ?? this.minItemsPerRow,
+      maxItemsPerRow: maxItemsPerRow ?? this.maxItemsPerRow,
       compactLevel: compactLevel ?? this.compactLevel,
       cardGifMode: cardGifMode ?? this.cardGifMode,
       fileGifMode: fileGifMode ?? this.fileGifMode,
@@ -234,6 +242,8 @@ class GridSettings {
         'maxCardWidth': maxCardWidth,
         'aspectRatio': aspectRatio,
         'itemsPerRow': itemsPerRow,
+        'minItemsPerRow': minItemsPerRow,
+        'maxItemsPerRow': maxItemsPerRow,
         'compactLevel': compactLevel,
         'cardGifMode': cardGifMode.name,
         'fileGifMode': fileGifMode.name,
@@ -251,6 +261,8 @@ class GridSettings {
       maxCardWidth: (map['maxCardWidth'] ?? 200).toDouble(),
       aspectRatio: map['aspectRatio'] ?? '4:3',
       itemsPerRow: map['itemsPerRow'] ?? 0,
+      minItemsPerRow: map['minItemsPerRow'] ?? 1,
+      maxItemsPerRow: map['maxItemsPerRow'] ?? 12,
       compactLevel: (map['compactLevel'] ?? 1.0).toDouble(),
       cardGifMode: GifDisplayMode.values.firstWhere(
         (e) => e.name == map['cardGifMode'],
@@ -412,6 +424,8 @@ class SettingsService {
       'maxCardWidth': data['${_gridPrefix}maxCardWidth'],
       'aspectRatio': data['${_gridPrefix}aspectRatio'],
       'itemsPerRow': data['${_gridPrefix}itemsPerRow'],
+      'minItemsPerRow': data['${_gridPrefix}minItemsPerRow'],
+      'maxItemsPerRow': data['${_gridPrefix}maxItemsPerRow'],
       'compactLevel': data['${_gridPrefix}compactLevel'],
       'cardGifMode': data['${_gridPrefix}cardGifMode'],
       'fileGifMode': data['${_gridPrefix}fileGifMode'],

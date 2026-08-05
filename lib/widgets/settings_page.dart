@@ -448,7 +448,7 @@ class _SettingsPageState extends State<SettingsPage>
             const SizedBox(height: 16),
             _buildAspectRatioSelector(),
             const SizedBox(height: 16),
-            _buildItemsPerRowField(),
+            _buildItemsPerRowFields(),
             const SizedBox(height: 20),
             _buildCompactLevelSlider(),
             const SizedBox(height: 20),
@@ -1107,18 +1107,67 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  Widget _buildItemsPerRowField() {
+  /// 每行固定数量 / 每行最少数量 / 每行最多数量 三个数字输入框一行并排。
+  /// 最少/最多只在自动模式（固定数量=0）生效，固定模式时置灰禁用。
+  Widget _buildItemsPerRowFields() {
+    final enabled = _gridSettings.itemsPerRow == 0;
     return Row(
       children: [
-        Text(Strings.t('itemsPerRow'),
-            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
-        const SizedBox(width: 12),
+        _buildNumberField(
+          label: Strings.t('itemsPerRow'),
+          value: _gridSettings.itemsPerRow,
+          enabled: true,
+          onChanged: (n) =>
+              _gridSettings = _gridSettings.copyWith(itemsPerRow: n.clamp(0, 20)),
+        ),
+        const SizedBox(width: 20),
+        _buildNumberField(
+          label: Strings.t('itemsPerRowMin'),
+          value: _gridSettings.minItemsPerRow,
+          enabled: enabled,
+          onChanged: (n) {
+            final min = n.clamp(1, 999);
+            // 最少输入越过最多时自动抬高最多，保证 min <= max
+            final max = min > _gridSettings.maxItemsPerRow
+                ? min
+                : _gridSettings.maxItemsPerRow;
+            _gridSettings = _gridSettings.copyWith(
+              minItemsPerRow: min,
+              maxItemsPerRow: max,
+            );
+          },
+        ),
+        const SizedBox(width: 20),
+        _buildNumberField(
+          label: Strings.t('itemsPerRowMax'),
+          value: _gridSettings.maxItemsPerRow,
+          enabled: enabled,
+          onChanged: (n) => _gridSettings =
+              _gridSettings.copyWith(maxItemsPerRow: n.clamp(1, 12)),
+        ),
+      ],
+    );
+  }
+
+  /// 数字输入框：灰色小标签 + 数字文本框（与"每行固定数量"同款样式）。
+  Widget _buildNumberField({
+    required String label,
+    required int value,
+    required bool enabled,
+    required ValueChanged<int> onChanged,
+  }) {
+    final labelColor =
+        enabled ? const Color(0xFF616161) : Theme.of(context).disabledColor;
+    return Row(
+      children: [
+        Text(label, style: TextStyle(fontSize: 11, color: labelColor)),
+        const SizedBox(width: 8),
         SizedBox(
           width: 60,
           child: TextField(
             keyboardType: TextInputType.number,
-            controller: TextEditingController(
-                text: _gridSettings.itemsPerRow.toString()),
+            enabled: enabled,
+            controller: TextEditingController(text: value.toString()),
             style: const TextStyle(fontSize: 12),
             decoration: InputDecoration(
               isDense: true,
@@ -1127,8 +1176,9 @@ class _SettingsPageState extends State<SettingsPage>
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
             ),
             onChanged: (v) {
-              final n = int.tryParse(v) ?? 0;
-              _gridSettings = _gridSettings.copyWith(itemsPerRow: n.clamp(0, 20));
+              // 空输入/非法输入保持原值
+              final n = int.tryParse(v);
+              if (n != null) onChanged(n);
             },
           ),
         ),
@@ -1269,6 +1319,8 @@ class _SettingsPageState extends State<SettingsPage>
             'maxCardWidth': importedSettings['grid_maxCardWidth'],
             'aspectRatio': importedSettings['grid_aspectRatio'],
             'itemsPerRow': importedSettings['grid_itemsPerRow'],
+            'minItemsPerRow': importedSettings['grid_minItemsPerRow'],
+            'maxItemsPerRow': importedSettings['grid_maxItemsPerRow'],
             'compactLevel': importedSettings['grid_compactLevel'],
             'cardGifMode': importedSettings['grid_cardGifMode'],
             'fileGifMode': importedSettings['grid_fileGifMode'],

@@ -437,10 +437,22 @@ class Strings {
       AppLocale.ja: 'アダプティブ',
     },
     'itemsPerRowCount': {
-      AppLocale.zhHans: '每行数目',
-      AppLocale.zhHant: '每行數目',
+      AppLocale.zhHans: '每行数量',
+      AppLocale.zhHant: '每行數量',
       AppLocale.en: 'Items Per Row',
-      AppLocale.ja: '行あたりの数',
+      AppLocale.ja: '1行あたりの数',
+    },
+    'itemsPerRowMin': {
+      AppLocale.zhHans: '每行最少数量',
+      AppLocale.zhHant: '每行最少數量',
+      AppLocale.en: 'Min Items Per Row',
+      AppLocale.ja: '1行あたりの最小数',
+    },
+    'itemsPerRowMax': {
+      AppLocale.zhHans: '每行最多数量',
+      AppLocale.zhHant: '每行最多數量',
+      AppLocale.en: 'Max Items Per Row',
+      AppLocale.ja: '1行あたりの最大数',
     },
     'auto': {
       AppLocale.zhHans: '自动',
