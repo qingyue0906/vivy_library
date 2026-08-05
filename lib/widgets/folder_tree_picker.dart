@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/category_node.dart';
 import '../services/translations.dart';
-import 'compact_level.dart';
 import 'smooth_scroll.dart';
+import 'tree_row.dart';
 
 class FolderTreePicker extends StatefulWidget {
   final CategoryNode root;
@@ -35,7 +35,6 @@ class _FolderTreePickerState extends State<FolderTreePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -48,66 +47,59 @@ class _FolderTreePickerState extends State<FolderTreePicker> {
           physics: physics,
           padding: EdgeInsets.zero,
           children: [
-            _buildNode(context, c, widget.root, 0, label: Strings.t('rootDir')),
+            _buildNode(context, widget.root, 0, label: Strings.t('rootDir')),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNode(BuildContext context, double c, CategoryNode node, int depth, {String? label}) {
+  Widget _buildNode(BuildContext context, CategoryNode node, int depth,
+      {String? label, bool isLast = true, int parentLastChain = 0}) {
     final hasSubDirs = node.subDirs.isNotEmpty;
     final isExpanded = _expanded.contains(node.path);
     final isSelected = widget.selectedPath == node.path;
+    final lastChain = isLast ? parentLastChain + 1 : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
+        TreeRow(
+          label: label ?? node.name,
+          icon: hasSubDirs && isExpanded ? Icons.folder_open : Icons.folder,
+          isSelected: isSelected,
+          hasSubDirs: hasSubDirs,
+          isExpanded: isExpanded,
+          depth: depth,
+          lastChain: lastChain,
           onTap: () {
             widget.onSelected(node.path);
             setState(() {});
           },
-          child: Container(
-            height: 28 * c,
-            color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
-            child: Padding(
-              padding: EdgeInsets.only(left: 4 * c + depth * 14 * c, right: 8 * c),
-              child: Row(
-                children: [
-                  if (hasSubDirs)
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (isExpanded) { _expanded.remove(node.path); }
-                          else { _expanded.add(node.path); }
-                        });
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.all(2 * c),
-                        child: Icon(
-                          isExpanded ? Icons.expand_more : Icons.chevron_right,
-                          size: 14 * c, color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox(width: 18 * c),
-                  Icon(Icons.folder, size: 13 * c, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  SizedBox(width: 4 * c),
-                  Expanded(
-                    child: Text(
-                      label ?? node.name,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12 * c, color: Theme.of(context).colorScheme.onSurface),
-                    ),
-                  ),
-                ],
-              ),
+          onToggleExpand: hasSubDirs
+              ? () {
+                  setState(() {
+                    if (isExpanded) {
+                      _expanded.remove(node.path);
+                    } else {
+                      _expanded.add(node.path);
+                    }
+                  });
+                }
+              : null,
+        ),
+        if (hasSubDirs)
+          ExpandableChildren(
+            expanded: isExpanded,
+            builder: (context) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...node.subDirs.asMap().entries.map((e) => _buildNode(
+                    context, e.value, depth + 1,
+                    isLast: e.key == node.subDirs.length - 1,
+                    parentLastChain: lastChain)),
+              ],
             ),
           ),
-        ),
-        if (hasSubDirs && isExpanded)
-          ...node.subDirs.map((n) => _buildNode(context, c, n, depth + 1)),
       ],
     );
   }

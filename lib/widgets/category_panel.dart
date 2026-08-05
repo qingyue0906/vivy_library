@@ -3,6 +3,7 @@ import '../models/category_node.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
+import 'tree_row.dart';
 
 /// 左侧分类栏，树形展示多层文件夹。
 /// 有子文件夹的节点显示展开箭头，点击展开/收起子层。
@@ -41,50 +42,62 @@ class _CategoryPanelState extends State<CategoryPanel> {
         builder: (context, controller, physics) => ListView(
           controller: controller,
           physics: physics,
-          padding: EdgeInsets.zero,
+          padding: EdgeInsets.fromLTRB(0, 2 * c, 0, 4 * c),
           children: [
             // Part 1: 全部项目 + 根目录
-            _buildItem(context, c,
+            _buildItem(context,
                 label: Strings.t('allItems'), value: null, depth: 0, node: null,
                 icon: Icons.apps),
-            _buildItem(context, c,
+            _buildItem(context,
                 label: Strings.t('rootDir'), value: widget.root.path, depth: 0, node: widget.root,
                 icon: Icons.folder_open),
             Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
             // Part 2: 根级直接文件夹展开树
-            ...widget.root.subDirs.map((node) =>
-                _buildNode(context, c, node, 0)),
+            ...widget.root.subDirs.asMap().entries.map((e) => _buildNode(
+                context, e.value, 0,
+                isLast: e.key == widget.root.subDirs.length - 1,
+                parentLastChain: 0)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNode(BuildContext context, double c, CategoryNode node, int depth) {
+  Widget _buildNode(BuildContext context, CategoryNode node, int depth,
+      {required bool isLast, required int parentLastChain}) {
     final hasSubDirs = node.subDirs.isNotEmpty;
     final isExpanded = widget.expandedPaths.contains(node.path);
+    final lastChain = isLast ? parentLastChain + 1 : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildItem(context, c,
+        _buildItem(context,
             label: node.name,
             value: node.path,
             depth: depth,
             node: node,
             hasSubDirs: hasSubDirs,
             isExpanded: isExpanded,
-            onToggleExpand: hasSubDirs
-                ? () => widget.onToggleExpand(node.path)
-                : null),
-        if (hasSubDirs && isExpanded)
-          ...node.subDirs.map((sub) => _buildNode(context, c, sub, depth + 1)),
+            lastChain: lastChain),
+        if (hasSubDirs)
+          ExpandableChildren(
+            expanded: isExpanded,
+            builder: (context) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...node.subDirs.asMap().entries.map((e) => _buildNode(
+                    context, e.value, depth + 1,
+                    isLast: e.key == node.subDirs.length - 1,
+                    parentLastChain: lastChain)),
+              ],
+            ),
+          ),
       ],
     );
   }
 
   Widget _buildItem(
-    BuildContext context,
-    double c, {
+    BuildContext context, {
     required String label,
     required String? value,
     required int depth,
@@ -92,51 +105,23 @@ class _CategoryPanelState extends State<CategoryPanel> {
     IconData icon = Icons.folder,
     bool hasSubDirs = false,
     bool isExpanded = false,
-    VoidCallback? onToggleExpand,
+    int lastChain = 0,
   }) {
-    final cs = Theme.of(context).colorScheme;
     final isSelected = widget.selectedCategoryPath == value;
-    return Container(
-      height: 28 * c,
-      color: isSelected ? cs.primaryContainer : Colors.transparent,
-      child: InkWell(
-        onTap: () => widget.onCategorySelected(value),
-        child: Padding(
-          padding: EdgeInsets.only(left: 8 * c + depth * 12 * c, right: 8 * c),
-          child: Row(
-            children: [
-              if (hasSubDirs)
-                InkWell(
-                  onTap: onToggleExpand,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: EdgeInsets.all(1 * c),
-                    child: Icon(
-                      isExpanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 14 * c,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                SizedBox(width: 16 * c),
-              Icon(icon, size: 13 * c, color: cs.onSurfaceVariant),
-              SizedBox(width: 4 * c),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12 * c,
-                    color: isSelected ? cs.onPrimaryContainer : cs.onSurface,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return TreeRow(
+      label: label,
+      icon: hasSubDirs
+          ? (isExpanded ? Icons.folder_open : Icons.folder)
+          : icon,
+      isSelected: isSelected,
+      hasSubDirs: hasSubDirs,
+      isExpanded: isExpanded,
+      depth: depth,
+      lastChain: lastChain,
+      onTap: () => widget.onCategorySelected(value),
+      onToggleExpand: hasSubDirs
+          ? () => widget.onToggleExpand(node!.path)
+          : null,
     );
   }
 }
