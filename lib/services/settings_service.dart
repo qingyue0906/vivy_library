@@ -184,6 +184,8 @@ class GridSettings {
   final GifDisplayMode fileGifMode;
   final GridDisplayMode displayMode;
   final GridBadgeFlags badges;
+  final bool showBottomFilePanel; // 显示底部文件面板；关闭后嵌入右侧"文件"标签页
+  final bool keepDetailTabOnSelection; // 切换选中卡片时保持右侧面板当前标签页
 
   double get aspectRatioValue {
     final parts = aspectRatio.split(':');
@@ -207,6 +209,8 @@ class GridSettings {
     this.fileGifMode = GifDisplayMode.hover,
     this.displayMode = GridDisplayMode.loose,
     this.badges = const GridBadgeFlags(),
+    this.showBottomFilePanel = true,
+    this.keepDetailTabOnSelection = false,
   });
 
   GridSettings copyWith({
@@ -221,6 +225,8 @@ class GridSettings {
     GifDisplayMode? fileGifMode,
     GridDisplayMode? displayMode,
     GridBadgeFlags? badges,
+    bool? showBottomFilePanel,
+    bool? keepDetailTabOnSelection,
   }) {
     return GridSettings(
       minCardWidth: minCardWidth ?? this.minCardWidth,
@@ -234,6 +240,9 @@ class GridSettings {
       fileGifMode: fileGifMode ?? this.fileGifMode,
       displayMode: displayMode ?? this.displayMode,
       badges: badges ?? this.badges,
+      showBottomFilePanel: showBottomFilePanel ?? this.showBottomFilePanel,
+      keepDetailTabOnSelection:
+          keepDetailTabOnSelection ?? this.keepDetailTabOnSelection,
     );
   }
 
@@ -249,6 +258,8 @@ class GridSettings {
         'fileGifMode': fileGifMode.name,
         'displayMode': displayMode.name,
         'badges': badges.toMap(),
+        'showBottomFilePanel': showBottomFilePanel,
+        'keepDetailTabOnSelection': keepDetailTabOnSelection,
       };
 
   factory GridSettings.fromMap(Map<String, dynamic> map) {
@@ -277,6 +288,8 @@ class GridSettings {
         orElse: () => GridDisplayMode.loose,
       ),
       badges: badges,
+      showBottomFilePanel: map['showBottomFilePanel'] ?? true,
+      keepDetailTabOnSelection: map['keepDetailTabOnSelection'] ?? false,
     );
   }
 }
@@ -431,6 +444,8 @@ class SettingsService {
       'fileGifMode': data['${_gridPrefix}fileGifMode'],
       'displayMode': data['${_gridPrefix}displayMode'],
       'badges': data['${_gridPrefix}badges'],
+      'showBottomFilePanel': data['${_gridPrefix}showBottomFilePanel'],
+      'keepDetailTabOnSelection': data['${_gridPrefix}keepDetailTabOnSelection'],
     });
   }
 

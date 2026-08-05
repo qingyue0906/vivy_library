@@ -41,13 +41,14 @@ class FileBrowserPanel extends StatefulWidget {
   final void Function(String path)? onBrowseHtmlFile;
   final VoidCallback? onBrowseMarkdownProject;
   final void Function(String path)? onBrowseMarkdownFile;
+  final bool embedded; // 嵌入右侧面板时隐藏无意义的 ✕ 关闭按钮
 
   const FileBrowserPanel({
     super.key,
     required this.item,
     required this.state,
     required this.scriptService,
-    required this.height,
+    this.height = 260,
     this.backgroundOpacity = 1.0,
     this.gifMode = GifDisplayMode.hover,
     this.onPlayProject,
@@ -62,6 +63,7 @@ class FileBrowserPanel extends StatefulWidget {
     this.onBrowseHtmlFile,
     this.onBrowseMarkdownProject,
     this.onBrowseMarkdownFile,
+    this.embedded = false,
   });
 
   @override
@@ -105,6 +107,25 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     final c = CompactLevel.of(context);
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(8);
+    if (widget.embedded) {
+      // 嵌入右侧面板：无固定高度、无头部栏，高度由内容决定，滚动交给外层。
+      return Stack(
+        children: [
+          _buildFileGrid(context, c, shrinkWrap: true),
+          if (_isDragOver)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: cs.primary, width: 2),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
     return Container(
       height: widget.height,
       clipBehavior: _isDragOver ? Clip.antiAlias : Clip.none,
@@ -233,14 +254,15 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
               tooltip: Strings.t('openProjectMarkdown'),
               onTap: widget.onBrowseMarkdownProject ?? () {},
             ),
-          _headerIconButton(
-            c: c,
-            cs: cs,
-            icon: Icons.close,
-            tooltip: Strings.t('closePanel'),
-            onTap: widget.state.hideFileBrowser,
-            iconColor: Colors.red.shade400,
-          ),
+          if (!widget.embedded)
+            _headerIconButton(
+              c: c,
+              cs: cs,
+              icon: Icons.close,
+              tooltip: Strings.t('closePanel'),
+              onTap: widget.state.hideFileBrowser,
+              iconColor: Colors.red.shade400,
+            ),
         ],
       ),
     );
@@ -277,7 +299,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     );
   }
 
-  Widget _buildFileGrid(BuildContext context, double c) {
+  Widget _buildFileGrid(BuildContext context, double c, {bool shrinkWrap = false}) {
     final raw = _getRawList();
     if (raw.isEmpty) {
       return Center(child: Text(Strings.t('folderNotExist')));
@@ -307,22 +329,37 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       );
     }
 
-    final grid = SmoothScroll(
-      builder: (context, controller, physics) => GridView.builder(
-        controller: controller,
-        physics: physics,
-        padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 82 * c,
-          mainAxisExtent: 96 * c,
-          crossAxisSpacing: 4 * c,
-          mainAxisSpacing: 4 * c,
-        ),
-        itemCount: visible.length,
-        itemBuilder: (context, index) =>
-            _buildFileItem(context, visible[index], c),
-      ),
-    );
+    final grid = shrinkWrap
+        ? GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 82 * c,
+              mainAxisExtent: 96 * c,
+              crossAxisSpacing: 4 * c,
+              mainAxisSpacing: 4 * c,
+            ),
+            itemCount: visible.length,
+            itemBuilder: (context, index) =>
+                _buildFileItem(context, visible[index], c),
+          )
+        : SmoothScroll(
+            builder: (context, controller, physics) => GridView.builder(
+              controller: controller,
+              physics: physics,
+              padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 6 * c),
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 82 * c,
+                mainAxisExtent: 96 * c,
+                crossAxisSpacing: 4 * c,
+                mainAxisSpacing: 4 * c,
+              ),
+              itemCount: visible.length,
+              itemBuilder: (context, index) =>
+                  _buildFileItem(context, visible[index], c),
+            ),
+          );
 
     // 点击空白处清除选中；Ctrl+A 全选
     final interactive = GestureDetector(

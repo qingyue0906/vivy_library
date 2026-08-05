@@ -450,7 +450,9 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 200),
     );
     _extentTicker = createTicker(_onExtentTick);
-    if (state.fileBrowserVisible && state.selectedItem != null) {
+    if (state.fileBrowserVisible &&
+        state.selectedItem != null &&
+        widget.gridSettings.showBottomFilePanel) {
       _panelAnim.value = 1;
       _panelItem = state.selectedItem;
     }
@@ -487,7 +489,9 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
 
     // 依据可见性驱动面板进出场动画（带状态守卫，build 重复调用时为 no-op）。
     // 同一进度 v 同时驱动「内容让位高度」与「面板位移」，二者完全同步。
-    final visible = state.fileBrowserVisible && state.selectedItem != null;
+    final visible = state.fileBrowserVisible &&
+        state.selectedItem != null &&
+        widget.gridSettings.showBottomFilePanel;
     if (visible) {
       _panelItem = state.selectedItem;
       if (!_panelAnim.isCompleted) _panelAnim.forward();

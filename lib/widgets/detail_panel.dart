@@ -7,15 +7,19 @@ import '../models/library_item.dart';
 import '../models/category_node.dart';
 import '../models/direct_file.dart';
 import '../models/goto_entry.dart';
+import '../providers/library_state.dart';
 import '../services/library_scanner.dart' show previewExtensions;
+import '../services/script_service.dart';
+import '../services/settings_service.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
+import 'file_browser_panel.dart';
 import 'smooth_scroll.dart';
 
 /// 详情面板的四个标签页。
 enum _DetailTab { overview, metadata, files, related }
 
-class DetailPanel extends StatelessWidget {
+class DetailPanel extends StatefulWidget {
   final LibraryItem? item;
   final ItemInfo? effectiveInfo; // 有效 info（含父文件夹继承 + 硬编码保底）
   final CategoryNode? folder;
@@ -23,6 +27,17 @@ class DetailPanel extends StatelessWidget {
   final double backgroundOpacity;
   final void Function(GotoEntry entry)? onGotoTap;
   final void Function(String query)? onSearchByQuery;
+  final bool showBottomFilePanel; // 关闭时文件浏览区嵌入"文件"标签页底部
+  final bool keepDetailTabOnSelection; // 切换选中时保持当前标签页
+  final LibraryState? state;
+  final ScriptService? scriptService;
+  final GifDisplayMode gifMode;
+  final void Function(LibraryItem item, {String? startPath})? onOpenVideoPlayer;
+  final void Function(LibraryItem item, {String? startPath})? onOpenAudioPlayer;
+  final void Function(LibraryItem item, {String? startPath})? onOpenComicReader;
+  final void Function(LibraryItem item, {String? startPath})? onOpenEbookReader;
+  final void Function(LibraryItem item, {String? startPath})? onOpenEdgeHtml;
+  final void Function(LibraryItem item, {String? startPath})? onOpenMarkdown;
 
   const DetailPanel({
     super.key,
@@ -33,24 +48,64 @@ class DetailPanel extends StatelessWidget {
     this.backgroundOpacity = 1.0,
     this.onGotoTap,
     this.onSearchByQuery,
+    this.showBottomFilePanel = true,
+    this.keepDetailTabOnSelection = false,
+    this.state,
+    this.scriptService,
+    this.gifMode = GifDisplayMode.hover,
+    this.onOpenVideoPlayer,
+    this.onOpenAudioPlayer,
+    this.onOpenComicReader,
+    this.onOpenEbookReader,
+    this.onOpenEdgeHtml,
+    this.onOpenMarkdown,
   });
+
+  @override
+  State<DetailPanel> createState() => _DetailPanelState();
+}
+
+class _DetailPanelState extends State<DetailPanel> {
+  /// 跨选中切换保留的标签页（按枚举存储，跨类型切换自动兜底）。
+  _DetailTab? _lastTab;
+
+  void _onTabSelected(_DetailTab tab) {
+    _lastTab = tab;
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     // 以选择对象身份作为 key，切换选中项时重建内部 TabController，
     // 避免标签页数量变化导致的断言错误。
-    final selectionKey = Object.hash(item?.path, folder?.path, file?.path);
+    // showBottomFilePanel 也纳入 key：设置切换该开关后标签页数量变化，
+    // 需要重建以匹配新的 TabController 长度。
+    final selectionKey = Object.hash(widget.item?.path, widget.folder?.path,
+        widget.file?.path, widget.showBottomFilePanel);
     return Container(
-      color: cs.surfaceContainerLow.withValues(alpha: backgroundOpacity),
+      color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
       child: _DetailPanelBody(
         key: ValueKey(selectionKey),
-        item: item,
-        effectiveInfo: effectiveInfo,
-        folder: folder,
-        file: file,
-        onGotoTap: onGotoTap,
-        onSearchByQuery: onSearchByQuery,
+        item: widget.item,
+        effectiveInfo: widget.effectiveInfo,
+        folder: widget.folder,
+        file: widget.file,
+        onGotoTap: widget.onGotoTap,
+        onSearchByQuery: widget.onSearchByQuery,
+        keepDetailTab: widget.keepDetailTabOnSelection,
+        lastTab: _lastTab,
+        onTabSelected: _onTabSelected,
+        showBottomFilePanel: widget.showBottomFilePanel,
+        backgroundOpacity: widget.backgroundOpacity,
+        state: widget.state,
+        scriptService: widget.scriptService,
+        gifMode: widget.gifMode,
+        onOpenVideoPlayer: widget.onOpenVideoPlayer,
+        onOpenAudioPlayer: widget.onOpenAudioPlayer,
+        onOpenComicReader: widget.onOpenComicReader,
+        onOpenEbookReader: widget.onOpenEbookReader,
+        onOpenEdgeHtml: widget.onOpenEdgeHtml,
+        onOpenMarkdown: widget.onOpenMarkdown,
       ),
     );
   }
@@ -63,6 +118,20 @@ class _DetailPanelBody extends StatefulWidget {
   final DirectFile? file;
   final void Function(GotoEntry entry)? onGotoTap;
   final void Function(String query)? onSearchByQuery;
+  final bool keepDetailTab;
+  final _DetailTab? lastTab;
+  final void Function(_DetailTab tab)? onTabSelected;
+  final bool showBottomFilePanel;
+  final double backgroundOpacity;
+  final LibraryState? state;
+  final ScriptService? scriptService;
+  final GifDisplayMode gifMode;
+  final void Function(LibraryItem item, {String? startPath})? onOpenVideoPlayer;
+  final void Function(LibraryItem item, {String? startPath})? onOpenAudioPlayer;
+  final void Function(LibraryItem item, {String? startPath})? onOpenComicReader;
+  final void Function(LibraryItem item, {String? startPath})? onOpenEbookReader;
+  final void Function(LibraryItem item, {String? startPath})? onOpenEdgeHtml;
+  final void Function(LibraryItem item, {String? startPath})? onOpenMarkdown;
 
   const _DetailPanelBody({
     super.key,
@@ -72,6 +141,20 @@ class _DetailPanelBody extends StatefulWidget {
     this.file,
     this.onGotoTap,
     this.onSearchByQuery,
+    this.keepDetailTab = false,
+    this.lastTab,
+    this.onTabSelected,
+    this.showBottomFilePanel = true,
+    this.backgroundOpacity = 1.0,
+    this.state,
+    this.scriptService,
+    this.gifMode = GifDisplayMode.hover,
+    this.onOpenVideoPlayer,
+    this.onOpenAudioPlayer,
+    this.onOpenComicReader,
+    this.onOpenEbookReader,
+    this.onOpenEdgeHtml,
+    this.onOpenMarkdown,
   });
 
   @override
@@ -91,8 +174,17 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
   bool get _isFile => widget.file != null;
 
   /// 依据当前选中对象的类型决定要展示哪些标签页。
+  /// 底部文件面板开启时 item 无"文件"标签页（文件在底部面板查看）；
+  /// 文件夹的"文件"标签页始终移除（信息与元数据重复，无文件浏览区）。
   List<_TabSpec> _tabSpecs() {
     if (_isItem) {
+      if (widget.showBottomFilePanel) {
+        return const [
+          _TabSpec(_DetailTab.overview, 'tabOverview', Icons.dashboard_outlined),
+          _TabSpec(_DetailTab.metadata, 'tabMetadata', Icons.data_object_outlined),
+          _TabSpec(_DetailTab.related, 'tabRelated', Icons.link_outlined),
+        ];
+      }
       return const [
         _TabSpec(_DetailTab.overview, 'tabOverview', Icons.dashboard_outlined),
         _TabSpec(_DetailTab.metadata, 'tabMetadata', Icons.data_object_outlined),
@@ -104,7 +196,6 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       return const [
         _TabSpec(_DetailTab.overview, 'tabOverview', Icons.dashboard_outlined),
         _TabSpec(_DetailTab.metadata, 'tabMetadata', Icons.data_object_outlined),
-        _TabSpec(_DetailTab.files, 'tabFiles', Icons.folder_outlined),
       ];
     }
     if (_isFile) {
@@ -119,8 +210,16 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
   @override
   void initState() {
     super.initState();
+    final specs = _tabSpecs();
+    // 设置开启时按上次标签页恢复（枚举方式存储，跨类型自动兜底到 0）。
+    var initialIndex = 0;
+    if (widget.keepDetailTab && widget.lastTab != null) {
+      final idx = specs.indexWhere((s) => s.key == widget.lastTab);
+      if (idx >= 0) initialIndex = idx;
+    }
     _tabController = TabController(
-      length: _tabSpecs().length,
+      length: specs.length,
+      initialIndex: initialIndex,
       vsync: this,
       animationDuration: const Duration(milliseconds: 180),
     )..addListener(_onTabChanged);
@@ -146,9 +245,16 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     }
 
     final specs = _tabSpecs();
+    final filesTabIndex = specs.indexWhere((s) => s.key == _DetailTab.files);
+    final fabVisible = _isItem &&
+        !widget.showBottomFilePanel &&
+        widget.state != null &&
+        widget.scriptService != null &&
+        filesTabIndex >= 0 &&
+        _tabController.index == filesTabIndex;
     // 整页一体滚动：头部、TabBar、当前标签内容共用一个滚动视图，
     // 滚轮滚动整个预览面板，而非只有标签下方的内容滚动。
-    return SmoothScroll(
+    final body = SmoothScroll(
       builder: (context, controller, physics) {
         _outerController = controller;
         return CustomScrollView(
@@ -158,7 +264,8 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
             SliverToBoxAdapter(child: _buildHeader(c, cs)),
             SliverToBoxAdapter(child: _buildTabBar(c, cs, specs)),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(12 * c, 4 * c, 12 * c, 16 * c),
+              padding: EdgeInsets.fromLTRB(12 * c, 4 * c, 12 * c,
+                  fabVisible ? 16 * c + 52 : 16 * c),
               sliver: SliverToBoxAdapter(
                 child: _tabContent(context, c, cs, specs[_tabController.index].key),
               ),
@@ -166,6 +273,18 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
           ],
         );
       },
+    );
+    // 文件标签页的悬浮操作按钮组，固定在面板右下角，不随内容滚动。
+    if (!fabVisible) return body;
+    return Stack(
+      children: [
+        body,
+        Positioned(
+          right: 16 * c,
+          bottom: 16 * c,
+          child: _buildFloatingButtons(context, c),
+        ),
+      ],
     );
   }
 
@@ -181,7 +300,8 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w600),
       unselectedLabelStyle: TextStyle(fontSize: 11 * c),
-      onTap: (_) {
+      onTap: (i) {
+        widget.onTabSelected?.call(specs[i].key);
         // 切换标签后回到面板顶部，与每页独立滚动时从内容顶部开始的直觉一致
         _outerController?.jumpTo(0);
       },
@@ -381,7 +501,7 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       case _DetailTab.metadata:
         return _metadataContent(context, c, cs);
       case _DetailTab.files:
-        return _filesContent(context, c, cs);
+        return _filesContent(context, c);
       case _DetailTab.related:
         return _relatedContent(context, c, cs);
     }
@@ -483,33 +603,141 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     return Column(children: rows);
   }
 
-  Widget _filesContent(BuildContext context, double c, ColorScheme cs) {
-    final rows = <Widget>[];
-    if (_isItem) {
-      final it = widget.item!;
-      rows.add(_copyableRow(context, c, cs, Strings.t('category'), it.category));
-      rows.add(_copyableRow(context, c, cs, Strings.t('size'), _formatSize(it.sizeInBytes)));
-      rows.add(_copyableRow(
-          context, c, cs, Strings.t('modifiedTime'), _formatDate(it.modifiedTime)));
-      rows.add(_copyableRow(context, c, cs, Strings.t('path'), it.path));
-    } else if (_isFolder) {
-      final f = widget.folder!;
-      rows.add(_copyableRow(context, c, cs, Strings.t('path'), f.path));
-      rows.add(_copyableRow(context, c, cs, Strings.t('size'), _formatSize(f.sizeInBytes)));
-      rows.add(_copyableRow(context, c, cs, Strings.t('subfolderCount'),
-          '${f.subDirs.length}'));
-      rows.add(_copyableRow(
-          context, c, cs, Strings.t('directItemCount'), '${f.items.length}'));
-    } else if (_isFile) {
-      final f = widget.file!;
-      rows.add(_copyableRow(context, c, cs, Strings.t('extension'),
-          f.extension.isNotEmpty ? '.${f.extension}' : Strings.t('noExt')));
-      rows.add(_copyableRow(context, c, cs, Strings.t('size'), _formatSize(f.sizeInBytes)));
-      rows.add(_copyableRow(
-          context, c, cs, Strings.t('modifiedTime'), _formatDate(f.modifiedTime)));
-      rows.add(_copyableRow(context, c, cs, Strings.t('path'), f.path));
+  /// "文件"标签页内容：仅在 item 且底部文件面板关闭时存在，
+  /// 直接显示嵌入的文件浏览区（信息行与"元数据"标签页重复，已移除）。
+  Widget _filesContent(BuildContext context, double c) {
+    if (widget.state == null || widget.scriptService == null) {
+      return const SizedBox.shrink();
     }
-    return Column(children: rows);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 4 * c),
+        _buildEmbeddedBrowser(context),
+      ],
+    );
+  }
+
+  Widget _buildEmbeddedBrowser(BuildContext context) {
+    final it = widget.item!;
+    final v = widget.onOpenVideoPlayer;
+    final a = widget.onOpenAudioPlayer;
+    final r = widget.onOpenComicReader;
+    final e = widget.onOpenEbookReader;
+    final h = widget.onOpenEdgeHtml;
+    final m = widget.onOpenMarkdown;
+    return FileBrowserPanel(
+      item: it,
+      state: widget.state!,
+      scriptService: widget.scriptService!,
+      backgroundOpacity: widget.backgroundOpacity,
+      gifMode: widget.gifMode,
+      embedded: true,
+      onPlayProject: v == null ? null : () => v(it),
+      onPlayVideoFile: v == null ? null : (path) => v(it, startPath: path),
+      onPlayAudioProject: a == null ? null : () => a(it),
+      onPlayAudioFile: a == null ? null : (path) => a(it, startPath: path),
+      onReadProject: r == null ? null : () => r(it),
+      onReadImageFile: r == null ? null : (path) => r(it, startPath: path),
+      onReadEbookProject: e == null ? null : () => e(it),
+      onReadEbookFile: e == null ? null : (path) => e(it, startPath: path),
+      onBrowseHtmlProject: h == null ? null : () => h(it),
+      onBrowseHtmlFile: h == null ? null : (path) => h(it, startPath: path),
+      onBrowseMarkdownProject: m == null ? null : () => m(it),
+      onBrowseMarkdownFile: m == null ? null : (path) => m(it, startPath: path),
+    );
+  }
+
+  /// 文件标签页右下角的悬浮操作按钮组：32px 扁平圆形灰色按钮，
+  /// 与中间网格区 40px 主题色带阴影的创建按钮在视觉上区分。
+  /// 按钮内容：打开项目（随类型）、显示/隐藏 Info、取消全选（有选中时）。
+  Widget _buildFloatingButtons(BuildContext context, double c) {
+    final cs = Theme.of(context).colorScheme;
+    final it = widget.item!;
+    final type = (widget.effectiveInfo ?? it.info).type.toLowerCase();
+    final state = widget.state!;
+    final buttons = <Widget>[];
+
+    void add(IconData icon, String tooltip, VoidCallback onTap) {
+      buttons.add(
+        Tooltip(
+          message: tooltip,
+          child: Material(
+            color: cs.surfaceContainerHighest,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 32 * c,
+                height: 32 * c,
+                child: Icon(icon, size: 16 * c, color: cs.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ),
+      );
+      buttons.add(SizedBox(width: 10 * c));
+    }
+
+    switch (type) {
+      case 'video':
+      case 'anime':
+        if (widget.onOpenVideoPlayer != null) {
+          add(Icons.play_arrow, Strings.t('openProjectVideos'),
+              () => widget.onOpenVideoPlayer!(it));
+        }
+        break;
+      case 'comic':
+      case 'picture':
+        if (widget.onOpenComicReader != null) {
+          add(Icons.auto_stories, Strings.t('openProjectComic'),
+              () => widget.onOpenComicReader!(it));
+        }
+        break;
+      case 'novel':
+      case 'book':
+        if (widget.onOpenEbookReader != null) {
+          add(Icons.menu_book, Strings.t('openProjectEbook'),
+              () => widget.onOpenEbookReader!(it));
+        }
+        break;
+      case 'voice':
+      case 'music':
+        if (widget.onOpenAudioPlayer != null) {
+          add(Icons.audiotrack, Strings.t('openProjectAudio'),
+              () => widget.onOpenAudioPlayer!(it));
+        }
+        break;
+      case 'edgehtml':
+        if (widget.onOpenEdgeHtml != null) {
+          add(Icons.html, Strings.t('openProjectHtml'),
+              () => widget.onOpenEdgeHtml!(it));
+        }
+        break;
+      case 'markdown':
+        if (widget.onOpenMarkdown != null) {
+          add(Icons.article, Strings.t('openProjectMarkdown'),
+              () => widget.onOpenMarkdown!(it));
+        }
+        break;
+    }
+
+    final showSystem = state.showSystemFiles;
+    add(
+      showSystem ? Icons.visibility_off : Icons.visibility,
+      showSystem ? Strings.t('hideInfo') : Strings.t('showInfo'),
+      state.toggleSystemFiles,
+    );
+
+    if (state.selectedBrowserPaths.isNotEmpty) {
+      add(Icons.deselect, Strings.t('deselectAll'), state.clearBrowserSelection);
+    }
+
+    if (buttons.isNotEmpty && buttons.last is SizedBox) {
+      buttons.removeLast();
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: buttons);
   }
 
   Widget _relatedContent(BuildContext context, double c, ColorScheme cs) {

@@ -581,6 +581,18 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 folder: _state.selectedFolder,
                 file: _state.selectedFile,
                 backgroundOpacity: rightAlpha,
+                showBottomFilePanel: widget.gridSettings.showBottomFilePanel,
+                keepDetailTabOnSelection:
+                    widget.gridSettings.keepDetailTabOnSelection,
+                state: _state,
+                scriptService: widget.scriptService,
+                gifMode: widget.gridSettings.fileGifMode,
+                onOpenVideoPlayer: _openVideoPlayer,
+                onOpenAudioPlayer: _openAudioPlayer,
+                onOpenComicReader: _openComicReader,
+                onOpenEbookReader: _openEbookReader,
+                onOpenEdgeHtml: _openEdgeHtml,
+                onOpenMarkdown: _openMarkdown,
                 onGotoTap: (entry) async {
                   bool ok;
                   if (entry.path != null && entry.path!.isNotEmpty) {

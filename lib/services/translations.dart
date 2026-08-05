@@ -394,11 +394,41 @@ class Strings {
       AppLocale.en: 'Grid Settings',
       AppLocale.ja: 'グリッド設定',
     },
+    'showBottomFilePanel': {
+      AppLocale.zhHans: '显示底部文件面板',
+      AppLocale.zhHant: '顯示底部檔案面板',
+      AppLocale.en: 'Show bottom file panel',
+      AppLocale.ja: '下部ファイルパネルを表示',
+    },
+    'showBottomFilePanelHint': {
+      AppLocale.zhHans: '关闭后，选中项目的文件将显示在右侧"文件"标签页中',
+      AppLocale.zhHant: '關閉後，選中項目的檔案將顯示在右側「檔案」標籤頁中',
+      AppLocale.en: 'When off, files of the selected item appear in the Files tab on the right',
+      AppLocale.ja: 'オフにすると、選択項目のファイルが右側の「ファイル」タブに表示されます',
+    },
+    'keepDetailTabOnSelection': {
+      AppLocale.zhHans: '切换选中时保持右侧标签页',
+      AppLocale.zhHant: '切換選中時保持右側標籤頁',
+      AppLocale.en: 'Keep right panel tab when switching selection',
+      AppLocale.ja: '選択切替時も右側タブを保持',
+    },
+    'keepDetailTabOnSelectionHint': {
+      AppLocale.zhHans: '开启后，切换选中卡片不会重置右侧面板当前标签页',
+      AppLocale.zhHant: '開啟後，切換選中卡片不會重置右側面板目前標籤頁',
+      AppLocale.en: 'When on, switching selected cards does not reset the right panel tab',
+      AppLocale.ja: 'オンにすると、選択カードを切り替えても右側パネルのタブはリセットされません',
+    },
     'gridDisplaySettings': {
       AppLocale.zhHans: '网格显示设置',
       AppLocale.zhHant: '網格顯示設定',
       AppLocale.en: 'Grid Display',
       AppLocale.ja: 'グリッド表示',
+    },
+    'panelAndTab': {
+      AppLocale.zhHans: '面板与标签页',
+      AppLocale.zhHant: '面板與標籤頁',
+      AppLocale.en: 'Panel & Tabs',
+      AppLocale.ja: 'パネルとタブ',
     },
     'displayMode': {
       AppLocale.zhHans: '显示模式',
@@ -863,6 +893,12 @@ class Strings {
       AppLocale.zhHant: '創作者',
       AppLocale.en: 'Creator',
       AppLocale.ja: '作成者',
+    },
+    'category': {
+      AppLocale.zhHans: '文件夹',
+      AppLocale.zhHant: '資料夾',
+      AppLocale.en: 'Folder',
+      AppLocale.ja: 'フォルダ',
     },
     'type': {
       AppLocale.zhHans: '类型',

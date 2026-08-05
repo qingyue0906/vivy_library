@@ -462,6 +462,24 @@ class _SettingsPageState extends State<SettingsPage>
               setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
             }),
             const SizedBox(height: 20),
+            Text(Strings.t('panelAndTab'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            _buildSwitchRow(
+              labelKey: 'showBottomFilePanel',
+              hintKey: 'showBottomFilePanelHint',
+              value: _gridSettings.showBottomFilePanel,
+              onChanged: (v) =>
+                  setState(() => _gridSettings = _gridSettings.copyWith(showBottomFilePanel: v)),
+            ),
+            const SizedBox(height: 12),
+            _buildSwitchRow(
+              labelKey: 'keepDetailTabOnSelection',
+              hintKey: 'keepDetailTabOnSelectionHint',
+              value: _gridSettings.keepDetailTabOnSelection,
+              onChanged: (v) => setState(
+                  () => _gridSettings = _gridSettings.copyWith(keepDetailTabOnSelection: v)),
+            ),
+            const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
@@ -472,6 +490,40 @@ class _SettingsPageState extends State<SettingsPage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSwitchRow({
+    required String labelKey,
+    required String hintKey,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 220,
+              child: Text(Strings.t(labelKey), style: const TextStyle(fontSize: 12)),
+            ),
+            Transform.scale(
+              scale: 0.75,
+              child: Switch(
+                value: value,
+                onChanged: onChanged,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          Strings.t(hintKey),
+          style: const TextStyle(fontSize: 11, color: Color(0xFF616161)),
+        ),
+      ],
     );
   }
 
