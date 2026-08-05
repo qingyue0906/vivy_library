@@ -1017,6 +1017,16 @@ class SettingsService {
     await AppDataService.setString('grouping_enabled', v.toString());
   }
 
+  // --- Show system files (info/preview) ---
+
+  static Future<bool> loadShowSystemFiles() async {
+    return (await AppDataService.getString('show_system_files')) == 'true';
+  }
+
+  static Future<void> saveShowSystemFiles(bool v) async {
+    await AppDataService.setString('show_system_files', v.toString());
+  }
+
   // --- Background settings ---
 
   static Future<BackgroundSettings> loadBackgroundSettings() async {

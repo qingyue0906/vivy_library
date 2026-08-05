@@ -723,6 +723,7 @@ class LibraryState extends ChangeNotifier {
 
   void toggleSystemFiles() {
     _showSystemFiles = !_showSystemFiles;
+    SettingsService.saveShowSystemFiles(_showSystemFiles);
     notifyListeners();
   }
 
@@ -814,6 +815,7 @@ class LibraryState extends ChangeNotifier {
     _searchScope = await SettingsService.loadSearchScope();
     _classSource = await SettingsService.loadClassSource();
     _groupingEnabled = await SettingsService.loadGroupingEnabled();
+    _showSystemFiles = await SettingsService.loadShowSystemFiles();
     notifyListeners();
   }
 
