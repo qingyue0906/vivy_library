@@ -1,14 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../providers/library_state.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
+import 'drag_select.dart';
 import 'smooth_scroll.dart';
 
 class ClassNavBar extends StatelessWidget {
   final LibraryState state;
+  final ValueListenable<bool>? dragSelect; // 全局拖选会话（设置开启时传入）
 
-  const ClassNavBar({super.key, required this.state});
+  const ClassNavBar({super.key, required this.state, this.dragSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -92,31 +95,35 @@ class ClassNavBar extends StatelessWidget {
         ? cs.primary
         : (cs.brightness == Brightness.light ? Colors.white : cs.surfaceContainer);
 
-    return Material(
-      color: chipBg,
-      borderRadius: BorderRadius.circular(3 * c),
-      child: InkWell(
-        onTap: () => state.setSelectedClass(label),
+    return DragSelectItem(
+      active: dragSelect,
+      onSelect: () => state.setSelectedClass(label),
+      child: Material(
+        color: chipBg,
         borderRadius: BorderRadius.circular(3 * c),
-        hoverColor: cs.onSurface.withValues(alpha: 0.08),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(3 * c),
-            border: Border.all(
-              color: isSelected ? cs.primary : cs.outlineVariant,
-              width: 0.5,
+        child: InkWell(
+          onTap: () => state.setSelectedClass(label),
+          borderRadius: BorderRadius.circular(3 * c),
+          hoverColor: cs.onSurface.withValues(alpha: 0.08),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 3 * c),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(3 * c),
+              border: Border.all(
+                color: isSelected ? cs.primary : cs.outlineVariant,
+                width: 0.5,
+              ),
+            ),
+            child: Text(
+              '$displayLabel ($count)',
+              style: TextStyle(
+                fontSize: 10 * c,
+                color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ),
-          child: Text(
-          '$displayLabel ($count)',
-          style: TextStyle(
-            fontSize: 10 * c,
-            color: isSelected ? cs.onPrimary : cs.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
         ),
-      ),
       ),
     );
   }

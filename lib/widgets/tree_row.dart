@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'compact_level.dart';
+import 'drag_select.dart';
 
 /// 树形列表视觉常量。
 const double treeRowHeight = 28;
@@ -139,17 +140,10 @@ class TreeRow extends StatelessWidget {
       ),
     );
     if (dragSelect != null && onTap != null) {
-      final select = onTap!;
-      row = Listener(
-        // 按下行的瞬间立即选中（箭头区域也计入行内）。
-        onPointerDown: (_) => select(),
-        child: MouseRegion(
-          // 按住滑动会话期间，指针划入本行即选中。
-          onEnter: (_) {
-            if (dragSelect!.value) select();
-          },
-          child: row,
-        ),
+      row = DragSelectItem(
+        active: dragSelect,
+        onSelect: onTap,
+        child: row,
       );
     }
     return row;

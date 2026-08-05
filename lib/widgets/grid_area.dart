@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -19,6 +20,7 @@ import 'exe_picker_dialog.dart';
 import '../models/exe_record.dart';
 import '../services/script_service.dart';
 import 'class_nav_bar.dart';
+import 'drag_select.dart';
 import 'package:flutter/services.dart';
 import 'package:image_size_getter/image_size_getter.dart';
 import 'package:image_size_getter/file_input.dart';
@@ -302,6 +304,7 @@ class GridArea extends StatefulWidget {
   final List<DirectFile> files;
   final LibraryState state;
   final ScriptService scriptService;
+  final ValueListenable<bool>? dragSelect; // 全局拖选会话（设置开启时传入）
   final double filePanelHeight;
   final void Function(double delta) onFilePanelResize;
   final VoidCallback? onFilePanelResizeEnd;
@@ -326,6 +329,7 @@ class GridArea extends StatefulWidget {
     required this.files,
     required this.state,
     required this.scriptService,
+    this.dragSelect,
     required this.filePanelHeight,
     required this.onFilePanelResize,
     this.onFilePanelResizeEnd,
@@ -525,7 +529,7 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
               children: [
                 Column(
                   children: [
-                    ClassNavBar(state: state),
+                    ClassNavBar(state: state, dragSelect: widget.dragSelect),
                     Expanded(
                       child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
                           ? Center(
@@ -1036,63 +1040,75 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
     GridDisplayMode mode,
     GridBadgeFlags badges,
   ) {
-    return ItemCard(
-      key: GlobalObjectKey(item.path),
-      item: item,
-      effectiveInfo: state.effectiveInfo(item),
-      displayWidth: cardWidth,
-      displayHeight: imgHeight,
-      displayMode: mode,
-      badges: badges,
-      isSelected: state.isItemSelected(item.path),
-      onTap: () => state.setSelectedItem(item),
-      onCtrlTap: () => state.toggleItemSelection(item),
-      onShiftTap: () => state.selectRange(item, items),
-      onDoubleTap: () {
-        final type = state.effectiveInfo(item).type.toLowerCase();
-        if (type == 'video' || type == 'anime') {
-          widget.onOpenVideoPlayer(item);
-        } else if (type == 'voice' || type == 'music') {
-          widget.onOpenAudioPlayer(item);
-        } else if (type == 'comic' || type == 'picture') {
-          widget.onOpenComicReader(item);
-        } else if (type == 'novel' || type == 'book') {
-          widget.onOpenEbookReader(item);
-        } else if (type == 'edgehtml') {
-          widget.onOpenEdgeHtml(item);
-        } else if (type == 'markdown') {
-          widget.onOpenMarkdown(item);
-        }
-      },
-      onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),
-      gifMode: gridSettings.cardGifMode,
+    return DragSelectItem(
+      active: widget.dragSelect,
+      onSelect: () => state.setSelectedItem(item),
+      child: ItemCard(
+        key: GlobalObjectKey(item.path),
+        item: item,
+        effectiveInfo: state.effectiveInfo(item),
+        displayWidth: cardWidth,
+        displayHeight: imgHeight,
+        displayMode: mode,
+        badges: badges,
+        isSelected: state.isItemSelected(item.path),
+        onTap: () => state.setSelectedItem(item),
+        onCtrlTap: () => state.toggleItemSelection(item),
+        onShiftTap: () => state.selectRange(item, items),
+        onDoubleTap: () {
+          final type = state.effectiveInfo(item).type.toLowerCase();
+          if (type == 'video' || type == 'anime') {
+            widget.onOpenVideoPlayer(item);
+          } else if (type == 'voice' || type == 'music') {
+            widget.onOpenAudioPlayer(item);
+          } else if (type == 'comic' || type == 'picture') {
+            widget.onOpenComicReader(item);
+          } else if (type == 'novel' || type == 'book') {
+            widget.onOpenEbookReader(item);
+          } else if (type == 'edgehtml') {
+            widget.onOpenEdgeHtml(item);
+          } else if (type == 'markdown') {
+            widget.onOpenMarkdown(item);
+          }
+        },
+        onRightClick: (globalPos) => _showContextMenu(context, item, globalPos),
+        gifMode: gridSettings.cardGifMode,
+      ),
     );
   }
 
-  Widget _folderCard(CategoryNode node, double cardWidth) => FolderCard(
-        key: GlobalObjectKey(node.path),
-        node: node,
-        displayWidth: cardWidth,
-        displayMode: gridSettings.displayMode,
-        isSelected: state.isFolderSelected(node.path),
-        onTap: () => state.setSelectedFolder(node),
-        onDoubleTap: () => state.setSelectedCategory(node.path),
-        onCtrlTap: () => state.toggleFolderSelection(node),
-        onShiftTap: () => state.selectFolderRange(node, subDirs),
-        onRightClick: (globalPos) =>
-            _showFolderContextMenu(context, node, globalPos),
+  Widget _folderCard(CategoryNode node, double cardWidth) => DragSelectItem(
+        active: widget.dragSelect,
+        onSelect: () => state.setSelectedFolder(node),
+        child: FolderCard(
+          key: GlobalObjectKey(node.path),
+          node: node,
+          displayWidth: cardWidth,
+          displayMode: gridSettings.displayMode,
+          isSelected: state.isFolderSelected(node.path),
+          onTap: () => state.setSelectedFolder(node),
+          onDoubleTap: () => state.setSelectedCategory(node.path),
+          onCtrlTap: () => state.toggleFolderSelection(node),
+          onShiftTap: () => state.selectFolderRange(node, subDirs),
+          onRightClick: (globalPos) =>
+              _showFolderContextMenu(context, node, globalPos),
+        ),
       );
 
-  Widget _fileCard(DirectFile file, double cardWidth) => FileCard(
-        key: GlobalObjectKey(file.path),
-        file: file,
-        displayWidth: cardWidth,
-        displayMode: gridSettings.displayMode,
-        isSelected: state.selectedFile?.path == file.path,
-        onTap: () => state.setSelectedFile(file),
-        onDoubleTap: () => _openFile(file.path),
-        onRightClick: (globalPos) =>
-            _showFileContextMenu(context, file, globalPos),
+  Widget _fileCard(DirectFile file, double cardWidth) => DragSelectItem(
+        active: widget.dragSelect,
+        onSelect: () => state.setSelectedFile(file),
+        child: FileCard(
+          key: GlobalObjectKey(file.path),
+          file: file,
+          displayWidth: cardWidth,
+          displayMode: gridSettings.displayMode,
+          isSelected: state.selectedFile?.path == file.path,
+          onTap: () => state.setSelectedFile(file),
+          onDoubleTap: () => _openFile(file.path),
+          onRightClick: (globalPos) =>
+              _showFileContextMenu(context, file, globalPos),
+        ),
       );
 
   /// 自适应模式：解析预览图真实宽高比。

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
@@ -73,6 +75,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   final TextEditingController _searchController = TextEditingController();
 
   final LibraryRootService _rootService = LibraryRootService();
+
+  /// 全局按住滑动拖选会话：任意位置按下即激活，抬起/取消结束。
+  /// 各支持区域（左侧树/分类/标签页/网格卡片）据此在指针划入时切换选中。
+  final ValueNotifier<bool> _dragSession = ValueNotifier(false);
 
   bool _isMaximized = false;
   bool _createDialogShowing = false;
@@ -181,6 +187,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     _leftPanelWidth.dispose();
     _rightPanelWidth.dispose();
     _filePanelHeight.dispose();
+    _dragSession.dispose();
     _state.dispose();
     _searchController.dispose();
     super.dispose();
@@ -228,6 +235,9 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     final cs = Theme.of(context).colorScheme;
     final bg = widget.backgroundSettings;
     final hasBg = bg.path != null;
+    // 全局拖选会话：设置开启时传入各支持区域，否则为 null（不启用）。
+    final dragSession =
+        widget.gridSettings.dragSelectQuickSwitch ? _dragSession : null;
     return CompactLevel(
       level: widget.gridSettings.compactLevel,
       child: Scaffold(
@@ -241,15 +251,28 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
               ),
-            Column(
-              children: [
-                _buildTitleBar(cs),
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: _state,
-                    builder: (context, _) => _buildBody(),
+            Listener(
+              // 仅左键激活拖选会话；右键按住滑动不触发选中。
+              onPointerDown: (event) {
+                if (event.buttons & kPrimaryButton != 0) {
+                  _dragSession.value = true;
+                }
+              },
+              onPointerUp: (_) => _dragSession.value = false,
+              onPointerCancel: (_) => _dragSession.value = false,
+              // 自愈：指针拖出窗口/失焦导致 up 丢失时，会话保持激活；
+              // hover 事件只会在无按键时产生，下次移动即复位会话，
+              // 避免悬停误选。
+              onPointerHover: (_) => _dragSession.value = false,
+              child: Column(
+                children: [
+                  _buildTitleBar(cs),
+                  Expanded(
+                    child: ListenableBuilder(
+                      listenable: _state,
+                      builder: (context, _) => _buildBody(dragSession),
+                    ),
                   ),
-                ),
                 ListenableBuilder(
                   listenable: _state,
                   builder: (context, _) {
@@ -285,6 +308,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 ),
               ],
             ),
+          ),
           ],
         ),
       ),
@@ -394,7 +418,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(ValueListenable<bool>? dragSession) {
     if (_state.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -432,10 +456,10 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ],
       );
     }
-    return _buildMainArea();
+    return _buildMainArea(dragSession);
   }
 
-  Widget _buildMainArea() {
+  Widget _buildMainArea(ValueListenable<bool>? dragSession) {
     final cs = Theme.of(context).colorScheme;
     final bg = widget.backgroundSettings;
     final hasBg = bg.path != null;
@@ -468,7 +492,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       expandedPaths: _state.expandedPaths,
                       onToggleExpand: _state.toggleExpand,
                       backgroundOpacity: leftAlpha,
-                      dragSelectEnabled: widget.gridSettings.dragSelectTree,
+                      dragSelect: dragSession,
                     ),
                   ),
                 ],
@@ -487,6 +511,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 files: _state.filteredDirectFiles,
                 state: _state,
                 scriptService: widget.scriptService,
+                dragSelect: dragSession,
                 filePanelHeight: fileHeight,
                 onFilePanelResize: _resizeFilePanel,
                 onFilePanelResizeEnd: _saveLayout,
@@ -585,6 +610,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 showBottomFilePanel: widget.gridSettings.showBottomFilePanel,
                 keepDetailTabOnSelection:
                     widget.gridSettings.keepDetailTabOnSelection,
+                dragSelect: dragSession,
                 state: _state,
                 scriptService: widget.scriptService,
                 gifMode: widget.gridSettings.fileGifMode,

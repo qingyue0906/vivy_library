@@ -186,7 +186,7 @@ class GridSettings {
   final GridBadgeFlags badges;
   final bool showBottomFilePanel; // 显示底部文件面板；关闭后嵌入右侧"文件"标签页
   final bool keepDetailTabOnSelection; // 切换选中卡片时保持右侧面板当前标签页
-  final bool dragSelectTree; // 左侧文件夹树按住滑动快捷切换选中
+  final bool dragSelectQuickSwitch; // 按住滑动快捷切换选中（树/分类/标签页/卡片）
 
   double get aspectRatioValue {
     final parts = aspectRatio.split(':');
@@ -212,7 +212,7 @@ class GridSettings {
     this.badges = const GridBadgeFlags(),
     this.showBottomFilePanel = true,
     this.keepDetailTabOnSelection = false,
-    this.dragSelectTree = false,
+    this.dragSelectQuickSwitch = false,
   });
 
   GridSettings copyWith({
@@ -229,7 +229,7 @@ class GridSettings {
     GridBadgeFlags? badges,
     bool? showBottomFilePanel,
     bool? keepDetailTabOnSelection,
-    bool? dragSelectTree,
+    bool? dragSelectQuickSwitch,
   }) {
     return GridSettings(
       minCardWidth: minCardWidth ?? this.minCardWidth,
@@ -246,7 +246,8 @@ class GridSettings {
       showBottomFilePanel: showBottomFilePanel ?? this.showBottomFilePanel,
       keepDetailTabOnSelection:
           keepDetailTabOnSelection ?? this.keepDetailTabOnSelection,
-      dragSelectTree: dragSelectTree ?? this.dragSelectTree,
+      dragSelectQuickSwitch:
+          dragSelectQuickSwitch ?? this.dragSelectQuickSwitch,
     );
   }
 
@@ -264,7 +265,7 @@ class GridSettings {
         'badges': badges.toMap(),
         'showBottomFilePanel': showBottomFilePanel,
         'keepDetailTabOnSelection': keepDetailTabOnSelection,
-        'dragSelectTree': dragSelectTree,
+        'dragSelectQuickSwitch': dragSelectQuickSwitch,
       };
 
   factory GridSettings.fromMap(Map<String, dynamic> map) {
@@ -295,7 +296,9 @@ class GridSettings {
       badges: badges,
       showBottomFilePanel: map['showBottomFilePanel'] ?? true,
       keepDetailTabOnSelection: map['keepDetailTabOnSelection'] ?? false,
-      dragSelectTree: map['dragSelectTree'] ?? false,
+      dragSelectQuickSwitch: map['dragSelectQuickSwitch'] ??
+          map['dragSelectTree'] ??
+          false,
     );
   }
 }
@@ -452,6 +455,7 @@ class SettingsService {
       'badges': data['${_gridPrefix}badges'],
       'showBottomFilePanel': data['${_gridPrefix}showBottomFilePanel'],
       'keepDetailTabOnSelection': data['${_gridPrefix}keepDetailTabOnSelection'],
+      'dragSelectQuickSwitch': data['${_gridPrefix}dragSelectQuickSwitch'],
       'dragSelectTree': data['${_gridPrefix}dragSelectTree'],
     });
   }

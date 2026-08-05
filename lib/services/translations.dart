@@ -418,17 +418,17 @@ class Strings {
       AppLocale.en: 'When on, switching selected cards does not reset the right panel tab',
       AppLocale.ja: 'オンにすると、選択カードを切り替えても右側パネルのタブはリセットされません',
     },
-    'treeDragSelect': {
-      AppLocale.zhHans: '按住滑动切换左侧树选中',
-      AppLocale.zhHant: '按住滑動切換左側樹選中',
-      AppLocale.en: 'Drag to switch tree selection',
-      AppLocale.ja: 'ドラッグでツリー選択を切り替え',
+    'dragSelectQuickSwitch': {
+      AppLocale.zhHans: '按住滑动快捷切换选中',
+      AppLocale.zhHant: '按住滑動快捷切換選中',
+      AppLocale.en: 'Drag to switch selection',
+      AppLocale.ja: 'ドラッグで選択を切り替え',
     },
-    'treeDragSelectHint': {
-      AppLocale.zhHans: '开启后，按住并滑动即可连续切换左侧文件夹树的选中项',
-      AppLocale.zhHant: '開啟後，按住並滑動即可連續切換左側資料夾樹的選中項',
-      AppLocale.en: 'When on, press and drag to switch the selected folder in the left tree',
-      AppLocale.ja: 'オンにすると、押したままドラッグして左側ツリーの選択を切り替えられます',
+    'dragSelectQuickSwitchHint': {
+      AppLocale.zhHans: '开启后，按住并滑动即可连续切换左侧文件夹树、顶部分类、右侧标签页与网格卡片的选中项',
+      AppLocale.zhHant: '開啟後，按住並滑動即可連續切換左側資料夾樹、頂部分類、右側標籤頁與網格卡片的選中項',
+      AppLocale.en: 'When on, press and drag to switch selection across the folder tree, class chips, tabs and grid cards',
+      AppLocale.ja: 'オンにすると、押したままドラッグしてツリー・分類チップ・タブ・グリッドカードの選択を切り替えられます',
     },
     'gridDisplaySettings': {
       AppLocale.zhHans: '网格显示设置',

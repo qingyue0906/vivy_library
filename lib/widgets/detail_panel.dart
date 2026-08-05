@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import '../services/script_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import 'compact_level.dart';
+import 'drag_select.dart';
 import 'file_browser_panel.dart';
 import 'smooth_scroll.dart';
 
@@ -30,6 +32,7 @@ class DetailPanel extends StatefulWidget {
   final void Function(String query)? onSearchByQuery;
   final bool showBottomFilePanel; // 关闭时文件浏览区嵌入"文件"标签页底部
   final bool keepDetailTabOnSelection; // 切换选中时保持当前标签页
+  final ValueListenable<bool>? dragSelect; // 全局拖选会话（设置开启时传入）
   final LibraryState? state;
   final ScriptService? scriptService;
   final GifDisplayMode gifMode;
@@ -51,6 +54,7 @@ class DetailPanel extends StatefulWidget {
     this.onSearchByQuery,
     this.showBottomFilePanel = true,
     this.keepDetailTabOnSelection = false,
+    this.dragSelect,
     this.state,
     this.scriptService,
     this.gifMode = GifDisplayMode.hover,
@@ -96,6 +100,7 @@ class _DetailPanelState extends State<DetailPanel> {
         keepDetailTab: widget.keepDetailTabOnSelection,
         lastTab: _lastTab,
         onTabSelected: _onTabSelected,
+        dragSelect: widget.dragSelect,
         showBottomFilePanel: widget.showBottomFilePanel,
         backgroundOpacity: widget.backgroundOpacity,
         state: widget.state,
@@ -122,6 +127,7 @@ class _DetailPanelBody extends StatefulWidget {
   final bool keepDetailTab;
   final _DetailTab? lastTab;
   final void Function(_DetailTab tab)? onTabSelected;
+  final ValueListenable<bool>? dragSelect;
   final bool showBottomFilePanel;
   final double backgroundOpacity;
   final LibraryState? state;
@@ -145,6 +151,7 @@ class _DetailPanelBody extends StatefulWidget {
     this.keepDetailTab = false,
     this.lastTab,
     this.onTabSelected,
+    this.dragSelect,
     this.showBottomFilePanel = true,
     this.backgroundOpacity = 1.0,
     this.state,
@@ -301,20 +308,29 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       unselectedLabelColor: cs.onSurfaceVariant,
       labelStyle: TextStyle(fontSize: 11 * c, fontWeight: FontWeight.w600),
       unselectedLabelStyle: TextStyle(fontSize: 11 * c),
-      onTap: (i) {
-        widget.onTabSelected?.call(specs[i].key);
-        // 切换标签后回到面板顶部，与每页独立滚动时从内容顶部开始的直觉一致
-        _outerController?.jumpTo(0);
-      },
+      onTap: (i) => _selectTab(specs, i),
       tabs: [
-        for (final s in specs)
-          Tab(
-            text: Strings.t(s.labelKey),
-            height: 38 * c,
-            icon: Icon(s.icon, size: 16 * c),
+        for (var i = 0; i < specs.length; i++)
+          DragSelectItem(
+            active: widget.dragSelect,
+            onSelect: () => _selectTab(specs, i),
+            child: Tab(
+              text: Strings.t(specs[i].labelKey),
+              height: 38 * c,
+              icon: Icon(specs[i].icon, size: 16 * c),
+            ),
           ),
       ],
     );
+  }
+
+  /// 切换到指定标签页：更新记忆、回到面板顶部。
+  /// 点击与拖选共用同一入口。
+  void _selectTab(List<_TabSpec> specs, int i) {
+    _tabController.animateTo(i);
+    widget.onTabSelected?.call(specs[i].key);
+    // 切换标签后回到面板顶部，与每页独立滚动时从内容顶部开始的直觉一致
+    _outerController?.jumpTo(0);
   }
 
   // ===== 头部：原比例预览图 + 标题 + 类型/评分/分级 =====

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/category_node.dart';
 import '../services/translations.dart';
@@ -16,7 +17,7 @@ class CategoryPanel extends StatefulWidget {
   final Set<String> expandedPaths;
   final void Function(String path) onToggleExpand;
   final double backgroundOpacity;
-  final bool dragSelectEnabled; // 按住滑动快捷切换选中（设置开关）
+  final ValueListenable<bool>? dragSelect; // 全局拖选会话（设置开启时由 shell 传入）
 
   const CategoryPanel({
     super.key,
@@ -26,7 +27,7 @@ class CategoryPanel extends StatefulWidget {
     required this.expandedPaths,
     required this.onToggleExpand,
     this.backgroundOpacity = 1.0,
-    this.dragSelectEnabled = false,
+    this.dragSelect,
   });
 
   @override
@@ -34,28 +35,14 @@ class CategoryPanel extends StatefulWidget {
 }
 
 class _CategoryPanelState extends State<CategoryPanel> {
-  /// 按住滑动的拖选会话：按下置 true，抬起/取消置 false。
-  /// 行内 MouseRegion 依据该值决定指针划入时是否选中。
-  final ValueNotifier<bool> _dragSelectActive = ValueNotifier(false);
-
-  @override
-  void dispose() {
-    _dragSelectActive.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final c = CompactLevel.of(context);
     return Material(
       color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
-      child: Listener(
-        onPointerDown: (_) => _dragSelectActive.value = true,
-        onPointerUp: (_) => _dragSelectActive.value = false,
-        onPointerCancel: (_) => _dragSelectActive.value = false,
-        child: SmoothScroll(
-          builder: (context, controller, physics) => ListView(
+      child: SmoothScroll(
+        builder: (context, controller, physics) => ListView(
             controller: controller,
             physics: physics,
             padding: EdgeInsets.fromLTRB(0, 2 * c, 0, 4 * c),
@@ -76,7 +63,6 @@ class _CategoryPanelState extends State<CategoryPanel> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -139,7 +125,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
       onToggleExpand: hasSubDirs
           ? () => widget.onToggleExpand(node!.path)
           : null,
-      dragSelect: widget.dragSelectEnabled ? _dragSelectActive : null,
+      dragSelect: widget.dragSelect,
     );
   }
 }

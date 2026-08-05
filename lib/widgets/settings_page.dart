@@ -481,11 +481,11 @@ class _SettingsPageState extends State<SettingsPage>
             ),
             const SizedBox(height: 12),
             _buildSwitchRow(
-              labelKey: 'treeDragSelect',
-              hintKey: 'treeDragSelectHint',
-              value: _gridSettings.dragSelectTree,
-              onChanged: (v) =>
-                  setState(() => _gridSettings = _gridSettings.copyWith(dragSelectTree: v)),
+              labelKey: 'dragSelectQuickSwitch',
+              hintKey: 'dragSelectQuickSwitchHint',
+              value: _gridSettings.dragSelectQuickSwitch,
+              onChanged: (v) => setState(
+                  () => _gridSettings = _gridSettings.copyWith(dragSelectQuickSwitch: v)),
             ),
             const SizedBox(height: 20),
             Align(
