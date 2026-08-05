@@ -33,6 +33,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Flutter 生成的插件注册文件（由 pub get / 构建自动再生成）
+**/generated_plugin_registrant.*
+**/generated_plugins.cmake
+**/GeneratedPluginRegistrant.swift
+
 # Symbolication related
 app.*.symbols
 
