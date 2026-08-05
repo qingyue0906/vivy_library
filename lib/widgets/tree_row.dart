@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'compact_level.dart';
 
@@ -13,6 +14,8 @@ const Color _darkSelected = Color(0xFF5B5475);
 
 /// 树的一行：Material 3 风格（圆角 hover/选中、行内边距）、
 /// 展开箭头（旋转动画）、缩进引导线（由 [lastChain] 决定线段终止）。
+/// 传入 [dragSelect]（非空）时支持按住滑动快捷切换选中：
+/// 按下行的瞬间立即选中，按住滑动划入的行也实时选中（会话由外部置位）。
 class TreeRow extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -23,6 +26,7 @@ class TreeRow extends StatelessWidget {
   final int lastChain;
   final VoidCallback? onTap;
   final VoidCallback? onToggleExpand;
+  final ValueListenable<bool>? dragSelect;
 
   const TreeRow({
     super.key,
@@ -35,6 +39,7 @@ class TreeRow extends StatelessWidget {
     required this.lastChain,
     this.onTap,
     this.onToggleExpand,
+    this.dragSelect,
   });
 
   @override
@@ -44,7 +49,7 @@ class TreeRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedColor = isDark ? _darkSelected : cs.secondaryContainer;
     final muted = isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
-    return Padding(
+    Widget row = Padding(
       padding: EdgeInsets.symmetric(horizontal: treeRowMargin * c),
       child: SizedBox(
         height: treeRowHeight * c,
@@ -133,6 +138,21 @@ class TreeRow extends StatelessWidget {
         ),
       ),
     );
+    if (dragSelect != null && onTap != null) {
+      final select = onTap!;
+      row = Listener(
+        // 按下行的瞬间立即选中（箭头区域也计入行内）。
+        onPointerDown: (_) => select(),
+        child: MouseRegion(
+          // 按住滑动会话期间，指针划入本行即选中。
+          onEnter: (_) {
+            if (dragSelect!.value) select();
+          },
+          child: row,
+        ),
+      );
+    }
+    return row;
   }
 }
 

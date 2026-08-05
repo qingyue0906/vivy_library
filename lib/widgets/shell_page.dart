@@ -468,6 +468,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                       expandedPaths: _state.expandedPaths,
                       onToggleExpand: _state.toggleExpand,
                       backgroundOpacity: leftAlpha,
+                      dragSelectEnabled: widget.gridSettings.dragSelectTree,
                     ),
                   ),
                 ],

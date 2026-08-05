@@ -16,6 +16,7 @@ class CategoryPanel extends StatefulWidget {
   final Set<String> expandedPaths;
   final void Function(String path) onToggleExpand;
   final double backgroundOpacity;
+  final bool dragSelectEnabled; // 按住滑动快捷切换选中（设置开关）
 
   const CategoryPanel({
     super.key,
@@ -25,6 +26,7 @@ class CategoryPanel extends StatefulWidget {
     required this.expandedPaths,
     required this.onToggleExpand,
     this.backgroundOpacity = 1.0,
+    this.dragSelectEnabled = false,
   });
 
   @override
@@ -32,32 +34,47 @@ class CategoryPanel extends StatefulWidget {
 }
 
 class _CategoryPanelState extends State<CategoryPanel> {
+  /// 按住滑动的拖选会话：按下置 true，抬起/取消置 false。
+  /// 行内 MouseRegion 依据该值决定指针划入时是否选中。
+  final ValueNotifier<bool> _dragSelectActive = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    _dragSelectActive.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final c = CompactLevel.of(context);
     return Material(
       color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
-      child: SmoothScroll(
-        builder: (context, controller, physics) => ListView(
-          controller: controller,
-          physics: physics,
-          padding: EdgeInsets.fromLTRB(0, 2 * c, 0, 4 * c),
-          children: [
-            // Part 1: 全部项目 + 根目录
-            _buildItem(context,
-                label: Strings.t('allItems'), value: null, depth: 0, node: null,
-                icon: Icons.apps),
-            _buildItem(context,
-                label: Strings.t('rootDir'), value: widget.root.path, depth: 0, node: widget.root,
-                icon: Icons.folder_open),
-            Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
-            // Part 2: 根级直接文件夹展开树
-            ...widget.root.subDirs.asMap().entries.map((e) => _buildNode(
-                context, e.value, 0,
-                isLast: e.key == widget.root.subDirs.length - 1,
-                parentLastChain: 0)),
-          ],
+      child: Listener(
+        onPointerDown: (_) => _dragSelectActive.value = true,
+        onPointerUp: (_) => _dragSelectActive.value = false,
+        onPointerCancel: (_) => _dragSelectActive.value = false,
+        child: SmoothScroll(
+          builder: (context, controller, physics) => ListView(
+            controller: controller,
+            physics: physics,
+            padding: EdgeInsets.fromLTRB(0, 2 * c, 0, 4 * c),
+            children: [
+              // Part 1: 全部项目 + 根目录
+              _buildItem(context,
+                  label: Strings.t('allItems'), value: null, depth: 0, node: null,
+                  icon: Icons.apps),
+              _buildItem(context,
+                  label: Strings.t('rootDir'), value: widget.root.path, depth: 0, node: widget.root,
+                  icon: Icons.folder_open),
+              Divider(height: 1 * c, thickness: 1, color: cs.outlineVariant),
+              // Part 2: 根级直接文件夹展开树
+              ...widget.root.subDirs.asMap().entries.map((e) => _buildNode(
+                  context, e.value, 0,
+                  isLast: e.key == widget.root.subDirs.length - 1,
+                  parentLastChain: 0)),
+            ],
+          ),
         ),
       ),
     );
@@ -122,6 +139,7 @@ class _CategoryPanelState extends State<CategoryPanel> {
       onToggleExpand: hasSubDirs
           ? () => widget.onToggleExpand(node!.path)
           : null,
+      dragSelect: widget.dragSelectEnabled ? _dragSelectActive : null,
     );
   }
 }

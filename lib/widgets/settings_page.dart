@@ -479,6 +479,14 @@ class _SettingsPageState extends State<SettingsPage>
               onChanged: (v) => setState(
                   () => _gridSettings = _gridSettings.copyWith(keepDetailTabOnSelection: v)),
             ),
+            const SizedBox(height: 12),
+            _buildSwitchRow(
+              labelKey: 'treeDragSelect',
+              hintKey: 'treeDragSelectHint',
+              value: _gridSettings.dragSelectTree,
+              onChanged: (v) =>
+                  setState(() => _gridSettings = _gridSettings.copyWith(dragSelectTree: v)),
+            ),
             const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerRight,
