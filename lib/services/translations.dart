@@ -906,6 +906,12 @@ class Strings {
       AppLocale.en: 'Creator',
       AppLocale.ja: '作成者',
     },
+    'uuid': {
+      AppLocale.zhHans: 'UUID',
+      AppLocale.zhHant: 'UUID',
+      AppLocale.en: 'UUID',
+      AppLocale.ja: 'UUID',
+    },
     'category': {
       AppLocale.zhHans: '文件夹',
       AppLocale.zhHant: '資料夾',

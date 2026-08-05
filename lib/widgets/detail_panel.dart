@@ -564,15 +564,18 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       rows.add(_copyableRow(
           context, c, cs, Strings.t('rating'), '${(info.rating / 2).toStringAsFixed(1)} / 5'));
       rows.add(_copyableRow(
-          context, c, cs, Strings.t('classLabel'), info.classes.join('、')));
+          context, c, cs, Strings.t('classLabel'), info.classes.join(', ')));
       rows.add(_copyableRow(
-          context, c, cs, Strings.t('tags'), info.tags.join('、')));
+          context, c, cs, Strings.t('tags'), info.tags.join(', ')));
       rows.add(_copyableRow(context, c, cs, Strings.t('category'), widget.item!.category));
       rows.add(_copyableRow(
           context, c, cs, Strings.t('size'), _formatSize(widget.item!.sizeInBytes)));
       rows.add(_copyableRow(
           context, c, cs, Strings.t('modifiedTime'), _formatDate(widget.item!.modifiedTime)));
       rows.add(_copyableRow(context, c, cs, Strings.t('path'), widget.item!.path));
+      final uuid = widget.item!.info.uuid;
+      rows.add(_copyableRow(context, c, cs, Strings.t('uuid'),
+          uuid == null || uuid.isEmpty ? '—' : uuid));
     } else if (_isFolder) {
       final info = widget.folder!.info;
       if (info != null) {
