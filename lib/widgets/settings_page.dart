@@ -97,7 +97,9 @@ class _SettingsPageState extends State<SettingsPage>
 
   @override
   void dispose() {
-    _gridSaveDebounce?.cancel();
+    // 冲刷未落盘的改动（改为退出前保存，而不是丢弃）。
+    _flushGridSave();
+    _flushBgSave();
     _tabCtrl.dispose();
     _itemsPerRowCtrl.dispose();
     _minItemsPerRowCtrl.dispose();
@@ -105,17 +107,109 @@ class _SettingsPageState extends State<SettingsPage>
     super.dispose();
   }
 
-  Timer? _gridSaveDebounce;
+  // ======== 网格设置：改动即生效，落盘/主界面应用统一走防抖 + 松开刷盘 ========
 
-  /// 界面页控件改动即生效：立即更新内存并通知主界面实时预览，
-  /// 落盘经 150ms 防抖（拖动滑块等高频变化只写一次磁盘）。
+  static const _gridSaveDebounceMs = 300;
+  static const _gridHoldMaxReschedules = 15;
+
+  Timer? _gridSaveDebounce;
+  int _gridHoldReschedules = 0;
+  bool _gridSliderPressed = false;
+  bool _gridSaveDirty = false;
+  bool _gridPreviewPending = false;
+
+  /// 离散控件（开关/下拉/数字输入等）改动即生效：立即预览，落盘经防抖。
   void _updateGridSettings(GridSettings next) {
     setState(() => _gridSettings = next);
     widget.onGridSettingsChanged(next);
+    _gridSaveDirty = true;
+    _gridPreviewPending = false;
+    _scheduleGridSave();
+  }
+
+  /// 滑杆拖动：只更新本地显示，主界面应用与落盘都推迟到松开。
+  void _updateGridSettingsOnSlider(GridSettings next) {
+    setState(() => _gridSettings = next);
+    _gridSaveDirty = true;
+    _gridPreviewPending = true;
+    _scheduleGridSave();
+  }
+
+  void _scheduleGridSave() {
     _gridSaveDebounce?.cancel();
-    _gridSaveDebounce = Timer(const Duration(milliseconds: 150), () {
-      SettingsService.saveGridSettings(_gridSettings);
+    _gridSaveDebounce = Timer(const Duration(milliseconds: _gridSaveDebounceMs), () {
+      _gridSaveDebounce = null;
+      if (_gridSliderPressed) {
+        // 手柄仍按下：继续等待松开；长时间按住（异常未松开）强制落盘一次。
+        if (++_gridHoldReschedules >= _gridHoldMaxReschedules) {
+          _gridHoldReschedules = 0;
+          _flushGridSave();
+        } else {
+          _scheduleGridSave();
+        }
+        return;
+      }
+      _flushGridSave();
     });
+  }
+
+  void _flushGridSave() {
+    _gridSaveDebounce?.cancel();
+    _gridSaveDebounce = null;
+    _gridHoldReschedules = 0;
+    if (!_gridSaveDirty && !_gridPreviewPending) return;
+    _gridSaveDirty = false;
+    if (_gridPreviewPending) {
+      _gridPreviewPending = false;
+      widget.onGridSettingsChanged(_gridSettings);
+    }
+    SettingsService.saveGridSettings(_gridSettings);
+  }
+
+  // ======== 背景设置：同样按下不保存，松开才应用/落盘 ========
+
+  Timer? _bgSaveDebounce;
+  int _bgHoldReschedules = 0;
+  bool _bgSliderPressed = false;
+  bool _bgSaveDirty = false;
+  bool _bgPreviewPending = false;
+
+  void _updateBackgroundSettings(BackgroundSettings next) {
+    setState(() => _bgSettings = next);
+    _bgSaveDirty = true;
+    _bgPreviewPending = true;
+    _scheduleBgSave();
+  }
+
+  void _scheduleBgSave() {
+    _bgSaveDebounce?.cancel();
+    _bgSaveDebounce = Timer(const Duration(milliseconds: _gridSaveDebounceMs), () {
+      _bgSaveDebounce = null;
+      if (_bgSliderPressed) {
+        // 手柄仍按下：继续等待松开；长时间按住（异常未松开）强制落盘一次。
+        if (++_bgHoldReschedules >= _gridHoldMaxReschedules) {
+          _bgHoldReschedules = 0;
+          _flushBgSave();
+        } else {
+          _scheduleBgSave();
+        }
+        return;
+      }
+      _flushBgSave();
+    });
+  }
+
+  void _flushBgSave() {
+    _bgSaveDebounce?.cancel();
+    _bgSaveDebounce = null;
+    _bgHoldReschedules = 0;
+    if (!_bgSaveDirty && !_bgPreviewPending) return;
+    _bgSaveDirty = false;
+    if (_bgPreviewPending) {
+      _bgPreviewPending = false;
+      widget.onBackgroundChanged(_bgSettings);
+    }
+    SettingsService.saveBackgroundSettings(_bgSettings);
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
@@ -507,18 +601,18 @@ class _SettingsPageState extends State<SettingsPage>
                   const SizedBox(height: 8),
                   _buildOpacitySlider(Strings.t('leftPanel'),
                       _bgSettings.leftOpacity, hasBg, (v) {
-                    _bgSettings = _bgSettings.copyWith(leftOpacity: v);
-                    _saveBackground();
+                    _updateBackgroundSettings(
+                        _bgSettings.copyWith(leftOpacity: v));
                   }),
                   _buildOpacitySlider(Strings.t('middlePanel'),
                       _bgSettings.middleOpacity, hasBg, (v) {
-                    _bgSettings = _bgSettings.copyWith(middleOpacity: v);
-                    _saveBackground();
+                    _updateBackgroundSettings(
+                        _bgSettings.copyWith(middleOpacity: v));
                   }),
                   _buildOpacitySlider(Strings.t('rightPanel'),
                       _bgSettings.rightOpacity, hasBg, (v) {
-                    _bgSettings = _bgSettings.copyWith(rightOpacity: v);
-                    _saveBackground();
+                    _updateBackgroundSettings(
+                        _bgSettings.copyWith(rightOpacity: v));
                   }),
                 ],
               ),
@@ -555,9 +649,18 @@ class _SettingsPageState extends State<SettingsPage>
                   min: 0.0,
                   max: 1.0,
                   divisions: 10,
+                  onChangeStart: enabled ? (_) => _bgSliderPressed = true : null,
+                  onChangeEnd: enabled
+                      ? (_) {
+                          _bgSliderPressed = false;
+                          _flushBgSave();
+                        }
+                      : null,
                   onChanged: enabled
                       ? (v) {
-                          setState(() => onChanged(v));
+                          // 纯点中手柄不拖动时值不变，跳过避免无谓保存。
+                          if (v == value) return;
+                          onChanged(v);
                         }
                       : null,
                 ),
@@ -594,7 +697,13 @@ class _SettingsPageState extends State<SettingsPage>
     _saveBackground();
   }
 
+  /// 选择/清除背景等按钮路径：立即保存并应用，同时清掉滑杆未决状态。
   void _saveBackground() {
+    _bgSaveDebounce?.cancel();
+    _bgSaveDebounce = null;
+    _bgHoldReschedules = 0;
+    _bgSaveDirty = false;
+    _bgPreviewPending = false;
     SettingsService.saveBackgroundSettings(_bgSettings);
     widget.onBackgroundChanged(_bgSettings);
   }
@@ -616,12 +725,12 @@ class _SettingsPageState extends State<SettingsPage>
                   const SizedBox(height: 12),
                   _buildSliderField(Strings.t('minCardWidth'),
                       _gridSettings.minCardWidth, 80, 300,
-                      (v) => _updateGridSettings(
+                      (v) => _updateGridSettingsOnSlider(
                           _gridSettings.copyWith(minCardWidth: v))),
                   const SizedBox(height: 16),
                   _buildSliderField(Strings.t('maxCardWidth'),
                       _gridSettings.maxCardWidth, 120, 400,
-                      (v) => _updateGridSettings(
+                      (v) => _updateGridSettingsOnSlider(
                           _gridSettings.copyWith(maxCardWidth: v))),
                   const SizedBox(height: 16),
                   _buildAspectRatioSelector(),
@@ -751,8 +860,20 @@ class _SettingsPageState extends State<SettingsPage>
             min: 85,
             max: 125,
             divisions: 8,
-            onChanged: (v) => _updateGridSettings(
-                _gridSettings.copyWith(compactLevel: v / 100)),
+            onChangeStart: (_) => _gridSliderPressed = true,
+            onChangeEnd: (_) {
+              _gridSliderPressed = false;
+              _flushGridSave();
+            },
+            onChanged: (v) {
+              // 纯点中手柄不拖动时值不变，跳过避免无谓保存
+              // （compactLevel 经 /100 往返，用误差容差比较）。
+              if ((v - _gridSettings.compactLevel * 100).abs() < 0.001) {
+                return;
+              }
+              _updateGridSettingsOnSlider(
+                  _gridSettings.copyWith(compactLevel: v / 100));
+            },
           ),
         ),
       ],
@@ -1369,7 +1490,16 @@ class _SettingsPageState extends State<SettingsPage>
           min: min,
           max: max,
           divisions: ((max - min) / 10).round(),
-          onChanged: onChanged,
+          onChangeStart: (_) => _gridSliderPressed = true,
+          onChangeEnd: (_) {
+            _gridSliderPressed = false;
+            _flushGridSave();
+          },
+          onChanged: (v) {
+            // 纯点中手柄不拖动时值不变，跳过避免无谓保存。
+            if (v == value) return;
+            onChanged(v);
+          },
         ),
       ],
     );
