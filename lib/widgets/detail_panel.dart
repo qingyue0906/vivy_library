@@ -81,6 +81,7 @@ class _DetailPanelState extends State<DetailPanel> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final c = CompactLevel.of(context);
     // 以选择对象身份作为 key，切换选中项时重建内部 TabController，
     // 避免标签页数量变化导致的断言错误。
     // showBottomFilePanel 也纳入 key：设置切换该开关后标签页数量变化，
@@ -88,7 +89,12 @@ class _DetailPanelState extends State<DetailPanel> {
     final selectionKey = Object.hash(widget.item?.path, widget.folder?.path,
         widget.file?.path, widget.showBottomFilePanel);
     return Container(
-      color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
+        border: Border.all(color: cs.outlineVariant, width: 0.5),
+        borderRadius: BorderRadius.circular(8 * c),
+      ),
       child: _DetailPanelBody(
         key: ValueKey(selectionKey),
         item: widget.item,

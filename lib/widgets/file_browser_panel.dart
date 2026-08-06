@@ -128,10 +128,11 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     }
     return Container(
       height: widget.height,
-      clipBehavior: _isDragOver ? Clip.antiAlias : Clip.none,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.surface.withValues(alpha: widget.backgroundOpacity),
-        borderRadius: _isDragOver ? radius : null,
+        border: Border.all(color: cs.outlineVariant, width: 0.5),
+        borderRadius: radius,
       ),
       child: Stack(
         children: [

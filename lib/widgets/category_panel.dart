@@ -40,7 +40,8 @@ class _CategoryPanelState extends State<CategoryPanel> {
     final cs = Theme.of(context).colorScheme;
     final c = CompactLevel.of(context);
     return Material(
-      color: cs.surfaceContainerLow.withValues(alpha: widget.backgroundOpacity),
+      // 背景由外层（shell 左栏圆角容器）统一提供，此处透明避免双重填充。
+      color: Colors.transparent,
       child: SmoothScroll(
         builder: (context, controller, physics) => ListView(
             controller: controller,

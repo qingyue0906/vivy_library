@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -490,6 +491,7 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     // 依据可见性驱动面板进出场动画（带状态守卫，build 重复调用时为 no-op）。
     // 同一进度 v 同时驱动「内容让位高度」与「面板位移」，二者完全同步。
@@ -525,11 +527,25 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
             final v = _panelAnim.value;
             final panelTotal = filePanelHeight + 4;
             final reserved = panelTotal * v;
-            return Stack(
-              children: [
-                Column(
-                  children: [
-                    ClassNavBar(state: state, dragSelect: widget.dragSelect),
+            return CustomPaint(
+              // 中间面板透明，四角圆角外侧漏出的三角区域
+              // 用与标题栏同色的底色补齐。
+              painter: _PanelCornerPainter(
+                color: cs.surfaceContainerHigh
+                    .withValues(alpha: widget.middleOpacity),
+                radius: 8 * c,
+              ),
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  border: Border.all(color: cs.outlineVariant, width: 0.5),
+                  borderRadius: BorderRadius.circular(8 * c),
+                ),
+                child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      ClassNavBar(state: state, dragSelect: widget.dragSelect),
                     Expanded(
                       child: (items.isEmpty && subDirs.isEmpty && files.isEmpty)
                           ? Center(
@@ -577,32 +593,37 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                                   ),
                                 ),
                               ),
-                              FileBrowserPanel(
-                                key: _panelKey,
-                                item: _panelItem!,
-                                state: state,
-                                scriptService: scriptService,
-                                height: filePanelHeight,
-                                backgroundOpacity: middleOpacity,
-                                gifMode: gridSettings.fileGifMode,
-                                onPlayProject: () =>
-                                    widget.onOpenVideoPlayer(_panelItem!),
-                                onPlayVideoFile: (path) => widget.onOpenVideoPlayer(
-                                  _panelItem!,
-                                  startPath: path,
-                                ),
-                                onPlayAudioProject: () =>
-                                    widget.onOpenAudioPlayer(_panelItem!),
-                                onPlayAudioFile: (path) =>
-                                    widget.onOpenAudioPlayer(
-                                  _panelItem!,
-                                  startPath: path,
-                                ),
-                                onReadProject: () =>
-                                    widget.onOpenComicReader(_panelItem!),
-                                onReadImageFile: (path) =>
-                                    widget.onOpenComicReader(
-                                  _panelItem!,
+                              Container(
+                                // 圆角外侧漏出的三角区域用与标题栏同色的底色补齐。
+                                color: cs.surfaceContainerHigh
+                                    .withValues(alpha: widget.middleOpacity),
+                                child: FileBrowserPanel(
+                                  key: _panelKey,
+                                  item: _panelItem!,
+                                  state: state,
+                                  scriptService: scriptService,
+                                  height: filePanelHeight,
+                                  backgroundOpacity: middleOpacity,
+                                  gifMode: gridSettings.fileGifMode,
+                                  onPlayProject: () =>
+                                      widget.onOpenVideoPlayer(_panelItem!),
+                                  onPlayVideoFile: (path) =>
+                                      widget.onOpenVideoPlayer(
+                                    _panelItem!,
+                                    startPath: path,
+                                  ),
+                                  onPlayAudioProject: () =>
+                                      widget.onOpenAudioPlayer(_panelItem!),
+                                  onPlayAudioFile: (path) =>
+                                      widget.onOpenAudioPlayer(
+                                    _panelItem!,
+                                    startPath: path,
+                                  ),
+                                  onReadProject: () =>
+                                      widget.onOpenComicReader(_panelItem!),
+                                  onReadImageFile: (path) =>
+                                      widget.onOpenComicReader(
+                                    _panelItem!,
                                   startPath: path,
                                 ),
                                 onReadEbookProject: () =>
@@ -627,6 +648,7 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                                   startPath: path,
                                 ),
                               ),
+                              ),
                             ],
                           ),
                         ),
@@ -642,7 +664,9 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                     child: const Icon(Icons.add),
                   ),
                 ),
-              ],
+                ],
+              ),
+              ),
             );
           },
         ),
@@ -2030,6 +2054,32 @@ class _DropHighlightState extends State<_DropHighlight> {
       ),
     );
   }
+}
+
+/// 为透明面板补四角底色：只画圆角矩形之外、外框之内的三角区域，
+/// 使圆角外侧漏出的背景与外侧条带（标题栏同色）一致。
+class _PanelCornerPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  _PanelCornerPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, ui.Size size) {
+    final bounds = Offset.zero & size;
+    canvas.saveLayer(bounds, Paint());
+    // 先铺满，再擦除内部圆角矩形，只留四角三角区。
+    canvas.drawRect(bounds, Paint()..color = color);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bounds, Radius.circular(radius)),
+      Paint()..blendMode = BlendMode.clear,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _PanelCornerPainter old) =>
+      old.color != color || old.radius != radius;
 }
 
 

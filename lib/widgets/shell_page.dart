@@ -461,46 +461,71 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
 
   Widget _buildMainArea(ValueListenable<bool>? dragSession) {
     final cs = Theme.of(context).colorScheme;
+    final c = CompactLevel.of(context);
     final bg = widget.backgroundSettings;
     final hasBg = bg.path != null;
     final leftAlpha = hasBg ? bg.leftOpacity : 1.0;
     final middleAlpha = hasBg ? bg.middleOpacity : 1.0;
     final rightAlpha = hasBg ? bg.rightOpacity : 1.0;
-    return Row(
+    // 面板外侧留白与标题栏同色（有背景图时同用 middleOpacity）。
+    final gapColor = cs.surfaceContainerHigh
+        .withValues(alpha: hasBg ? bg.middleOpacity : 1.0);
+    const gap = 6.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ValueListenableBuilder<double>(
-          valueListenable: _leftPanelWidth,
-          builder: (context, width, _) {
-            return SizedBox(
-              width: width,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    color: cs.surfaceContainerLow.withValues(alpha: leftAlpha),
-                    child: LibraryRootSelector(
-                      currentPath: _state.currentRootPath,
-                      onRootSelected: _onRootSelected,
+        Container(height: gap, color: gapColor),
+        Expanded(
+          child: Row(
+            children: [
+              Container(width: gap, color: gapColor),
+              ValueListenableBuilder<double>(
+            valueListenable: _leftPanelWidth,
+            builder: (context, width, _) {
+              return SizedBox(
+                width: width,
+                child: Container(
+                  // 圆角外侧漏出的三角区域用与标题栏同色的底色补齐。
+                  color: gapColor,
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color:
+                          cs.surfaceContainerLow.withValues(alpha: leftAlpha),
+                      border:
+                          Border.all(color: cs.outlineVariant, width: 0.5),
+                      borderRadius: BorderRadius.circular(8 * c),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          child: LibraryRootSelector(
+                            currentPath: _state.currentRootPath,
+                            onRootSelected: _onRootSelected,
+                          ),
+                        ),
+                        Divider(height: 1, color: cs.outlineVariant),
+                        Expanded(
+                          child: CategoryPanel(
+                            root: _state.categoryRoot,
+                            selectedCategoryPath: _state.selectedCategoryPath,
+                            onCategorySelected: _state.setSelectedCategory,
+                            expandedPaths: _state.expandedPaths,
+                            onToggleExpand: _state.toggleExpand,
+                            backgroundOpacity: leftAlpha,
+                            dragSelect: dragSession,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Divider(height: 1, color: cs.outlineVariant),
-                  Expanded(
-                    child: CategoryPanel(
-                      root: _state.categoryRoot,
-                      selectedCategoryPath: _state.selectedCategoryPath,
-                      onCategorySelected: _state.setSelectedCategory,
-                      expandedPaths: _state.expandedPaths,
-                      onToggleExpand: _state.toggleExpand,
-                      backgroundOpacity: leftAlpha,
-                      dragSelect: dragSession,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        _buildDragHandle(onDrag: _resizeLeftPanel, onDragEnd: _saveLayout),
+                ),
+              );
+            },
+          ),
+        _buildDragHandle(
+            onDrag: _resizeLeftPanel, onDragEnd: _saveLayout, color: gapColor),
         Expanded(
           child: ValueListenableBuilder<double>(
             valueListenable: _filePanelHeight,
@@ -593,14 +618,18 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
             },
           ),
         ),
-        _buildDragHandle(onDrag: _resizeRightPanel, onDragEnd: _saveLayout),
+        _buildDragHandle(
+            onDrag: _resizeRightPanel, onDragEnd: _saveLayout, color: gapColor),
         ValueListenableBuilder<double>(
           valueListenable: _rightPanelWidth,
           builder: (context, width, _) {
             return SizedBox(
               width: width,
-              child: DetailPanel(
-                item: _state.selectedItem,
+              child: Container(
+                // 圆角外侧漏出的三角区域用与标题栏同色的底色补齐。
+                color: gapColor,
+                child: DetailPanel(
+                  item: _state.selectedItem,
                 effectiveInfo: _state.selectedItem != null
                     ? _state.effectiveInfo(_state.selectedItem!)
                     : null,
@@ -644,16 +673,23 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                   _searchController.selection = TextSelection.collapsed(offset: query.length);
                 },
               ),
+              ),
             );
           },
         ),
+        Container(width: gap, color: gapColor),
       ],
-    );
+      ),
+    ),
+    Container(height: gap, color: gapColor),
+  ],
+  );
   }
 
   Widget _buildDragHandle({
     required void Function(double) onDrag,
     VoidCallback? onDragEnd,
+    Color color = Colors.transparent,
   }) {
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
@@ -663,7 +699,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         onPanEnd: (_) => onDragEnd?.call(),
         child: Container(
           width: _dragHandleWidth,
-          color: Colors.transparent,
+          color: color,
         ),
       ),
     );
