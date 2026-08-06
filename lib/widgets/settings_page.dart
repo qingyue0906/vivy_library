@@ -327,7 +327,11 @@ class _SettingsPageState extends State<SettingsPage>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
+        // 亮色下与页面背景区分度差，去填充只留描边（与脚本项一致）；
+        // 暗色下保留填充（与背景层次分明）。
+        color: cs.brightness == Brightness.dark
+            ? cs.surfaceContainerLow
+            : Colors.transparent,
         border: Border.all(color: cs.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -1866,7 +1870,10 @@ class _ScriptCardState extends State<_ScriptCard> {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
+          // 亮色下与页面背景区分度差，去填充只留描边；暗色保留填充。
+          color: cs.brightness == Brightness.dark
+              ? cs.surfaceContainerLow
+              : Colors.transparent,
           border: Border.all(
             color: _hovered ? cs.primary : cs.outlineVariant,
           ),
