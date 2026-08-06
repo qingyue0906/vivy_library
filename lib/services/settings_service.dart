@@ -27,12 +27,13 @@ class SearchScope {
     for (final f in allFields) f: enabled.contains(f),
   };
 
+  /// 如实恢复 map 中的启用字段；"全关"也原样返回（回退默认值的逻辑
+  /// 在 [SettingsService.loadSearchScope] 中按"是否保存过"判断）。
   factory SearchScope.fromMap(Map<String, dynamic> map) {
     final enabled = <String>{};
     for (final f in allFields) {
       if (map[f] == true) enabled.add(f);
     }
-    if (enabled.isEmpty) return SearchScope.defaults();
     return SearchScope(enabled: enabled);
   }
 }
@@ -495,6 +496,12 @@ class SettingsService {
 
   static Future<SearchScope> loadSearchScope() async {
     final data = await AppDataService.loadSettings();
+    // 未保存过任何搜索范围配置（首次使用）→ 回退默认值；
+    // 保存过（包括全部关闭）则如实恢复。
+    if (!SearchScope.allFields
+        .any((f) => data.containsKey('$_searchScopePrefix$f'))) {
+      return SearchScope.defaults();
+    }
     final map = <String, dynamic>{};
     for (final f in SearchScope.allFields) {
       map[f] = data['$_searchScopePrefix$f'];

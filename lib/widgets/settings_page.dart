@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -55,15 +56,30 @@ class _SettingsPageState extends State<SettingsPage>
   late BackgroundSettings _bgSettings;
   late AppLocale _locale;
   late SearchScope _searchScope;
-  bool _searchScopeExpanded = true;
+
+  final _itemsPerRowCtrl = TextEditingController();
+  final _minItemsPerRowCtrl = TextEditingController();
+  final _maxItemsPerRowCtrl = TextEditingController();
+
+  void _syncNumberField(TextEditingController ctrl, int value) {
+    final text = value.toString();
+    if (ctrl.text != text) ctrl.text = text;
+  }
+
+  void _syncNumberFields() {
+    _syncNumberField(_itemsPerRowCtrl, _gridSettings.itemsPerRow);
+    _syncNumberField(_minItemsPerRowCtrl, _gridSettings.minItemsPerRow);
+    _syncNumberField(_maxItemsPerRowCtrl, _gridSettings.maxItemsPerRow);
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 6, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _bgSettings = widget.backgroundSettings;
     _locale = Strings.currentLocale;
     _searchScope = widget.searchScope;
+    _syncNumberFields();
     _load();
   }
 
@@ -76,18 +92,48 @@ class _SettingsPageState extends State<SettingsPage>
       _gridSettings = grid;
       _accentColor = accent;
     });
+    _syncNumberFields();
   }
 
   @override
   void dispose() {
+    _gridSaveDebounce?.cancel();
     _tabCtrl.dispose();
+    _itemsPerRowCtrl.dispose();
+    _minItemsPerRowCtrl.dispose();
+    _maxItemsPerRowCtrl.dispose();
     super.dispose();
+  }
+
+  Timer? _gridSaveDebounce;
+
+  /// 界面页控件改动即生效：立即更新内存并通知主界面实时预览，
+  /// 落盘经 150ms 防抖（拖动滑块等高频变化只写一次磁盘）。
+  void _updateGridSettings(GridSettings next) {
+    setState(() => _gridSettings = next);
+    widget.onGridSettingsChanged(next);
+    _gridSaveDebounce?.cancel();
+    _gridSaveDebounce = Timer(const Duration(milliseconds: 150), () {
+      SettingsService.saveGridSettings(_gridSettings);
+    });
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.pop(context);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _onKeyEvent,
+      child: Scaffold(
       body: Column(
         children: [
           Container(
@@ -119,9 +165,12 @@ class _SettingsPageState extends State<SettingsPage>
           ),
           Row(
             children: [
-              GestureDetector(
+              InkWell(
                 onTap: () => Navigator.pop(context),
-                behavior: HitTestBehavior.opaque,
+                // 与 TabBar 涟漪一致：用主题强调色（primary）低透明度，
+                // 而非默认的灰色 splash，切换强调色时同步变化。
+                splashColor: cs.primary.withValues(alpha: 0.1),
+                highlightColor: cs.primary.withValues(alpha: 0.1),
                 child: Container(
                   width: 60,
                   height: 48,
@@ -134,10 +183,10 @@ class _SettingsPageState extends State<SettingsPage>
             controller: _tabCtrl,
             isScrollable: true,
             tabAlignment: TabAlignment.start,
+            dividerColor: Colors.transparent,
             labelStyle: const TextStyle(fontSize: 12),
             tabs: [
               Tab(text: Strings.t('tabGeneral')),
-              Tab(text: Strings.t('tabData')),
               Tab(text: Strings.t('tabTheme')),
               Tab(text: Strings.t('tabUi')),
               Tab(text: Strings.t('tabScripts')),
@@ -153,7 +202,6 @@ class _SettingsPageState extends State<SettingsPage>
           controller: _tabCtrl,
           children: [
             _buildGeneralTab(),
-            _buildDataTab(),
             _buildThemeTab(),
             _buildUiTab(),
             _buildScriptsTab(),
@@ -163,77 +211,180 @@ class _SettingsPageState extends State<SettingsPage>
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String text) {
+    final cs = Theme.of(context).colorScheme;
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
+      ),
+    );
+  }
+
+  Widget _sectionCard({required Widget child}) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: child,
     );
   }
 
   Widget _buildGeneralTab() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
+    final cs = Theme.of(context).colorScheme;
+    return SmoothScroll(
+      builder: (context, controller, physics) => SingleChildScrollView(
+        controller: controller,
+        physics: physics,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('language')),
+                  const SizedBox(height: 4),
+                  Text(
+                    Strings.t('languageDesc'),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 8),
+                  ...AppLocale.values.map((locale) {
+                    final selected = _locale == locale;
+                    return InkWell(
+                      onTap: () {
+                        setState(() => _locale = locale);
+                        widget.onLocaleChanged(locale);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              size: 18,
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(locale.displayName,
+                                style: const TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _sectionHeader(Strings.t('searchScope')),
+                      const SizedBox(width: 8),
+                      _smallButton(
+                        SearchScope.allFields.every(_searchScope.isEnabled)
+                            ? Strings.t('cancelSelectAll')
+                            : Strings.t('selectAll'),
+                        Icons.done_all,
+                        _toggleAllSearchScope,
+                      ),
+                      _smallButton(
+                        Strings.t('resetDefaults'),
+                        Icons.restore,
+                        _resetSearchScope,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSearchScopeChips(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildDataManageCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataManageCard() {
+    return _sectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(Strings.t('language'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text(Strings.t('languageDesc'), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          _sectionHeader(Strings.t('dataManage')),
           const SizedBox(height: 12),
-          ...AppLocale.values.map((locale) {
-            final selected = _locale == locale;
-            return InkWell(
-              onTap: () {
-                setState(() => _locale = locale);
-                widget.onLocaleChanged(locale);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                      size: 18,
-                      color: selected ? Theme.of(context).colorScheme.primary : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(locale.displayName, style: const TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 28,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 140,
-                  child: Text(Strings.t('searchScope'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-                SizedBox(
-                  width: 60,
-                  child: InkWell(
-                    onTap: () => setState(() => _searchScopeExpanded = !_searchScopeExpanded),
-                    child: Center(
-                      child: Icon(
-                        _searchScopeExpanded ? Icons.expand_less : Icons.expand_more,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _buildActionButton(
+            Strings.t('exportData'),
+            Icons.file_upload_outlined,
+            _exportData,
+            desc: Strings.t('exportDataDesc'),
           ),
-          if (_searchScopeExpanded) ...[
-            const SizedBox(height: 8),
-            ..._buildSearchScopeToggles(),
-          ],
+          const SizedBox(height: 10),
+          _buildActionButton(
+            Strings.t('importData'),
+            Icons.file_download_outlined,
+            _importData,
+            desc: Strings.t('importDataDesc'),
+          ),
+          const SizedBox(height: 10),
+          _buildActionButton(
+            Strings.t('clearData'),
+            Icons.delete_outline,
+            _clearData,
+            color: Colors.red.shade700,
+            desc: Strings.t('clearDataDesc'),
+          ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildSearchScopeToggles() {
+  /// 全选/取消全选搜索范围（单个按钮按当前状态切换）。
+  void _toggleAllSearchScope() {
+    final allSelected = SearchScope.allFields.every(_searchScope.isEnabled);
+    final updated = SearchScope(
+      enabled: allSelected ? const <String>{} : SearchScope.allFields,
+    );
+    _searchScope = updated;
+    SettingsService.saveSearchScope(updated);
+    widget.onSearchScopeChanged(updated);
+    setState(() {});
+  }
+
+  /// 恢复搜索范围默认选中项。
+  void _resetSearchScope() {
+    final updated = SearchScope.defaults();
+    _searchScope = updated;
+    SettingsService.saveSearchScope(updated);
+    widget.onSearchScopeChanged(updated);
+    setState(() {});
+  }
+
+  /// 搜索范围标签式多选：固定顺序展示，选中即强调色背景，点击切换。
+  Widget _buildSearchScopeChips() {
     const fields = [
       ('searchScopeUuid', 'uuid'),
       ('searchScopeDefine', 'define'),
@@ -247,52 +398,42 @@ class _SettingsPageState extends State<SettingsPage>
       ('searchScopeTags', 'tags'),
       ('searchScopeStar', 'star'),
     ];
-    return [
-      for (final (labelKey, field) in fields)
-        SizedBox(
-          height: 28,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 140,
-                child: Text(Strings.t(labelKey), style: const TextStyle(fontSize: 12)),
+    final cs = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final (labelKey, field) in fields)
+          FilterChip(
+            label: Text(
+              Strings.t(labelKey),
+              style: TextStyle(
+                fontSize: 12,
+                color: _searchScope.isEnabled(field)
+                    ? cs.onPrimary
+                    : cs.onSurface,
               ),
-              Transform.scale(
-                scale: 0.75,
-                child: Switch(
-                  value: _searchScope.isEnabled(field),
-                  onChanged: (v) {
-                    final updated = _searchScope.copyWithEnabled(field, v);
-                    _searchScope = updated;
-                    SettingsService.saveSearchScope(updated);
-                    widget.onSearchScopeChanged(updated);
-                    setState(() {});
-                  },
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
+            ),
+            selected: _searchScope.isEnabled(field),
+            selectedColor: cs.primary,
+            checkmarkColor: cs.onPrimary,
+            showCheckmark: false,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            side: BorderSide(
+              color: _searchScope.isEnabled(field)
+                  ? cs.primary
+                  : cs.outlineVariant,
+            ),
+            onSelected: (v) {
+              final updated = _searchScope.copyWithEnabled(field, v);
+              _searchScope = updated;
+              SettingsService.saveSearchScope(updated);
+              widget.onSearchScopeChanged(updated);
+              setState(() {});
+            },
           ),
-        ),
-    ];
-  }
-
-  Widget _buildDataTab() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(Strings.t('dataManage'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          _buildActionButton(Strings.t('exportData'), Icons.file_upload_outlined, _exportData),
-          const SizedBox(height: 10),
-          _buildActionButton(Strings.t('importData'), Icons.file_download_outlined, _importData),
-          const SizedBox(height: 10),
-          _buildActionButton(Strings.t('clearData'), Icons.delete_outline, _clearData,
-              color: Colors.red.shade700),
-        ],
-      ),
+      ],
     );
   }
 
@@ -303,60 +444,85 @@ class _SettingsPageState extends State<SettingsPage>
       builder: (context, controller, physics) => SingleChildScrollView(
         controller: controller,
         physics: physics,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(Strings.t('themeSection'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
-            _buildThemeOption(Strings.t('light'), ThemeMode.light),
-            _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
-            const SizedBox(height: 20),
-            _buildAccentSection(),
-            const SizedBox(height: 20),
-            Text(Strings.t('customBg'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _pickBackgroundImage,
-                  icon: const Icon(Icons.image, size: 16),
-                  label: Text(Strings.t('selectBg'), style: const TextStyle(fontSize: 12)),
-                ),
-                const SizedBox(width: 8),
-                if (hasBg) ...[
-                  OutlinedButton.icon(
-                    onPressed: _clearBackground,
-                    icon: Icon(Icons.delete_outline, size: 16, color: Colors.red.shade700),
-                    label: Text(Strings.t('clearBg'),
-                        style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
-                  ),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('themeSection')),
+                  const SizedBox(height: 4),
+                  _buildThemeOption(Strings.t('followSystem'), ThemeMode.system),
+                  _buildThemeOption(Strings.t('light'), ThemeMode.light),
+                  _buildThemeOption(Strings.t('dark'), ThemeMode.dark),
                 ],
-              ],
-            ),
-            if (hasBg) ...[
-              const SizedBox(height: 4),
-              Text(
-                _bgSettings.path!.replaceAll('\\', '/').split('/').last,
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
-            ],
+            ),
             const SizedBox(height: 16),
-            Text(Strings.t('panelOpacity'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 8),
-            _buildOpacitySlider(Strings.t('leftPanel'), _bgSettings.leftOpacity, hasBg, (v) {
-              _bgSettings = _bgSettings.copyWith(leftOpacity: v);
-              _saveBackground();
-            }),
-            _buildOpacitySlider(Strings.t('middlePanel'), _bgSettings.middleOpacity, hasBg, (v) {
-              _bgSettings = _bgSettings.copyWith(middleOpacity: v);
-              _saveBackground();
-            }),
-            _buildOpacitySlider(Strings.t('rightPanel'), _bgSettings.rightOpacity, hasBg, (v) {
-              _bgSettings = _bgSettings.copyWith(rightOpacity: v);
-              _saveBackground();
-            }),
+            _sectionCard(child: _buildAccentSection()),
+            const SizedBox(height: 16),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('customBg')),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _pickBackgroundImage,
+                        icon: const Icon(Icons.image, size: 16),
+                        label: Text(Strings.t('selectBg'),
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      const SizedBox(width: 8),
+                      if (hasBg) ...[
+                        OutlinedButton.icon(
+                          onPressed: _clearBackground,
+                          icon: Icon(Icons.delete_outline,
+                              size: 16, color: Colors.red.shade700),
+                          label: Text(Strings.t('clearBg'),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.red.shade700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (hasBg) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _bgSettings.path!.replaceAll('\\', '/').split('/').last,
+                      style:
+                          TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(
+                    Strings.t('panelOpacity'),
+                    style:
+                        TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildOpacitySlider(Strings.t('leftPanel'),
+                      _bgSettings.leftOpacity, hasBg, (v) {
+                    _bgSettings = _bgSettings.copyWith(leftOpacity: v);
+                    _saveBackground();
+                  }),
+                  _buildOpacitySlider(Strings.t('middlePanel'),
+                      _bgSettings.middleOpacity, hasBg, (v) {
+                    _bgSettings = _bgSettings.copyWith(middleOpacity: v);
+                    _saveBackground();
+                  }),
+                  _buildOpacitySlider(Strings.t('rightPanel'),
+                      _bgSettings.rightOpacity, hasBg, (v) {
+                    _bgSettings = _bgSettings.copyWith(rightOpacity: v);
+                    _saveBackground();
+                  }),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -364,6 +530,7 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildOpacitySlider(String label, double value, bool enabled, ValueChanged<double> onChanged) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -371,7 +538,10 @@ class _SettingsPageState extends State<SettingsPage>
           children: [
             SizedBox(
               width: 70,
-              child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
             ),
             Expanded(
               child: SliderTheme(
@@ -434,65 +604,84 @@ class _SettingsPageState extends State<SettingsPage>
       builder: (context, controller, physics) => SingleChildScrollView(
         controller: controller,
         physics: physics,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(Strings.t('gridSettings'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 16),
-            _buildSliderField(Strings.t('minCardWidth'), _gridSettings.minCardWidth, 80, 300,
-                (v) => _gridSettings = _gridSettings.copyWith(minCardWidth: v)),
-            const SizedBox(height: 16),
-            _buildSliderField(Strings.t('maxCardWidth'), _gridSettings.maxCardWidth, 120, 400,
-                (v) => _gridSettings = _gridSettings.copyWith(maxCardWidth: v)),
-            const SizedBox(height: 16),
-            _buildAspectRatioSelector(),
-            const SizedBox(height: 16),
-            _buildItemsPerRowFields(),
-            const SizedBox(height: 20),
-            _buildCompactLevelSlider(),
-            const SizedBox(height: 20),
-            Text(Strings.t('gifDisplayMode'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            _buildGifModeSelector(Strings.t('cardGifMode'), _gridSettings.cardGifMode, (v) {
-              setState(() => _gridSettings = _gridSettings.copyWith(cardGifMode: v));
-            }),
-            const SizedBox(height: 12),
-            _buildGifModeSelector(Strings.t('fileGifMode'), _gridSettings.fileGifMode, (v) {
-              setState(() => _gridSettings = _gridSettings.copyWith(fileGifMode: v));
-            }),
-            const SizedBox(height: 20),
-            Text(Strings.t('panelAndTab'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            _buildSwitchRow(
-              labelKey: 'showBottomFilePanel',
-              hintKey: 'showBottomFilePanelHint',
-              value: _gridSettings.showBottomFilePanel,
-              onChanged: (v) =>
-                  setState(() => _gridSettings = _gridSettings.copyWith(showBottomFilePanel: v)),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('gridSettings')),
+                  const SizedBox(height: 12),
+                  _buildSliderField(Strings.t('minCardWidth'),
+                      _gridSettings.minCardWidth, 80, 300,
+                      (v) => _updateGridSettings(
+                          _gridSettings.copyWith(minCardWidth: v))),
+                  const SizedBox(height: 16),
+                  _buildSliderField(Strings.t('maxCardWidth'),
+                      _gridSettings.maxCardWidth, 120, 400,
+                      (v) => _updateGridSettings(
+                          _gridSettings.copyWith(maxCardWidth: v))),
+                  const SizedBox(height: 16),
+                  _buildAspectRatioSelector(),
+                  const SizedBox(height: 16),
+                  _buildItemsPerRowFields(),
+                  const SizedBox(height: 16),
+                  _buildCompactLevelSlider(),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            _buildSwitchRow(
-              labelKey: 'keepDetailTabOnSelection',
-              hintKey: 'keepDetailTabOnSelectionHint',
-              value: _gridSettings.keepDetailTabOnSelection,
-              onChanged: (v) => setState(
-                  () => _gridSettings = _gridSettings.copyWith(keepDetailTabOnSelection: v)),
+            const SizedBox(height: 16),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('gifDisplayMode')),
+                  const SizedBox(height: 12),
+                  _buildGifModeSelector(Strings.t('cardGifMode'),
+                      _gridSettings.cardGifMode,
+                      (v) => _updateGridSettings(
+                          _gridSettings.copyWith(cardGifMode: v))),
+                  const SizedBox(height: 12),
+                  _buildGifModeSelector(Strings.t('fileGifMode'),
+                      _gridSettings.fileGifMode,
+                      (v) => _updateGridSettings(
+                          _gridSettings.copyWith(fileGifMode: v))),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            _buildSwitchRow(
-              labelKey: 'dragSelectQuickSwitch',
-              hintKey: 'dragSelectQuickSwitchHint',
-              value: _gridSettings.dragSelectQuickSwitch,
-              onChanged: (v) => setState(
-                  () => _gridSettings = _gridSettings.copyWith(dragSelectQuickSwitch: v)),
-            ),
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _saveGridSettings,
-                child: Text(Strings.t('apply'), style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 16),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('panelAndTab')),
+                  const SizedBox(height: 12),
+                  _buildSwitchRow(
+                    labelKey: 'showBottomFilePanel',
+                    hintKey: 'showBottomFilePanelHint',
+                    value: _gridSettings.showBottomFilePanel,
+                    onChanged: (v) => _updateGridSettings(
+                        _gridSettings.copyWith(showBottomFilePanel: v)),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSwitchRow(
+                    labelKey: 'keepDetailTabOnSelection',
+                    hintKey: 'keepDetailTabOnSelectionHint',
+                    value: _gridSettings.keepDetailTabOnSelection,
+                    onChanged: (v) => _updateGridSettings(
+                        _gridSettings.copyWith(keepDetailTabOnSelection: v)),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSwitchRow(
+                    labelKey: 'dragSelectQuickSwitch',
+                    hintKey: 'dragSelectQuickSwitchHint',
+                    value: _gridSettings.dragSelectQuickSwitch,
+                    onChanged: (v) => _updateGridSettings(
+                        _gridSettings.copyWith(dragSelectQuickSwitch: v)),
+                  ),
+                ],
               ),
             ),
           ],
@@ -507,41 +696,44 @@ class _SettingsPageState extends State<SettingsPage>
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return Column(
+    final cs = Theme.of(context).colorScheme;
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 220,
-              child: Text(Strings.t(labelKey), style: const TextStyle(fontSize: 12)),
-            ),
-            Transform.scale(
-              scale: 0.75,
-              child: Switch(
-                value: value,
-                onChanged: onChanged,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(Strings.t(labelKey), style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 2),
+              Text(
+                Strings.t(hintKey),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          Strings.t(hintKey),
-          style: const TextStyle(fontSize: 11, color: Color(0xFF616161)),
+        Transform.scale(
+          scale: 0.75,
+          child: Switch(
+            value: value,
+            onChanged: onChanged,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildCompactLevelSlider() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(Strings.t('compactLevel'), style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            Text(Strings.t('compactLevel'),
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
             const SizedBox(width: 8),
             Text('${(_gridSettings.compactLevel * 100).round()}%',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
@@ -559,9 +751,8 @@ class _SettingsPageState extends State<SettingsPage>
             min: 85,
             max: 125,
             divisions: 8,
-            onChanged: (v) => setState(() {
-              _gridSettings = _gridSettings.copyWith(compactLevel: v / 100);
-            }),
+            onChanged: (v) => _updateGridSettings(
+                _gridSettings.copyWith(compactLevel: v / 100)),
           ),
         ),
       ],
@@ -579,28 +770,36 @@ class _SettingsPageState extends State<SettingsPage>
       children: [
         SizedBox(
           width: 90,
-          child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+          ),
         ),
         Expanded(
-          child: DropdownButtonFormField<GifDisplayMode>(
-            key: ValueKey(current),
-            initialValue: current,
-            isDense: true,
-            style: TextStyle(fontSize: 12, color: cs.onSurface),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: cs.outlineVariant),
+              borderRadius: BorderRadius.circular(6),
             ),
-            items: GifDisplayMode.values
-                .map((mode) => DropdownMenuItem(
-                      value: mode,
-                      child: Text(labels[mode]!, style: TextStyle(fontSize: 12, color: cs.onSurface)),
-                    ))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
+            child: DropdownButton<GifDisplayMode>(
+              value: current,
+              isExpanded: true,
+              isDense: true,
+              underline: const SizedBox.shrink(),
+              style: TextStyle(fontSize: 12, color: cs.onSurface),
+              items: GifDisplayMode.values
+                  .map((mode) => DropdownMenuItem(
+                        value: mode,
+                        child: Text(labels[mode]!,
+                            style:
+                                TextStyle(fontSize: 12, color: cs.onSurface)),
+                      ))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
+            ),
           ),
         ),
       ],
@@ -610,74 +809,88 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildScriptsTab() {
     final scripts = widget.scriptService.scripts;
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Python 路径
-          Text(Strings.t('pythonPath'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(6),
+    return SmoothScroll(
+      builder: (context, controller, physics) => SingleChildScrollView(
+        controller: controller,
+        physics: physics,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Python 路径
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('pythonPath')),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            widget.scriptService.pythonPath.isEmpty
+                                ? Strings.t('pythonPathDefault')
+                                : widget.scriptService.pythonPath,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color:
+                                    Theme.of(context).colorScheme.onSurface),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _pickPythonPath,
+                        child: Text(Strings.t('pythonBrowse'),
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      if (widget.scriptService.pythonPath.isNotEmpty)
+                        TextButton(
+                          onPressed: _clearPythonPath,
+                          child: Text(Strings.t('pythonReset'),
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
                   ),
-                  child: Text(
-                    widget.scriptService.pythonPath.isEmpty
-                        ? Strings.t('pythonPathDefault')
-                        : widget.scriptService.pythonPath,
-                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: _pickPythonPath,
-                child: Text(Strings.t('pythonBrowse'), style: const TextStyle(fontSize: 12)),
-              ),
-              if (widget.scriptService.pythonPath.isNotEmpty)
-                TextButton(
-                  onPressed: _clearPythonPath,
-                  child: Text(Strings.t('pythonReset'), style: const TextStyle(fontSize: 12)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // 脚本管理
-          Row(
-            children: [
-              Text(Strings.t('scriptManage'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const Spacer(),
-              _smallButton(Strings.t('scriptImport'), Icons.add, _importScript),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (scripts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Center(
-                child: Text(Strings.t('noScripts'),
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-              ),
-            )
-          else
-            Expanded(
-              child: SmoothScroll(
-                builder: (context, controller, physics) => ListView(
-                  controller: controller,
-                  physics: physics,
-                  children: [
-                    for (final script in scripts) _buildScriptItem(script),
-                  ],
-                ),
+                ],
               ),
             ),
-        ],
+            const SizedBox(height: 16),
+            // 脚本管理
+            Row(
+              children: [
+                _sectionHeader(Strings.t('scriptManage')),
+                const Spacer(),
+                _smallButton(Strings.t('scriptImport'), Icons.add, _importScript),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (scripts.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: Text(Strings.t('noScripts'),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant)),
+                ),
+              )
+            else
+              for (final script in scripts) _buildScriptItem(script),
+          ],
+        ),
       ),
     );
   }
@@ -685,13 +898,7 @@ class _SettingsPageState extends State<SettingsPage>
   Widget _buildScriptItem(ScriptEntry script) {
     final cs = Theme.of(context).colorScheme;
     final desc = widget.scriptService.readDescriptionSync(script);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(6),
-      ),
+    return _ScriptCard(
       child: Row(
         children: [
           Icon(Icons.code, size: 16, color: cs.onSurfaceVariant),
@@ -700,7 +907,9 @@ class _SettingsPageState extends State<SettingsPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(script.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(script.name,
+                    style:
+                        const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(script.fileName,
                     style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
@@ -709,7 +918,9 @@ class _SettingsPageState extends State<SettingsPage>
                   Text(desc,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.7))),
                 ],
               ],
             ),
@@ -892,59 +1103,91 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildAboutTab() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Vivy Library', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snapshot) {
-              final version = snapshot.data?.version ?? '';
-              final build = Strings.buildVersion;
-              final display = '$version${build.isEmpty ? '' : ' $build'}';
-              return Text(
-                Strings.tn('appVersion', {'version': display}),
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          Text(Strings.t('projectUrl'), style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => Process.run('cmd', ['/c', 'start', 'https://github.com/qingyue0906/vivy_library']),
-              child: const Text(
-                'https://github.com/qingyue0906/vivy_library',
-                style: TextStyle(fontSize: 12, color: Colors.blue),
-              ),
+    final cs = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text('Vivy Library',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    final version = snapshot.data?.version ?? '';
+                    final build = Strings.buildVersion;
+                    final display = '$version${build.isEmpty ? '' : ' $build'}';
+                    return Text(
+                      Strings.tn('appVersion', {'version': display}),
+                      style:
+                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                Text(Strings.t('projectUrl'),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                const SizedBox(height: 4),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Process.run('cmd', [
+                      '/c',
+                      'start',
+                      'https://github.com/qingyue0906/vivy_library'
+                    ]),
+                    child: Text(
+                      'https://github.com/qingyue0906/vivy_library',
+                      style: TextStyle(fontSize: 12, color: cs.primary),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildActionButton(
-      String label, IconData icon, VoidCallback onTap, {Color? color}) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 16, color: color),
-        label: Text(label,
-            style: TextStyle(
-                fontSize: 12,
-                color: color ?? Theme.of(context).textTheme.bodyLarge?.color)),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          alignment: Alignment.centerLeft,
+      String label, IconData icon, VoidCallback onTap,
+      {Color? color, String? desc}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 16, color: color),
+            label: Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: color ?? Theme.of(context).textTheme.bodyLarge?.color)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              alignment: Alignment.centerLeft,
+            ),
+          ),
         ),
-      ),
+        if (desc != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 4),
+            child: Text(
+              desc,
+              style: TextStyle(
+                  fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
+      ],
     );
   }
 
@@ -973,9 +1216,12 @@ class _SettingsPageState extends State<SettingsPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(Strings.t('accentColor'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        _sectionHeader(Strings.t('accentColor')),
         const SizedBox(height: 4),
-        Text(Strings.t('accentColorDesc'), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(
+          Strings.t('accentColorDesc'),
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+        ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
@@ -1085,6 +1331,7 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildThemeOption(String label, ThemeMode mode) {
+    final cs = Theme.of(context).colorScheme;
     final selected = _themeMode == mode;
     return InkWell(
       onTap: () {
@@ -1099,7 +1346,7 @@ class _SettingsPageState extends State<SettingsPage>
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
               size: 18,
-              color: selected ? Theme.of(context).colorScheme.primary : Colors.grey,
+              color: selected ? Theme.of(context).colorScheme.primary : cs.onSurfaceVariant,
             ),
             const SizedBox(width: 8),
             Text(label, style: const TextStyle(fontSize: 12)),
@@ -1111,17 +1358,18 @@ class _SettingsPageState extends State<SettingsPage>
 
   Widget _buildSliderField(
       String label, double value, double min, double max, ValueChanged<double> onChanged) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('$label: ${value.toInt()}px',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+            style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
         Slider(
           value: value,
           min: min,
           max: max,
           divisions: ((max - min) / 10).round(),
-          onChanged: (v) => setState(() => onChanged(v)),
+          onChanged: onChanged,
         ),
       ],
     );
@@ -1140,12 +1388,15 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _buildAspectRatioSelector() {
+    final cs = Theme.of(context).colorScheme;
     const ratios = ['1:1', '4:3', '3:2', '16:9'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(Strings.t('aspectRatio'),
-            style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+        Text(
+          Strings.t('aspectRatio'),
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
         Row(
           children: ratios.map((r) {
@@ -1155,9 +1406,8 @@ class _SettingsPageState extends State<SettingsPage>
               child: ChoiceChip(
                 label: Text(r, style: const TextStyle(fontSize: 11)),
                 selected: selected,
-                onSelected: (_) => setState(() {
-                  _gridSettings = _gridSettings.copyWith(aspectRatio: r);
-                }),
+                onSelected: (_) => _updateGridSettings(
+                    _gridSettings.copyWith(aspectRatio: r)),
                 visualDensity: VisualDensity.compact,
               ),
             );
@@ -1167,23 +1417,25 @@ class _SettingsPageState extends State<SettingsPage>
     );
   }
 
-  /// 每行固定数量 / 每行最少数量 / 每行最多数量 三个数字输入框一行并排。
+  /// 每行固定数量 / 每行最少数量 / 每行最多数量 三个数字输入框并排。
   /// 最少/最多只在自动模式（固定数量=0）生效，固定模式时置灰禁用。
   Widget _buildItemsPerRowFields() {
     final enabled = _gridSettings.itemsPerRow == 0;
-    return Row(
+    _syncNumberFields();
+    return Wrap(
+      spacing: 20,
+      runSpacing: 12,
       children: [
         _buildNumberField(
           label: Strings.t('itemsPerRow'),
-          value: _gridSettings.itemsPerRow,
+          controller: _itemsPerRowCtrl,
           enabled: true,
-          onChanged: (n) =>
-              _gridSettings = _gridSettings.copyWith(itemsPerRow: n.clamp(0, 20)),
+          onChanged: (n) => _updateGridSettings(
+              _gridSettings.copyWith(itemsPerRow: n.clamp(0, 20))),
         ),
-        const SizedBox(width: 20),
         _buildNumberField(
           label: Strings.t('itemsPerRowMin'),
-          value: _gridSettings.minItemsPerRow,
+          controller: _minItemsPerRowCtrl,
           enabled: enabled,
           onChanged: (n) {
             final min = n.clamp(1, 999);
@@ -1191,19 +1443,18 @@ class _SettingsPageState extends State<SettingsPage>
             final max = min > _gridSettings.maxItemsPerRow
                 ? min
                 : _gridSettings.maxItemsPerRow;
-            _gridSettings = _gridSettings.copyWith(
+            _updateGridSettings(_gridSettings.copyWith(
               minItemsPerRow: min,
               maxItemsPerRow: max,
-            );
+            ));
           },
         ),
-        const SizedBox(width: 20),
         _buildNumberField(
           label: Strings.t('itemsPerRowMax'),
-          value: _gridSettings.maxItemsPerRow,
+          controller: _maxItemsPerRowCtrl,
           enabled: enabled,
-          onChanged: (n) => _gridSettings =
-              _gridSettings.copyWith(maxItemsPerRow: n.clamp(1, 12)),
+          onChanged: (n) => _updateGridSettings(
+              _gridSettings.copyWith(maxItemsPerRow: n.clamp(1, 12))),
         ),
       ],
     );
@@ -1212,12 +1463,12 @@ class _SettingsPageState extends State<SettingsPage>
   /// 数字输入框：灰色小标签 + 数字文本框（与"每行固定数量"同款样式）。
   Widget _buildNumberField({
     required String label,
-    required int value,
+    required TextEditingController controller,
     required bool enabled,
     required ValueChanged<int> onChanged,
   }) {
     final labelColor =
-        enabled ? const Color(0xFF616161) : Theme.of(context).disabledColor;
+        enabled ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).disabledColor;
     return Row(
       children: [
         Text(label, style: TextStyle(fontSize: 11, color: labelColor)),
@@ -1227,7 +1478,7 @@ class _SettingsPageState extends State<SettingsPage>
           child: TextField(
             keyboardType: TextInputType.number,
             enabled: enabled,
-            controller: TextEditingController(text: value.toString()),
+            controller: controller,
             style: const TextStyle(fontSize: 12),
             decoration: InputDecoration(
               isDense: true,
@@ -1243,14 +1494,6 @@ class _SettingsPageState extends State<SettingsPage>
           ),
         ),
       ],
-    );
-  }
-
-  void _saveGridSettings() {
-    SettingsService.saveGridSettings(_gridSettings);
-    widget.onGridSettingsChanged(_gridSettings);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(Strings.t('gridSaved')), duration: const Duration(seconds: 1)),
     );
   }
 
@@ -1467,6 +1710,41 @@ class _SettingsPageState extends State<SettingsPage>
         );
       }
     }
+  }
+}
+
+class _ScriptCard extends StatefulWidget {
+  final Widget child;
+
+  const _ScriptCard({required this.child});
+
+  @override
+  State<_ScriptCard> createState() => _ScriptCardState();
+}
+
+class _ScriptCardState extends State<_ScriptCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          border: Border.all(
+            color: _hovered ? cs.primary : cs.outlineVariant,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: widget.child,
+      ),
+    );
   }
 }
 

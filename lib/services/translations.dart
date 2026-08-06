@@ -232,6 +232,24 @@ class Strings {
       AppLocale.en: 'Clear Data',
       AppLocale.ja: 'データをクリア',
     },
+    'exportDataDesc': {
+      AppLocale.zhHans: '将设置、脚本元数据及脚本文件打包为 zip 压缩包',
+      AppLocale.zhHant: '將設定、腳本元資料及腳本檔案打包為 zip 壓縮檔',
+      AppLocale.en: 'Pack settings, script metadata and script files into a zip archive',
+      AppLocale.ja: '設定・スクリプトメタデータ・スクリプトファイルを zip にまとめます',
+    },
+    'importDataDesc': {
+      AppLocale.zhHans: '从 zip 压缩包恢复设置与脚本（将覆盖当前数据）',
+      AppLocale.zhHant: '從 zip 壓縮檔還原設定與腳本（將覆蓋目前資料）',
+      AppLocale.en: 'Restore settings and scripts from a zip archive (overwrites current data)',
+      AppLocale.ja: 'zip から設定とスクリプトを復元します（現在のデータを上書き）',
+    },
+    'clearDataDesc': {
+      AppLocale.zhHans: '清空应用的所有本地数据，此操作不可撤销',
+      AppLocale.zhHant: '清空應用程式的所有本機資料，此操作無法復原',
+      AppLocale.en: 'Clear all local app data. This action cannot be undone',
+      AppLocale.ja: 'アプリのすべてのローカルデータを削除します。この操作は元に戻せません',
+    },
     'themeSection': {
       AppLocale.zhHans: '主题',
       AppLocale.zhHant: '主題',
@@ -801,6 +819,24 @@ class Strings {
       AppLocale.zhHant: '標星',
       AppLocale.en: 'Star',
       AppLocale.ja: 'スター',
+    },
+    'selectAll': {
+      AppLocale.zhHans: '全选',
+      AppLocale.zhHant: '全選',
+      AppLocale.en: 'Select All',
+      AppLocale.ja: 'すべて選択',
+    },
+    'cancelSelectAll': {
+      AppLocale.zhHans: '取消全选',
+      AppLocale.zhHant: '取消全選',
+      AppLocale.en: 'Deselect All',
+      AppLocale.ja: '選択をすべて解除',
+    },
+    'resetDefaults': {
+      AppLocale.zhHans: '恢复默认',
+      AppLocale.zhHant: '恢復預設',
+      AppLocale.en: 'Reset to Defaults',
+      AppLocale.ja: 'デフォルトに戻す',
     },
     'classSourceCreator': {
       AppLocale.zhHans: '作者',
