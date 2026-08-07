@@ -213,28 +213,38 @@ class _ItemCardState extends State<ItemCard> {
   }
 
   Widget _buildPreviewImage(BuildContext context, double c) {
-    final cs = Theme.of(context).colorScheme;
     if (widget.item.previewPath == null) {
-      return Center(
-        child: Icon(
-          Icons.image_not_supported,
-          size: 20 * c,
-          color: cs.onSurfaceVariant,
-        ),
-      );
+      return _buildTypePlaceholder(context, c);
     }
     final cacheW = ((widget.displayWidth * 2) ~/ 100 * 100)
         .clamp(100, 800)
         .toInt();
-    final errorWidget = Center(
-      child: Icon(Icons.broken_image, size: 20 * c, color: cs.onSurfaceVariant),
-    );
     return GifImage(
       file: File(widget.item.previewPath!),
       gifMode: widget.gifMode,
       cacheWidth: cacheW,
       fit: BoxFit.cover,
-      errorBuilder: (_) => errorWidget,
+      errorBuilder: (_) => _buildTypePlaceholder(context, c),
+    );
+  }
+
+  /// 无预览图 / 加载失败时的占位：与右侧预览面板一致，
+  /// 类型色渐变底 + 大号类型图标（图标随卡片尺寸缩放，上限与面板一致）。
+  Widget _buildTypePlaceholder(BuildContext context, double c) {
+    final type = widget.effectiveInfo.type.toLowerCase();
+    final tint = _typeColor(type);
+    final iconSize = (widget.displayHeight * 0.4).clamp(20 * c, 52 * c);
+    return Container(
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.12),
+      ),
+      child: Center(
+        child: Icon(
+          _typeIcon(type),
+          size: iconSize,
+          color: tint.withValues(alpha: 0.75),
+        ),
+      ),
     );
   }
 
