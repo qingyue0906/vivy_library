@@ -3,7 +3,7 @@ import '../providers/library_state.dart';
 import 'app_data_service.dart';
 import 'translations.dart';
 
-enum ClassSource { creator, type, contentrating, rating, class_, tags }
+enum ClassSource { creator, type, contentrating, rating, class_, tags, folder }
 
 class SearchScope {
   static const defaultFields = {'title', 'description', 'creator', 'class', 'tags'};

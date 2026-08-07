@@ -874,6 +874,12 @@ class Strings {
       AppLocale.en: 'Tags',
       AppLocale.ja: 'タグ',
     },
+    'classSourceFolder': {
+      AppLocale.zhHans: '文件夹',
+      AppLocale.zhHant: '資料夾',
+      AppLocale.en: 'Folder',
+      AppLocale.ja: 'フォルダ',
+    },
     'grouping': {
       AppLocale.zhHans: '分组',
       AppLocale.zhHant: '分組',

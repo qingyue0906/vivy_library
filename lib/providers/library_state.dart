@@ -240,7 +240,9 @@ class LibraryState extends ChangeNotifier {
       return _cachedFilteredSubDirs!;
     }
     var result = currentSubDirs;
-    result = result.where((n) => _matchesClassFilter(n.info)).toList();
+    if (_classSource != ClassSource.folder) {
+      result = result.where((n) => _matchesClassFilter(n.info)).toList();
+    }
     if (_searchQuery.isNotEmpty) {
       final parsed = SearchQuery.parse(
         _searchQuery,
@@ -436,14 +438,27 @@ class LibraryState extends ChangeNotifier {
               add(v);
             }
           }
+        case ClassSource.folder:
+          break;
       }
     }
 
-    for (final item in inCategory) {
-      processInfo(item.info);
-    }
-    for (final node in inFolders) {
-      processInfo(node.info);
+    if (_classSource == ClassSource.folder) {
+      for (final item in inCategory) {
+        final key = _folderClassKey(item.categoryPath);
+        if (key.isEmpty) {
+          addUncategorized();
+        } else {
+          add(key);
+        }
+      }
+    } else {
+      for (final item in inCategory) {
+        processInfo(item.info);
+      }
+      for (final node in inFolders) {
+        processInfo(node.info);
+      }
     }
 
     final sortedKeys = counts.keys.toList()..sort();
@@ -507,9 +522,13 @@ class LibraryState extends ChangeNotifier {
     var result = _itemsInSelectedCategory;
 
     // 1.5 椤堕儴 class 瀵艰埅绛涢€夛紙鐢ㄦ湁鏁?info 浠ュ懡涓户鎵垮€硷級
-    result = result
-        .where((e) => _matchesClassFilter(effectiveInfo(e)))
-        .toList();
+    result = _classSource == ClassSource.folder
+        ? result
+            .where((e) => _matchesFolderClass(e.categoryPath))
+            .toList()
+        : result
+            .where((e) => _matchesClassFilter(effectiveInfo(e)))
+            .toList();
 
     // 2 鎼滅储杩囨护
     if (_searchQuery.isNotEmpty) {
@@ -561,7 +580,37 @@ class LibraryState extends ChangeNotifier {
       case ClassSource.tags:
         if (_selectedClass == kUnclassified) return (info?.tags ?? []).isEmpty;
         return info?.tags.contains(_selectedClass) ?? false;
+      case ClassSource.folder:
+        return _selectedClass == kAllClass;
     }
+  }
+
+  /// 文件夹分类基准：当前树选中路径；"全部项目"时以资源库根为基准。
+  String _folderClassBase() {
+    final selected = _selectedCategoryPath;
+    return selected ?? _categoryRoot.path;
+  }
+
+  /// 项目所在文件夹相对当前分类基准的键（空串 = 直接位于基准目录）。
+  /// 统一转 `/` 分隔并去除尾分隔符；不匹配基准时回退完整路径。
+  String _folderClassKey(String categoryPath) {
+    final base = _folderClassBase().replaceAll('\\', '/');
+    final cat = categoryPath.replaceAll('\\', '/');
+    String strip(String s) => s.replaceFirst(RegExp(r'/+$'), '');
+    final b = strip(base).toLowerCase();
+    final c = strip(cat);
+    if (c.toLowerCase() == b) return '';
+    if (c.toLowerCase().startsWith('$b/')) {
+      return c.substring(b.length + 1);
+    }
+    return c;
+  }
+
+  bool _matchesFolderClass(String categoryPath) {
+    if (_selectedClass == kAllClass) return true;
+    final key = _folderClassKey(categoryPath);
+    if (_selectedClass == kUnclassified) return key.isEmpty;
+    return key == _selectedClass;
   }
 
   bool _matchesSearch(LibraryItem item, SearchQuery parsed) {

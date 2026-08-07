@@ -81,6 +81,7 @@ class ClassNavBar extends StatelessWidget {
       case ClassSource.rating: return Strings.t('classSourceRating');
       case ClassSource.class_: return Strings.t('classSourceClass');
       case ClassSource.tags: return Strings.t('classSourceTags');
+      case ClassSource.folder: return Strings.t('classSourceFolder');
     }
   }
 
