@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/library_state.dart';
 import '../models/library_item.dart';
@@ -254,7 +255,11 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
             Listener(
               // 仅左键激活拖选会话；右键按住滑动不触发选中。
               onPointerDown: (event) {
-                if (event.buttons & kPrimaryButton != 0) {
+                if (event.buttons & kPrimaryButton != 0 &&
+                    !HardwareKeyboard.instance.isControlPressed &&
+                    !HardwareKeyboard.instance.isShiftPressed &&
+                    !HardwareKeyboard.instance.isAltPressed &&
+                    !HardwareKeyboard.instance.isMetaPressed) {
                   _dragSession.value = true;
                 }
               },
