@@ -173,10 +173,6 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  /// 外层整页滚动控制器（由 SmoothScroll 创建，此处仅保存引用
-  /// 用于切换标签时回到面板顶部）。
-  ScrollController? _outerController;
-
   bool get _isItem => widget.item != null;
   bool get _isFolder => widget.folder != null;
   bool get _isFile => widget.file != null;
@@ -264,7 +260,6 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     // 滚轮滚动整个预览面板，而非只有标签下方的内容滚动。
     final body = SmoothScroll(
       builder: (context, controller, physics) {
-        _outerController = controller;
         return CustomScrollView(
           controller: controller,
           physics: physics,
@@ -283,15 +278,18 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       },
     );
     // 文件标签页的悬浮操作按钮组，固定在面板右下角，不随内容滚动。
-    if (!fabVisible) return body;
+    // 始终包裹 Stack：若按 fabVisible 分支切换返回根节点类型
+    // （SmoothScroll <-> Stack），会导致 SmoothScroll 子树整体重建、
+    // 滚动位置重置，因此保持根结构恒定。
     return Stack(
       children: [
         body,
-        Positioned(
-          right: 16 * c,
-          bottom: 16 * c,
-          child: _buildFloatingButtons(context, c),
-        ),
+        if (fabVisible)
+          Positioned(
+            right: 16 * c,
+            bottom: 16 * c,
+            child: _buildFloatingButtons(context, c),
+          ),
       ],
     );
   }
@@ -324,13 +322,12 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     );
   }
 
-  /// 切换到指定标签页：更新记忆、回到面板顶部。
+  /// 切换到指定标签页：更新记忆；切换时保持当前滚动位置
+  /// （不再跳回顶部，滚动位置随整页滚动视图自然延续）。
   /// 点击与拖选共用同一入口。
   void _selectTab(List<_TabSpec> specs, int i) {
     _tabController.animateTo(i);
     widget.onTabSelected?.call(specs[i].key);
-    // 切换标签后回到面板顶部，与每页独立滚动时从内容顶部开始的直觉一致
-    _outerController?.jumpTo(0);
   }
 
   // ===== 头部：原比例预览图 + 标题 + 类型/评分/分级 =====
