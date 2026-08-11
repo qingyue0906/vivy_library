@@ -12,6 +12,7 @@ import '../services/ebook_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
 import '../services/ebook_playlist_service.dart';
+import '../utils/folder_collapse.dart';
 import 'smooth_scroll.dart';
 
 /// 内置电子书阅读器。窗口/全屏骨架、顶栏拖拽+窗口控件、右侧可拖拽面板、点击分区
@@ -1441,7 +1442,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
           physics: physics,
           padding: const EdgeInsets.symmetric(vertical: 4),
           children: [
-            for (final r in tree) _treeNode(r, cs, 0),
+            for (final r in tree) _treeNode(r, cs, 0, isRoot: true),
           ],
         ),
       ),
@@ -1449,7 +1450,32 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   }
 
   /// 递归渲染文件夹树节点（含展开/收起）。
-  Widget _treeNode(EbookFolderNode node, ColorScheme cs, int depth) {
+  /// 开启「单文件文件夹折叠」时，单文件节点（及向上整条单子项链）渲染为
+  /// 单条折叠文件叶，显示名拼接「文件夹/书文件」，点击仍切换到链末端那本书。
+  Widget _treeNode(EbookFolderNode node, ColorScheme cs, int depth,
+      {bool isRoot = false}) {
+    final collapse = SettingsService.loadCollapseSingleFileFoldersSync();
+    if (!isRoot && collapse) {
+      final leaf = collapseLeafFile(
+        node,
+        childrenOf: (n) => n.children,
+        filesOf: (n) => n.files,
+      );
+      if (leaf != null) {
+        return _fileLeaf(
+          leaf,
+          cs,
+          depth,
+          displayName: collapsedPath(
+            node,
+            childrenOf: (n) => n.children,
+            filesOf: (n) => n.files,
+            nameOf: (n) => n.name,
+            fileNameOf: (f) => f.name,
+          )!,
+        );
+      }
+    }
     final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
     final expanded = _expandedNodes.contains(node.path);
     return Column(
@@ -1510,12 +1536,16 @@ class _EbookReaderPageState extends State<EbookReaderPage>
   }
 
   /// 树中的电子书文件叶（点击切换到该书；当前书高亮）。
-  Widget _fileLeaf(EbookFileEntry f, ColorScheme cs, int depth) {
+  Widget _fileLeaf(EbookFileEntry f, ColorScheme cs, int depth,
+      {String? displayName}) {
     final idx = widget.playlist.entries.indexOf(f.path);
     final isCurrent = idx >= 0 && idx == _bookIndex;
     return InkWell(
       onTap: idx >= 0 ? () => _switchBook(idx) : null,
-      child: Container(
+      child: Tooltip(
+        message: displayName ?? f.name,
+        waitDuration: const Duration(milliseconds: 500),
+        child: Container(
         decoration: isCurrent
             ? BoxDecoration(
                 border: Border(left: BorderSide(color: cs.primary, width: 3)),
@@ -1538,7 +1568,9 @@ class _EbookReaderPageState extends State<EbookReaderPage>
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                f.name,
+                displayName != null
+                    ? ellipsizePathMiddle(displayName)
+                    : f.name,
                 style: TextStyle(
                   fontSize: 12,
                   color: isCurrent ? cs.primary : cs.onSurface,
@@ -1547,6 +1579,7 @@ class _EbookReaderPageState extends State<EbookReaderPage>
               ),
             ),
           ],
+        ),
         ),
       ),
     );

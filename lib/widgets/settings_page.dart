@@ -83,14 +83,18 @@ class _SettingsPageState extends State<SettingsPage>
     _load();
   }
 
+  bool _collapseSingleFolders = true;
+
   Future<void> _load() async {
     final theme = await SettingsService.loadThemeMode();
     final grid = await SettingsService.loadGridSettings();
     final accent = await SettingsService.loadAccentColor();
+    final collapse = await SettingsService.loadCollapseSingleFileFolders();
     setState(() {
       _themeMode = theme;
       _gridSettings = grid;
       _accentColor = accent;
+      _collapseSingleFolders = collapse;
     });
     _syncNumberFields();
   }
@@ -793,6 +797,25 @@ class _SettingsPageState extends State<SettingsPage>
                     value: _gridSettings.dragSelectQuickSwitch,
                     onChanged: (v) => _updateGridSettings(
                         _gridSettings.copyWith(dragSelectQuickSwitch: v)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(Strings.t('playlistSection')),
+                  const SizedBox(height: 12),
+                  _buildSwitchRow(
+                    labelKey: 'collapseSingleFileFolders',
+                    hintKey: 'collapseSingleFileFoldersHint',
+                    value: _collapseSingleFolders,
+                    onChanged: (v) {
+                      setState(() => _collapseSingleFolders = v);
+                      SettingsService.saveCollapseSingleFileFolders(v);
+                    },
                   ),
                 ],
               ),

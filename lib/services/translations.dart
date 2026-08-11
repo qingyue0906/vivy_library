@@ -1465,6 +1465,28 @@ class Strings {
       AppLocale.en: 'Name',
       AppLocale.ja: '名前',
     },
+    'collapseSingleFileFolders': {
+      AppLocale.zhHans: '折叠单文件文件夹',
+      AppLocale.zhHant: '摺疊單檔案資料夾',
+      AppLocale.en: 'Collapse single-file folders',
+      AppLocale.ja: '単一ファイルのフォルダーを折りたたむ',
+    },
+    'collapseSingleFileFoldersHint': {
+      AppLocale.zhHans:
+          '播放列表中仅含一个文件的文件夹折叠为「文件夹/文件」条目，支持多层嵌套（如 文件夹1/文件夹2/文件）',
+      AppLocale.zhHant:
+          '播放清單中僅含一個檔案的資料夾摺疊為「資料夾/檔案」條目，支援多層巢狀（如 資料夾1/資料夾2/檔案）',
+      AppLocale.en:
+          'Folders containing a single file are collapsed into one "folder/file" entry in playlists, supporting multi-level nesting (e.g. folder1/folder2/file)',
+      AppLocale.ja:
+          'プレイリスト内でファイルが1つだけのフォルダーを「フォルダー/ファイル」の1エントリに折りたたみます（例：フォルダー1/フォルダー2/ファイル）',
+    },
+    'playlistSection': {
+      AppLocale.zhHans: '播放列表',
+      AppLocale.zhHant: '播放清單',
+      AppLocale.en: 'Playlist',
+      AppLocale.ja: 'プレイリスト',
+    },
     'sortSize': {
       AppLocale.zhHans: '大小',
       AppLocale.zhHant: '大小',

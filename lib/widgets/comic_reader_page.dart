@@ -9,6 +9,7 @@ import '../models/comic_page.dart';
 import '../services/comic_playlist_service.dart';
 import '../services/settings_service.dart';
 import '../services/translations.dart';
+import '../utils/folder_collapse.dart';
 import 'smooth_scroll.dart';
 
 /// 内置图片/漫画阅读器。参考 Komikku（平板分页阅读：点击左右分区翻页、
@@ -279,15 +280,45 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
   }
 
   /// 计算当前应显示的树行（仅展开节点可见），保持与扁平 entries 相同的 DFS 顺序。
+  /// 开启「单文件文件夹折叠」时，单文件节点（及向上整条单子项链，含压缩包）
+  /// 渲染为单条折叠文件行，显示名拼接「文件夹/文件」，点击仍跳转到链末端页。
   List<_TreeRow> _visibleRows() {
+    final collapse = SettingsService.loadCollapseSingleFileFoldersSync();
     final rows = <_TreeRow>[];
     for (final root in widget.playlist.tree) {
-      _appendVisible(root, 0, rows);
+      _appendVisible(root, 0, rows, collapse, isRoot: true);
     }
     return rows;
   }
 
-  void _appendVisible(ComicFolderNode node, int depth, List<_TreeRow> rows) {
+  void _appendVisible(
+    ComicFolderNode node,
+    int depth,
+    List<_TreeRow> rows,
+    bool collapse, {
+    bool isRoot = false,
+  }) {
+    if (!isRoot && collapse) {
+      final leaf = collapseLeafFile(
+        node,
+        childrenOf: (n) => n.children,
+        filesOf: (n) => n.files,
+      );
+      if (leaf != null) {
+        rows.add(_TreeRow.collapsedFile(
+          leaf,
+          depth,
+          collapsedPath(
+            node,
+            childrenOf: (n) => n.children,
+            filesOf: (n) => n.files,
+            nameOf: (n) => n.name,
+            fileNameOf: (f) => f.name,
+          )!,
+        ));
+        return;
+      }
+    }
     final hasContent = node.children.isNotEmpty || node.files.isNotEmpty;
     if (!hasContent) return;
     rows.add(_TreeRow.header(node, depth));
@@ -296,7 +327,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
         rows.add(_TreeRow.file(f, depth + 1));
       }
       for (final c in node.children) {
-        _appendVisible(c, depth + 1, rows);
+        _appendVisible(c, depth + 1, rows, collapse);
       }
     }
   }
@@ -1117,7 +1148,9 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
                               return _treeHeaderRow(cs, row.node!, row.depth);
                             }
                             final index = _pageIndexById[row.page!.id]!;
-                            return _thumbItem(cs, index, indent: row.depth * 14.0);
+                            return _thumbItem(cs, index,
+                                indent: row.depth * 14.0,
+                                displayName: row.displayName);
                           },
                         );
                       },
@@ -1129,7 +1162,8 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
     );
   }
 
-  Widget _thumbItem(ColorScheme cs, int index, {double indent = 0}) {
+  Widget _thumbItem(ColorScheme cs, int index,
+      {double indent = 0, String? displayName}) {
     final page = _entries[index];
     final isCurrent = _layout == ComicLayoutMode.double
         ? _currentSpreadPages.contains(index)
@@ -1137,7 +1171,10 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
     return InkWell(
       key: _thumbKey(index),
       onTap: () => _jumpTo(index),
-      child: Container(
+      child: Tooltip(
+        message: displayName ?? page.name,
+        waitDuration: const Duration(milliseconds: 500),
+        child: Container(
         padding: EdgeInsets.only(
           left: 8 + indent,
           right: 8,
@@ -1186,7 +1223,9 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    page.name,
+                    displayName != null
+                        ? ellipsizePathMiddle(displayName)
+                        : page.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1209,6 +1248,7 @@ class _ComicReaderPageState extends State<ComicReaderPage> with WindowListener {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -1220,8 +1260,19 @@ class _TreeRow {
   final ComicPage? page;
   final int depth;
 
-  _TreeRow.header(this.node, this.depth) : page = null;
-  _TreeRow.file(this.page, this.depth) : node = null;
+  /// 折叠文件行的显示名（「文件夹/zip/图片名」）；普通文件行为 null。
+  final String? displayName;
+
+  _TreeRow.header(this.node, this.depth)
+      : page = null,
+        displayName = null;
+
+  _TreeRow.file(this.page, this.depth)
+      : node = null,
+        displayName = null;
+
+  _TreeRow.collapsedFile(this.page, this.depth, this.displayName)
+      : node = null;
 }
 
 /// 直接图片或压缩包内图片的统一显示：直接图用 [Image.file]，压缩包内条目

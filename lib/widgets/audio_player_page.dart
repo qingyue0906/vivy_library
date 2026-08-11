@@ -15,6 +15,7 @@ import '../services/settings_service.dart';
 import '../services/fvp_player.dart';
 import '../services/playlist_sort.dart';
 import '../providers/library_state.dart';
+import '../utils/folder_collapse.dart';
 import 'smooth_scroll.dart';
 
 enum _RepeatMode { off, all, one, shuffle }
@@ -1277,6 +1278,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
                               cs: cs,
                               depth: item.depth,
                               isCurrent: isCurrent,
+                              displayName: item.displayName,
                               onTap: f.isAudio ? () => _playIndex(gi) : null,
                             );
                           },
@@ -1467,9 +1469,33 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
 
   /// 把「当前展开状态」下的文件夹树扁平化成一条有序列表，供 ListView.builder 虚拟化渲染。
   /// 只放入可见的文件夹头与文件叶；折叠的文件夹及其子项不进入列表。
+  /// 开启「单文件文件夹折叠」时，单文件节点（及向上整条单子项链）渲染为
+  /// 单条折叠文件叶，显示名拼接「文件夹/文件」，点击行为仍指向链末端的文件。
   List<_FlatItem> _buildFlatList() {
+    final collapse = SettingsService.loadCollapseSingleFileFoldersSync();
     final list = <_FlatItem>[];
-    void walk(AudioFolderNode node, int depth) {
+    void walk(AudioFolderNode node, int depth, {bool isRoot = false}) {
+      if (!isRoot && collapse) {
+        final leaf = collapseLeafFile(
+          node,
+          childrenOf: (n) => n.children,
+          filesOf: (n) => n.files,
+        );
+        if (leaf != null) {
+          list.add(_FlatItem.collapsedFile(
+            leaf,
+            depth,
+            collapsedPath(
+              node,
+              childrenOf: (n) => n.children,
+              filesOf: (n) => n.files,
+              nameOf: (n) => n.name,
+              fileNameOf: (f) => f.name,
+            )!,
+          ));
+          return;
+        }
+      }
       final hasKids = node.children.isNotEmpty || node.files.isNotEmpty;
       final expanded = _expanded.contains(node.path);
       list.add(_FlatItem.folder(node, depth, expanded, hasKids));
@@ -1484,7 +1510,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage>
     }
 
     for (final r in widget.playlist.tree) {
-      walk(r, 0);
+      walk(r, 0, isRoot: true);
     }
     return list;
   }
@@ -1562,11 +1588,22 @@ class _FlatItem {
   final bool expanded;
   final bool hasKids;
 
+  /// 折叠文件叶的显示名（「文件夹1/文件夹2/文件.mp3」）；普通文件叶为 null。
+  final String? displayName;
+
   _FlatItem.folder(this.folder, this.depth, this.expanded, this.hasKids)
       : isFolder = true,
-        file = null;
+        file = null,
+        displayName = null;
 
   _FlatItem.file(this.file, this.depth)
+      : isFolder = false,
+        folder = null,
+        expanded = false,
+        hasKids = false,
+        displayName = null;
+
+  _FlatItem.collapsedFile(this.file, this.depth, this.displayName)
       : isFolder = false,
         folder = null,
         expanded = false,
@@ -1582,6 +1619,10 @@ class _FileLeaf extends StatefulWidget {
   final ColorScheme cs;
   final int depth;
   final bool isCurrent;
+
+  /// 折叠文件叶的显示名（「文件夹/文件」），普通文件叶为 null（用标题/文件名）。
+  final String? displayName;
+
   final VoidCallback? onTap;
 
   const _FileLeaf({
@@ -1590,6 +1631,7 @@ class _FileLeaf extends StatefulWidget {
     required this.cs,
     required this.depth,
     required this.isCurrent,
+    this.displayName,
     this.onTap,
   }) : super(key: key);
 
@@ -1632,9 +1674,13 @@ class _FileLeafState extends State<_FileLeaf> {
     final isCurrent = widget.isCurrent;
     final playable = f.isAudio;
     final cover = f.meta?.coverBytes;
-    return InkWell(
-      onTap: widget.onTap,
-      child: Container(
+    final displayName = widget.displayName;
+    return Tooltip(
+      message: displayName ?? f.displayTitle,
+      waitDuration: const Duration(milliseconds: 500),
+      child: InkWell(
+        onTap: widget.onTap,
+        child: Container(
         decoration: isCurrent
             ? BoxDecoration(
                 border: Border(
@@ -1673,7 +1719,9 @@ class _FileLeafState extends State<_FileLeaf> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    f.displayTitle,
+                    displayName != null
+                        ? ellipsizePathMiddle(displayName)
+                        : f.displayTitle,
                     style: TextStyle(
                       fontSize: 12,
                       color: playable
@@ -1708,6 +1756,7 @@ class _FileLeafState extends State<_FileLeaf> {
             if (isCurrent)
               const Icon(Icons.volume_up, size: 14, color: Colors.blue),
           ],
+        ),
         ),
       ),
     );

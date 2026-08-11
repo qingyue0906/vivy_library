@@ -530,6 +530,25 @@ class SettingsService {
     await AppDataService.setString(_classSourceKey, source.name);
   }
 
+  // --- Playlist single-file folder collapse (单文件文件夹折叠) ---
+
+  static const _collapseSingleKey = 'playlist_collapse_single_file';
+  static bool _cachedCollapseSingle = true;
+
+  static bool loadCollapseSingleFileFoldersSync() => _cachedCollapseSingle;
+
+  /// 默认开启：播放列表树中只含一个文件的文件夹折叠为「文件夹/文件」条目。
+  static Future<bool> loadCollapseSingleFileFolders() async {
+    final val = await AppDataService.getString(_collapseSingleKey);
+    _cachedCollapseSingle = val == null || val == 'true';
+    return _cachedCollapseSingle;
+  }
+
+  static Future<void> saveCollapseSingleFileFolders(bool v) async {
+    _cachedCollapseSingle = v;
+    await AppDataService.setString(_collapseSingleKey, v.toString());
+  }
+
   // --- Player settings ---
 
   static const _playerShowMsKey = 'player_show_milliseconds';
