@@ -38,6 +38,90 @@ class SearchScope {
   }
 }
 
+/// 网格内容筛选（分级 + 类型白名单），类似 wallpaper engine。
+///
+/// 每个维度是一个「要显示」的勾选集合；**空白名单 = 该维度什么都不显示**，
+/// 因此默认值是全部勾选（[ItemFilter.all]），首次启动即显示全部内容。
+/// 「其他」用哨兵值 [otherSentinel] 表示，匹配所有不在预设集合中的值
+/// （如自定义类型 `ab`、分级 `R-19`，以及未定义类型的继承保底 `default`）。
+class ItemFilter {
+  /// 现有 12 种带图标徽章的类型（与卡片徽章/详情面板一致）。
+  static const presetTypes = {
+    'video', 'anime', 'novel', 'book', 'application', 'zip',
+    'picture', 'comic', 'voice', 'music', 'edgehtml', 'markdown',
+  };
+
+  /// 常用分级选项。
+  static const presetRatings = {'G', 'PG-13', 'R-18'};
+
+  /// 「其他」哨兵值。
+  static const otherSentinel = 'other';
+
+  final Set<String> types; // 类型白名单，可为空（空 = 类型维度全部隐藏）
+  final Set<String> ratings; // 分级白名单，可为空（空 = 分级维度全部隐藏）
+
+  const ItemFilter({required this.types, required this.ratings});
+
+  /// 默认全选：所有预设类型 + 「其他」、所有预设分级 + 「其他」。
+  factory ItemFilter.all() => const ItemFilter(
+        types: {
+          ...presetTypes, otherSentinel,
+        },
+        ratings: {
+          ...presetRatings, otherSentinel,
+        },
+      );
+
+  ItemFilter copyWith({Set<String>? types, Set<String>? ratings}) {
+    return ItemFilter(
+      types: types ?? this.types,
+      ratings: ratings ?? this.ratings,
+    );
+  }
+
+  /// 是否为「默认全选」状态（用于标题栏按钮高亮判断）。
+  bool get isAll {
+    return types.containsAll({...presetTypes, otherSentinel}) &&
+        ratings.containsAll({...presetRatings, otherSentinel});
+  }
+
+  /// 类型维度匹配：预设类型精确命中；非预设值（含 `default` 等）归「其他」。
+  /// 空白名单时任何类型都不显示。
+  bool matchesType(String type) {
+    if (types.isEmpty) return false;
+    final t = type.isEmpty ? otherSentinel : type;
+    return presetTypes.contains(t)
+        ? types.contains(t)
+        : types.contains(otherSentinel);
+  }
+
+  /// 分级维度匹配：预设分级精确命中；非预设值（如 `R-19`）归「其他」。
+  /// 空白名单时任何分级都不显示。
+  bool matchesRating(String rating) {
+    if (ratings.isEmpty) return false;
+    final r = rating.isEmpty ? otherSentinel : rating;
+    return presetRatings.contains(r)
+        ? ratings.contains(r)
+        : ratings.contains(otherSentinel);
+  }
+
+  /// 两个维度取交集：都命中才显示。
+  bool matches(String type, String rating) =>
+      matchesType(type) && matchesRating(rating);
+
+  /// 集合编码为逗号分隔字符串（用于持久化）。
+  String encode(Set<String> set) {
+    final list = set.toList()..sort();
+    return list.join(',');
+  }
+
+  /// 从逗号分隔字符串解码集合；null/空串返回空集合（该维度全隐藏）。
+  static Set<String> decode(String? raw) {
+    if (raw == null || raw.isEmpty) return const {};
+    return raw.split(',').where((s) => s.isNotEmpty).toSet();
+  }
+}
+
 class LayoutState {
   final double leftPanelWidth;
   final double rightPanelWidth;
@@ -528,6 +612,34 @@ class SettingsService {
 
   static Future<void> saveClassSource(ClassSource source) async {
     await AppDataService.setString(_classSourceKey, source.name);
+  }
+
+  // --- Grid content filter (分级/类型白名单筛选) ---
+
+  static const _filterTypesKey = 'filter_types';
+  static const _filterRatingsKey = 'filter_ratings';
+  static ItemFilter _cachedFilter = ItemFilter.all();
+
+  static ItemFilter loadItemFilterSync() => _cachedFilter;
+
+  /// 加载持久化的筛选。从未保存过时返回默认全选（显示全部内容）。
+  /// 两个 key 分别解析为类型/分级白名单（逗号分隔，可为空 = 该维度全隐藏）。
+  static Future<ItemFilter> loadItemFilter() async {
+    final typesRaw = await AppDataService.getString(_filterTypesKey);
+    final ratingsRaw = await AppDataService.getString(_filterRatingsKey);
+    final types = typesRaw == null ? ItemFilter.all().types : ItemFilter.decode(typesRaw);
+    final ratings = ratingsRaw == null
+        ? ItemFilter.all().ratings
+        : ItemFilter.decode(ratingsRaw);
+    _cachedFilter = ItemFilter(types: types, ratings: ratings);
+    return _cachedFilter;
+  }
+
+  static Future<void> saveItemFilter(ItemFilter filter) async {
+    _cachedFilter = filter;
+    await AppDataService.setString(_filterTypesKey, filter.encode(filter.types));
+    await AppDataService.setString(
+        _filterRatingsKey, filter.encode(filter.ratings));
   }
 
   // --- Playlist single-file folder collapse (单文件文件夹折叠) ---

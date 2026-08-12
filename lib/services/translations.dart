@@ -1523,6 +1523,42 @@ class Strings {
       AppLocale.en: 'Refresh',
       AppLocale.ja: '更新',
     },
+    'contentFilter': {
+      AppLocale.zhHans: '内容筛选',
+      AppLocale.zhHant: '內容篩選',
+      AppLocale.en: 'Content Filter',
+      AppLocale.ja: 'コンテンツフィルター',
+    },
+    'ratingSection': {
+      AppLocale.zhHans: '分级',
+      AppLocale.zhHant: '評級',
+      AppLocale.en: 'Rating',
+      AppLocale.ja: 'レーティング',
+    },
+    'typeSection': {
+      AppLocale.zhHans: '类型',
+      AppLocale.zhHant: '類型',
+      AppLocale.en: 'Type',
+      AppLocale.ja: 'タイプ',
+    },
+    'otherOption': {
+      AppLocale.zhHans: '其他',
+      AppLocale.zhHant: '其他',
+      AppLocale.en: 'Other',
+      AppLocale.ja: 'その他',
+    },
+    'clearAll': {
+      AppLocale.zhHans: '清除',
+      AppLocale.zhHant: '清除',
+      AppLocale.en: 'Clear',
+      AppLocale.ja: 'クリア',
+    },
+    'filterActive': {
+      AppLocale.zhHans: '已筛选',
+      AppLocale.zhHant: '已篩選',
+      AppLocale.en: 'Filtered',
+      AppLocale.ja: '絞り込み中',
+    },
 
     // ======== library_root_selector ========
     'selectLibrary': {

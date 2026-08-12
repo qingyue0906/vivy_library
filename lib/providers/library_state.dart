@@ -37,6 +37,7 @@ class LibraryState extends ChangeNotifier {
   String _searchQuery = '';
   SearchScope _searchScope = SearchScope.defaults();
   ClassSource _classSource = ClassSource.class_;
+  ItemFilter _filter = ItemFilter.all();
   String? _selectedCategoryPath; // null=鍏ㄩ儴锛屽惁鍒欎负鏂囦欢澶圭粷瀵硅矾寰?
   String _selectedClass = kAllClass;
   SortField _sortField = SortField.name;
@@ -107,6 +108,7 @@ class LibraryState extends ChangeNotifier {
         '${_classSource}|'
         '${_searchQuery}|'
         '${identityHashCode(_searchScope)}|'
+        '${_filter.types.hashCode}|${_filter.ratings.hashCode}|'
         '${_sortField}|${_sortOrder}|'
         '${_groupingEnabled}';
   }
@@ -130,6 +132,7 @@ class LibraryState extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   SearchScope get searchScope => _searchScope;
   ClassSource get classSource => _classSource;
+  ItemFilter get itemFilter => _filter;
   bool get groupingEnabled => _groupingEnabled;
   double get copyProgress => _copyProgress;
   String get copyStatus => _copyStatus;
@@ -540,6 +543,11 @@ class LibraryState extends ChangeNotifier {
         result = result.where((item) => _matchesSearch(item, parsed)).toList();
       }
     }
+    // 2.5 内容筛选（分级 + 类型白名单）
+    result = result.where((e) {
+      final info = effectiveInfo(e);
+      return _filter.matches(info.type, info.contentRating);
+    }).toList();
     result.sort((a, b) {
       int cmp;
       switch (_sortField) {
@@ -799,6 +807,14 @@ class LibraryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 更新内容筛选（分级 + 类型白名单），即时持久化。
+  void setItemFilter(ItemFilter filter) {
+    _filter = filter;
+    _bumpDataVersion();
+    SettingsService.saveItemFilter(filter);
+    notifyListeners();
+  }
+
   /// 閫変腑宸︿晶鏂囦欢澶癸紙null=鍏ㄩ儴锛夈€?
   void setSelectedCategory(String? path) {
     _selectedCategoryPath = path;
@@ -865,6 +881,7 @@ class LibraryState extends ChangeNotifier {
     _classSource = await SettingsService.loadClassSource();
     _groupingEnabled = await SettingsService.loadGroupingEnabled();
     _showSystemFiles = await SettingsService.loadShowSystemFiles();
+    _filter = await SettingsService.loadItemFilter();
     notifyListeners();
   }
 

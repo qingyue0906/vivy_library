@@ -8,6 +8,7 @@ class TopBar extends StatelessWidget {
   final TextEditingController searchController;
   final VoidCallback onSettingsTap;
   final VoidCallback? onGridDisplayTap;
+  final VoidCallback? onFilterTap;
 
   const TopBar({
     super.key,
@@ -15,6 +16,7 @@ class TopBar extends StatelessWidget {
     required this.searchController,
     required this.onSettingsTap,
     this.onGridDisplayTap,
+    this.onFilterTap,
   });
 
   @override
@@ -36,6 +38,8 @@ class TopBar extends StatelessWidget {
         _buildRefreshButton(c),
         SizedBox(width: 2 * c),
         _buildGridDisplayButton(c),
+        SizedBox(width: 2 * c),
+        _buildFilterButton(context, c),
         SizedBox(width: 2 * c),
         IconButton(
           icon: Icon(Icons.settings, size: 14 * c, color: cs.onSurfaceVariant),
@@ -209,6 +213,26 @@ class TopBar extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
       onPressed: onGridDisplayTap,
+    );
+  }
+
+  /// 内容筛选按钮（位于网格显示设置与设置之间）；筛选非默认全选时高亮。
+  Widget _buildFilterButton(BuildContext context, double c) {
+    if (onFilterTap == null) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    final active = !state.itemFilter.isAll;
+    return IconButton(
+      tooltip: active
+          ? '${Strings.t('contentFilter')} (${Strings.t('filterActive')})'
+          : Strings.t('contentFilter'),
+      icon: Icon(
+        Icons.filter_list,
+        size: 14 * c,
+        color: active ? cs.primary : cs.onSurfaceVariant,
+      ),
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: 22 * c, minHeight: 22 * c),
+      onPressed: onFilterTap,
     );
   }
 }

@@ -20,6 +20,7 @@ import 'detail_panel.dart';
 import 'grid_area.dart';
 import 'top_bar.dart';
 import 'grid_display_settings_panel.dart';
+import 'filter_panel.dart';
 import 'edit_dialog.dart';
 import 'create_item_dialog.dart';
 import '../services/library_root_service.dart';
@@ -178,6 +179,16 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
       builder: (_) => GridDisplaySettingsPanel(
         initial: widget.gridSettings,
         onChanged: widget.onGridSettingsChanged,
+      ),
+    );
+  }
+
+  void _openFilterPanel() {
+    showDialog(
+      context: context,
+      builder: (_) => FilterPanel(
+        initial: _state.itemFilter,
+        onChanged: _state.setItemFilter,
       ),
     );
   }
@@ -379,6 +390,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                           searchController: _searchController,
                           onSettingsTap: _openSettings,
                           onGridDisplayTap: _openGridDisplaySettings,
+                          onFilterTap: _openFilterPanel,
                         ),
                       ),
                     ),
