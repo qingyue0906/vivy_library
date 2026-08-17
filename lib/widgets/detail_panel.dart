@@ -177,6 +177,33 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
   bool get _isFolder => widget.folder != null;
   bool get _isFile => widget.file != null;
 
+  /// 空态判断缓存：文件标签页在项目为空时用 SliverFillRemaining 铺满剩余空间。
+  /// 与 FileBrowserPanel 的读盘缓存一样，按 item.path + showSystemFiles 缓存，
+  /// 避免面板每帧重建时反复 listSync 读盘。
+  String? _filesEmptyKey;
+  bool _filesTabEmpty = false;
+
+  bool _isFilesTabEmpty() {
+    final it = widget.item;
+    if (it == null) return false;
+    if (widget.showBottomFilePanel) return false;
+    final st = widget.state;
+    if (st == null || widget.scriptService == null) return false;
+    final key = '${it.path}|${st.showSystemFiles}';
+    if (key != _filesEmptyKey) {
+      _filesEmptyKey = key;
+      _filesTabEmpty = browserShowsEmptyState(it.path, st.showSystemFiles);
+    }
+    return _filesTabEmpty;
+  }
+
+  /// 嵌入文件浏览器拖入文件后回调：失效空态缓存并重建，
+  /// 让目录由空转非空时立刻从拖放区切回文件网格。
+  void _onEmbeddedFilesImported() {
+    _filesEmptyKey = null;
+    if (mounted) setState(() {});
+  }
+
   /// 依据当前选中对象的类型决定要展示哪些标签页。
   /// 底部文件面板开启时 item 无"文件"标签页（文件在底部面板查看）；
   /// 文件夹的"文件"标签页始终移除（信息与元数据重复，无文件浏览区）。
@@ -258,6 +285,11 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
         _tabController.index == filesTabIndex;
     // 整页一体滚动：头部、TabBar、当前标签内容共用一个滚动视图，
     // 滚轮滚动整个预览面板，而非只有标签下方的内容滚动。
+    final activeTab = specs[_tabController.index].key;
+    final tabContent = _tabContent(context, c, cs, activeTab);
+    // 文件标签页处于空状态时用 SliverFillRemaining 铺满 tab 下方剩余空间，
+    // 让拖放区至少占满剩余高度，并随窗口拉高/缩小自动伸缩。
+    final filesTabEmpty = activeTab == _DetailTab.files && _isFilesTabEmpty();
     final body = SmoothScroll(
       builder: (context, controller, physics) {
         return CustomScrollView(
@@ -269,9 +301,12 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
             SliverPadding(
               padding: EdgeInsets.fromLTRB(12 * c, 4 * c, 12 * c,
                   fabVisible ? 16 * c + 52 : 16 * c),
-              sliver: SliverToBoxAdapter(
-                child: _tabContent(context, c, cs, specs[_tabController.index].key),
-              ),
+              sliver: filesTabEmpty
+                  ? SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: tabContent,
+                    )
+                  : SliverToBoxAdapter(child: tabContent),
             ),
           ],
         );
@@ -622,15 +657,19 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
 
   /// "文件"标签页内容：仅在 item 且底部文件面板关闭时存在，
   /// 直接显示嵌入的文件浏览区（信息行与"元数据"标签页重复，已移除）。
+  /// 空状态时不再包 Column+SizedBox，避免在 SliverFillRemaining 的
+  /// 紧高度约束下出现 4px 溢出。
   Widget _filesContent(BuildContext context, double c) {
     if (widget.state == null || widget.scriptService == null) {
       return const SizedBox.shrink();
     }
+    final browser = _buildEmbeddedBrowser(context);
+    if (_isFilesTabEmpty()) return browser;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: 4 * c),
-        _buildEmbeddedBrowser(context),
+        browser,
       ],
     );
   }
@@ -650,6 +689,7 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
       backgroundOpacity: widget.backgroundOpacity,
       gifMode: widget.gifMode,
       embedded: true,
+      onFilesImported: _onEmbeddedFilesImported,
       onPlayProject: v == null ? null : () => v(it),
       onPlayVideoFile: v == null ? null : (path) => v(it, startPath: path),
       onPlayAudioProject: a == null ? null : () => a(it),

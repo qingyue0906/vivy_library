@@ -22,6 +22,26 @@ import 'gif_image.dart';
 import 'script_result_dialog.dart';
 import 'smooth_scroll.dart';
 
+/// 判断目录在文件浏览器当前设置下是否显示"空状态"（目录不存在 / 为空 /
+/// 仅含 Info/Preview 等隐藏系统文件）。供父面板决定是否让内容铺满剩余空间。
+bool browserShowsEmptyState(String itemPath, bool showSystemFiles) {
+  final dir = Directory(itemPath);
+  if (!dir.existsSync()) return true;
+  final entries = dir
+      .listSync()
+      .where((e) => e is File || e is Directory)
+      .toList();
+  if (entries.isEmpty) return true;
+  if (showSystemFiles) return false;
+  for (final e in entries) {
+    final name = e.path.replaceAll('\\', '/').split('/').last.toLowerCase();
+    final isInfo = name == 'info.json';
+    final isPreview = previewExtensions.any((ext) => name == 'preview$ext');
+    if (!isInfo && !isPreview) return false;
+  }
+  return true;
+}
+
 class FileBrowserPanel extends StatefulWidget {
   final LibraryItem item;
   final LibraryState state;
@@ -42,6 +62,7 @@ class FileBrowserPanel extends StatefulWidget {
   final VoidCallback? onBrowseMarkdownProject;
   final void Function(String path)? onBrowseMarkdownFile;
   final bool embedded; // 嵌入右侧面板时隐藏无意义的 ✕ 关闭按钮
+  final VoidCallback? onFilesImported; // 拖入文件复制完成后回调（用于失效外层空态缓存）
 
   const FileBrowserPanel({
     super.key,
@@ -64,6 +85,7 @@ class FileBrowserPanel extends StatefulWidget {
     this.onBrowseMarkdownProject,
     this.onBrowseMarkdownFile,
     this.embedded = false,
+    this.onFilesImported,
   });
 
   @override
@@ -301,10 +323,6 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
 
   Widget _buildFileGrid(BuildContext context, double c, {bool shrinkWrap = false}) {
     final raw = _getRawList();
-    if (raw.isEmpty) {
-      return Center(child: Text(Strings.t('folderNotExist')));
-    }
-
     final visible = widget.state.showSystemFiles
         ? raw
         : raw.where((f) {
@@ -316,12 +334,15 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
 
     final visiblePaths = visible.map((e) => e.path).toList();
 
-    if (visible.isEmpty) {
+    // 空状态（目录不存在 / 为空 / 仅含隐藏系统文件）：
+    // 与底部面板一致，包一层 DropTarget，整块剩余区域都能拖入文件。
+    if (raw.isEmpty || visible.isEmpty) {
+      final dirMissing = !Directory(widget.item.path).existsSync();
       return _buildDropTarget(
         c,
         Center(
           child: Text(
-            Strings.t('noFiles'),
+            dirMissing ? Strings.t('folderNotExist') : Strings.t('noFiles'),
             style: TextStyle(color: Colors.grey.shade500, fontSize: 12 * c),
           ),
         ),
@@ -390,6 +411,12 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     );
   }
 
+  /// 拖入文件后清空目录列举缓存，让下一次 build 重新读盘。
+  void _invalidateRawCache() {
+    _rawListPath = null;
+    _rawListCache = null;
+  }
+
   /// 用 DropTarget 包裹：拖入文件即复制到 item.path。
   Widget _buildDropTarget(double c, Widget child, List<String> visiblePaths) {
     return DropTarget(
@@ -403,14 +430,14 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         if (widget.state.modalDropActive) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
+          _invalidateRawCache();
           widget.state.copyFilesToDirectory(paths, widget.item.path);
+          widget.onFilesImported?.call();
         }
       },
       child: child,
     );
   }
-
-
 
   Widget _buildFileItem(BuildContext context, FileSystemEntity file, double c) {
     return _FileGridItem(

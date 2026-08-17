@@ -1334,6 +1334,8 @@ class LibraryState extends ChangeNotifier {
         onFileDone: onFileDone,
       );
     } else {
+      // 目标父目录可能不存在（如拖入已被删除的项目文件夹），先创建再复制。
+      await File(dest).parent.create(recursive: true);
       await File(src).copy(dest);
       onFileDone?.call();
     }
