@@ -1295,13 +1295,6 @@ class LibraryState extends ChangeNotifier {
   void showCopyComplete(String message) {
     _copyShowTimer?.cancel();
     if (_disposed) return;
-    if (!_copyBarShown) {
-      // 快速复制：进度条从未显示，直接隐藏，不打扰
-      _copyProgress = -1;
-      _copyStatus = '';
-      notifyListeners();
-      return;
-    }
     final seq = _copySeq;
     _copyProgress = 1.0;
     _copyStatus = message;

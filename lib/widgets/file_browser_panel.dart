@@ -425,13 +425,17 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         setState(() => _isDragOver = true);
       },
       onDragExited: (_) => setState(() => _isDragOver = false),
-      onDragDone: (detail) {
+      onDragDone: (detail) async {
         setState(() => _isDragOver = false);
         if (widget.state.modalDropActive) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {
+          // 等待复制真正完成、文件落盘后再失效目录列举缓存并强制重建。
+          // 不能在复制前失效：复制期间的中间重建会把仍为空的目录重新写回
+          // 缓存，导致复制完成后 listSync 命中陈旧空缓存、新文件不显示。
+          await widget.state.copyFilesToDirectory(paths, widget.item.path);
           _invalidateRawCache();
-          widget.state.copyFilesToDirectory(paths, widget.item.path);
+          if (mounted) setState(() {});
           widget.onFilesImported?.call();
         }
       },

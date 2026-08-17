@@ -173,6 +173,13 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  /// 嵌入文件浏览器的稳定 key：空态→非空态切换时结构会从 SliverFillRemaining
+  /// 变为 SliverToBoxAdapter+Column，导致 FileBrowserPanel 在元素树中的位置
+  /// 改变。若无 key，其 State（含 DropTarget 全局监听）会被销毁重建，desktop_drop
+  /// 的全局监听器在 dispose→re-register 时序下会破坏后续拖入；用 GlobalKey
+  /// 保持元素复用即可让拖入持续可用（与底部文件面板的 _panelKey 同理）。
+  final GlobalKey _embeddedBrowserKey = GlobalKey();
+
   bool get _isItem => widget.item != null;
   bool get _isFolder => widget.folder != null;
   bool get _isFile => widget.file != null;
@@ -683,6 +690,7 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     final h = widget.onOpenEdgeHtml;
     final m = widget.onOpenMarkdown;
     return FileBrowserPanel(
+      key: _embeddedBrowserKey,
       item: it,
       state: widget.state!,
       scriptService: widget.scriptService!,
