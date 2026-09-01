@@ -790,8 +790,11 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
 
   /// 打开内置图片/漫画阅读器：递归扫描项目内所有图片与 zip/cbz 构建阅读列表，
   /// [startPath] 指定从哪张图片/压缩包开始阅读（底部面板双击图片/压缩包时传入）。
+  /// 双击单个压缩包时只索引该包（避免递归扫描整个项目目录）。
   Future<void> _openComicReader(LibraryItem item, {String? startPath}) async {
-    final playlist = await ComicPlaylistService.build(item);
+    final playlist = (startPath != null && ComicPlaylistService.isArchiveFile(startPath))
+        ? await ComicPlaylistService.buildFromArchive(startPath)
+        : await ComicPlaylistService.build(item);
     // 预加载阅读偏好以填充同步缓存，避免首帧按默认闪现后跳变。
     await SettingsService.loadReaderLayoutMode();
     await SettingsService.loadReaderDirection();

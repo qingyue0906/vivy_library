@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:archive/archive.dart' show Archive, ZipDecoder;
+import 'package:archive/archive.dart'
+    show Archive, InputFileStream, ZipDecoder;
 import 'package:path/path.dart' as p;
 import '../models/library_item.dart';
 import '../models/comic_page.dart';
@@ -35,8 +36,10 @@ class ComicPlaylistService {
   static final List<String> _indexLru = [];
   static const _maxCachedIndexes = 4;
 
-  /// 回退路径用的整包解码缓存（zip 中心目录解析失败时使用）。
-  static final Map<String, Archive> _archiveCache = {};
+  /// 回退路径用的流式解码缓存（zip 中心目录解析失败时使用）。
+  /// archive 包的 zip 条目内容是惰性的：条目数据按需从 [InputFileStream]
+  /// 读取，因此流必须保持打开直到缓存被淘汰，淘汰/清空时 close 释放句柄。
+  static final Map<String, _ArchiveHandle> _archiveCache = {};
   static final List<String> _archiveLru = [];
   static const _maxCachedArchives = 4;
 
@@ -48,7 +51,9 @@ class ComicPlaylistService {
   static int _cachedPageBytes = 0;
 
   /// 读取压缩包中心目录索引：只读包尾 EOCD + 中央目录（不读整包）。
-  /// 标准 zip/cbz 成功返回索引；zip64 或格式异常返回 null（调用方回退整包解码）。
+  /// 支持 zip64（包 >4GB 或条目 >65535）：通过 Zip64 EOCD Locator/Record
+  /// 与条目 extra field 0x0001 读取 64 位大小与偏移。
+  /// 解析失败返回 null（调用方回退到 InputFileStream 流式解码，同样不整包入内存）。
   static Future<_ZipIndex?> _readZipIndex(String archivePath) async {
     final file = File(archivePath);
     final length = await file.length();
@@ -70,13 +75,17 @@ class ComicPlaylistService {
       }
       if (eocdPos < 0) return null;
 
-      final totalEntries = _u16(tail, eocdPos + 10);
-      final cdSize = _u32(tail, eocdPos + 12);
-      final cdOffset = _u32(tail, eocdPos + 16);
-      // zip64 标志：回退旧路径
+      var totalEntries = _u16(tail, eocdPos + 10);
+      var cdSize = _u32(tail, eocdPos + 12);
+      var cdOffset = _u32(tail, eocdPos + 16);
+      // zip64 标志：EOCD 字段为 0xFFFF/0xFFFFFFFF 时读取 Zip64 记录。
       if (totalEntries == 0xFFFF || cdSize == 0xFFFFFFFF ||
           cdOffset == 0xFFFFFFFF) {
-        return null;
+        final parsed = await _readZip64Eocd(raf, tail, eocdPos);
+        if (parsed == null) return null;
+        totalEntries = parsed.$1;
+        cdSize = parsed.$2;
+        cdOffset = parsed.$3;
       }
 
       await raf.setPosition(cdOffset);
@@ -87,16 +96,42 @@ class ComicPlaylistService {
       while (pos + 46 <= cd.length) {
         if (_u32(cd, pos) != 0x02014b50) break;
         final method = _u16(cd, pos + 10);
-        final compressedSize = _u32(cd, pos + 20);
-        final uncompressedSize = _u32(cd, pos + 24);
+        var compressedSize = _u32(cd, pos + 20);
+        var uncompressedSize = _u32(cd, pos + 24);
         final nameLen = _u16(cd, pos + 28);
         final extraLen = _u16(cd, pos + 30);
         final commentLen = _u16(cd, pos + 32);
-        final localHeaderOffset = _u32(cd, pos + 42);
+        var localHeaderOffset = _u32(cd, pos + 42);
         final name = utf8.decode(
           cd.sublist(pos + 46, pos + 46 + nameLen),
           allowMalformed: true,
         );
+        // Zip64 extended information (extra id 0x0001)：仅当对应 u32 字段
+        // 为 0xFFFFFFFF 时按固定顺序补齐 64 位值。
+        var ex = pos + 46 + nameLen;
+        final exEnd = ex + extraLen;
+        while (ex + 4 <= exEnd) {
+          final id = _u16(cd, ex);
+          final size = _u16(cd, ex + 2);
+          final dataStart = ex + 4;
+          final dataEnd = dataStart + size;
+          if (id == 0x0001) {
+            var p = dataStart;
+            if (uncompressedSize == 0xFFFFFFFF && p + 8 <= dataEnd) {
+              uncompressedSize = _u64(cd, p);
+              p += 8;
+            }
+            if (compressedSize == 0xFFFFFFFF && p + 8 <= dataEnd) {
+              compressedSize = _u64(cd, p);
+              p += 8;
+            }
+            if (localHeaderOffset == 0xFFFFFFFF && p + 8 <= dataEnd) {
+              localHeaderOffset = _u64(cd, p);
+              p += 8;
+            }
+          }
+          ex = dataEnd;
+        }
         // 跳过目录条目（名称以 / 或 \ 结尾）
         if (!name.endsWith('/') && !name.endsWith('\\')) {
           entries.add(_ZipEntry(
@@ -116,6 +151,30 @@ class ComicPlaylistService {
     } finally {
       await raf.close();
     }
+  }
+
+  /// 读取 Zip64 EOCD：定位器（0x07064b50）固定位于 EOCD 前 20 字节，
+  /// 内含 Zip64 EOCD Record 偏移；Record（0x06064b50）从 +32 起依次为
+  /// 8 字节 totalEntries、cdSize、cdOffset。返回 (totalEntries, cdSize, cdOffset)。
+  static Future<(int, int, int)?> _readZip64Eocd(
+    RandomAccessFile raf,
+    List<int> tail,
+    int eocdPos,
+  ) async {
+    final locPos = eocdPos - 20;
+    if (locPos < 0 || _u32(tail, locPos) != 0x07064b50) return null;
+    final zip64EocdOffset = _u64(tail, locPos + 8);
+    await raf.setPosition(zip64EocdOffset);
+    final rec = await raf.read(56);
+    if (rec.length != 56 || _u32(rec, 0) != 0x06064b50) return null;
+    var totalEntries = _u64(rec, 32);
+    if (totalEntries == 0) totalEntries = _u64(rec, 24);
+    final cdSize = _u64(rec, 40);
+    final cdOffset = _u64(rec, 48);
+    if (cdSize == 0 || cdSize == 0xFFFFFFFF || cdOffset == 0xFFFFFFFF) {
+      return null;
+    }
+    return (totalEntries, cdSize, cdOffset);
   }
 
   static Future<_ZipIndex?> _getZipIndex(String archivePath) async {
@@ -176,7 +235,11 @@ class ComicPlaylistService {
     }
   }
 
-  static Future<Archive> _getArchive(String archivePath) async {
+  /// 回退：流式解码压缩包（不再 readAsBytes 整包入内存）。
+  /// [InputFileStream] 为随机访问 + 缓冲的文件流，只读中央目录与所需条目数据；
+  /// 条目内容惰性解压，峰值内存 = 单页大小而非整包大小。
+  /// 同步文件 IO 会短暂占用调用线程（P1 将迁移到 worker isolate）。
+  static _ArchiveHandle? _getArchive(String archivePath) {
     final cached = _archiveCache[archivePath];
     if (cached != null) {
       _archiveLru
@@ -184,15 +247,20 @@ class ComicPlaylistService {
         ..add(archivePath);
       return cached;
     }
-    final bytes = await File(archivePath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
-    _archiveCache[archivePath] = archive;
-    _archiveLru.add(archivePath);
-    while (_archiveLru.length > _maxCachedArchives) {
-      final evict = _archiveLru.removeAt(0);
-      _archiveCache.remove(evict);
+    try {
+      final stream = InputFileStream(archivePath, bufferSize: 1 << 20);
+      final archive = ZipDecoder().decodeStream(stream);
+      final handle = _ArchiveHandle(archive, stream);
+      _archiveCache[archivePath] = handle;
+      _archiveLru.add(archivePath);
+      while (_archiveLru.length > _maxCachedArchives) {
+        final evict = _archiveLru.removeAt(0);
+        _archiveCache.remove(evict)?.stream.closeSync();
+      }
+      return handle;
+    } catch (_) {
+      return null;
     }
-    return archive;
   }
 
   static void _cachePage(String id, Uint8List bytes) {
@@ -230,29 +298,29 @@ class ComicPlaylistService {
         _cachePage(page.id, bytes);
         return bytes;
       }
-      // 优先：中心目录索引按条目读取（整包不常驻内存）
+      // 优先：中心目录索引按条目读取（整包不常驻内存，O(1) 查找）
       final index = await _getZipIndex(page.archivePath!);
       if (index != null) {
-        for (final e in index.entries) {
-          if (e.name == page.entryName) {
-            final bytes = await _readEntryBytes(page.archivePath!, e);
-            if (bytes != null) {
-              _cachePage(page.id, bytes);
-              return bytes;
-            }
-            break;
+        final e = index.byName[page.entryName];
+        if (e != null) {
+          final bytes = await _readEntryBytes(page.archivePath!, e);
+          if (bytes != null) {
+            _cachePage(page.id, bytes);
+            return bytes;
           }
         }
       }
-      // 回退：整包解码后找条目（zip64 等解析失败场景）
-      final archive = await _getArchive(page.archivePath!);
-      for (final f in archive.files) {
-        if (f.isFile && f.name == page.entryName) {
-          final content = f.content as List<int>;
-          final bytes =
-              content is Uint8List ? content : Uint8List.fromList(content);
-          _cachePage(page.id, bytes);
-          return bytes;
+      // 回退：流式解码后找条目（zip64 记录异常等解析失败场景，同样不整包入内存）
+      final handle = _getArchive(page.archivePath!);
+      if (handle != null) {
+        for (final f in handle.archive.files) {
+          if (f.isFile && f.name == page.entryName) {
+            final content = f.content as List<int>;
+            final bytes =
+                content is Uint8List ? content : Uint8List.fromList(content);
+            _cachePage(page.id, bytes);
+            return bytes;
+          }
         }
       }
       return null;
@@ -268,6 +336,9 @@ class ComicPlaylistService {
     _cachedPageBytes = 0;
     _indexCache.clear();
     _indexLru.clear();
+    for (final h in _archiveCache.values) {
+      h.stream.closeSync();
+    }
     _archiveCache.clear();
     _archiveLru.clear();
   }
@@ -276,6 +347,16 @@ class ComicPlaylistService {
 
   static int _u32(List<int> b, int o) =>
       b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24);
+
+  static int _u64(List<int> b, int o) =>
+      b[o] |
+      (b[o + 1] << 8) |
+      (b[o + 2] << 16) |
+      (b[o + 3] << 24) |
+      (b[o + 4] << 32) |
+      (b[o + 5] << 40) |
+      (b[o + 6] << 48) |
+      (b[o + 7] << 56);
 
   /// 构建项目内全部图片/压缩包的阅读列表。
   static Future<ComicPlaylist> build(LibraryItem item) =>
@@ -291,6 +372,17 @@ class ComicPlaylistService {
     final entries = <ComicPage>[];
     _collect(rootNode, entries);
     return ComicPlaylist(entries: entries, tree: [rootNode]);
+  }
+
+  /// 直接以单个 zip/cbz 压缩包构建阅读列表（双击压缩包场景）。
+  /// 只索引这一个包，避免递归扫描整个项目目录（大项目下会逐个读
+  /// 无关包的中央目录，非常慢）。
+  static Future<ComicPlaylist> buildFromArchive(String archivePath) async {
+    final node = await _buildArchiveNode(archivePath);
+    if (node == null) return ComicPlaylist(entries: [], tree: []);
+    final entries = <ComicPage>[];
+    _collect(node, entries);
+    return ComicPlaylist(entries: entries, tree: [node]);
   }
 
   static Future<void> _scan(Directory dir, ComicFolderNode node) async {
@@ -338,7 +430,7 @@ class ComicPlaylistService {
   }
 
   /// 将 zip/cbz 解析为一个“虚拟文件夹”节点，列出其内的图片条目。
-  /// 优先用中心目录索引（只读包尾，不加载整包）；解析失败回退整包解码。
+  /// 优先用中心目录索引（只读包尾，不加载整包）；解析失败回退流式解码。
   static Future<ComicFolderNode?> _buildArchiveNode(String archivePath) async {
     final index = await _getZipIndex(archivePath);
     if (index != null) {
@@ -364,7 +456,9 @@ class ComicPlaylistService {
       return node.files.isEmpty ? null : node;
     }
     try {
-      final archive = await _getArchive(archivePath);
+      final handle = _getArchive(archivePath);
+      if (handle == null) return null;
+      final archive = handle.archive;
       final node = ComicFolderNode(
         p.basename(archivePath),
         archivePath,
@@ -446,9 +540,19 @@ class ComicPlaylistService {
 }
 
 /// zip/cbz 中心目录索引（仅条目元数据，不持有包内容）。
+/// [byName] 提供条目名 O(1) 查找，避免大包（数万条目）翻页时的线性扫描。
 class _ZipIndex {
   final List<_ZipEntry> entries;
-  const _ZipIndex(this.entries);
+  final Map<String, _ZipEntry> byName;
+  _ZipIndex(this.entries) : byName = {for (final e in entries) e.name: e};
+}
+
+/// 流式解码句柄：Archive 的条目内容惰性引用 [stream]（随机访问文件流），
+/// 因此流必须保持打开，直到缓存淘汰或 [ComicPlaylistService.clearCache]。
+class _ArchiveHandle {
+  final Archive archive;
+  final InputFileStream stream;
+  const _ArchiveHandle(this.archive, this.stream);
 }
 
 /// 中心目录中的单个文件条目。
