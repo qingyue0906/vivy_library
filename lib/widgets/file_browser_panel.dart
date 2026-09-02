@@ -42,6 +42,23 @@ bool browserShowsEmptyState(String itemPath, bool showSystemFiles) {
   return true;
 }
 
+/// 文件面板展示用的轻量条目（磁盘实体或快照虚拟条目的统一抽象）。
+class _FileEntry {
+  final String path;
+  final String name;
+  final bool isDir;
+  final int sizeInBytes;
+  final DateTime modifiedTime;
+
+  const _FileEntry({
+    required this.path,
+    required this.name,
+    required this.isDir,
+    this.sizeInBytes = 0,
+    required this.modifiedTime,
+  });
+}
+
 class FileBrowserPanel extends StatefulWidget {
   final LibraryItem item;
   final LibraryState state;
@@ -99,10 +116,34 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   /// 目录列举结果缓存：拖动底部分隔条时本面板每帧重建，但 item.path
   /// 与 showSystemFiles 不变，故缓存一次即可，避免每帧同步 listSync 读盘造成卡顿。
   String? _rawListPath;
-  List<FileSystemEntity>? _rawListCache;
+  List<_FileEntry>? _rawListCache;
 
-  List<FileSystemEntity> _getRawList() {
+  /// 快照模式下受限操作统一 toast 提示。
+  void _snapshotToast() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(Strings.t('snapshotNotSupported')),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  /// 取文件清单：快照模式用快照内记录的只读虚拟列表；正常模式读盘。
+  List<_FileEntry> _getRawList() {
     final path = widget.item.path;
+    if (widget.state.isSnapshotMode) {
+      final entries = widget.state.snapshotItemFiles[path] ?? const [];
+      return [
+        for (final e in entries)
+          _FileEntry(
+            path: '$path${Platform.pathSeparator}${e.name}',
+            name: e.name,
+            isDir: e.isDir,
+            sizeInBytes: e.sizeInBytes,
+            modifiedTime: e.modifiedTime,
+          ),
+      ];
+    }
     if (path == _rawListPath && _rawListCache != null) return _rawListCache!;
     final dir = Directory(path);
     if (!dir.existsSync()) {
@@ -111,8 +152,25 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
       _rawListCache = dir
           .listSync()
           .where((e) => e is File || e is Directory)
-          .toList()
-        ..sort((a, b) => _baseName(a.path).compareTo(_baseName(b.path)));
+          .map((e) {
+        final name = _baseName(e.path);
+        final isDir = e is Directory;
+        var size = 0;
+        DateTime modified = DateTime.now();
+        try {
+          final stat = e.statSync();
+          size = isDir ? 0 : stat.size;
+          modified = stat.modified;
+        } catch (_) {}
+        return _FileEntry(
+          path: e.path,
+          name: name,
+          isDir: isDir,
+          sizeInBytes: size,
+          modifiedTime: modified,
+        );
+      }).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
     }
     _rawListPath = path;
     return _rawListCache!;
@@ -337,7 +395,9 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     // 空状态（目录不存在 / 为空 / 仅含隐藏系统文件）：
     // 与底部面板一致，包一层 DropTarget，整块剩余区域都能拖入文件。
     if (raw.isEmpty || visible.isEmpty) {
-      final dirMissing = !Directory(widget.item.path).existsSync();
+      // 快照模式下原目录必然不存在，统一显示"无文件"而非"文件夹不存在"
+      final dirMissing = !widget.state.isSnapshotMode &&
+          !Directory(widget.item.path).existsSync();
       return _buildDropTarget(
         c,
         Center(
@@ -419,6 +479,8 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
 
   /// 用 DropTarget 包裹：拖入文件即复制到 item.path。
   Widget _buildDropTarget(double c, Widget child, List<String> visiblePaths) {
+    // 快照模式只读：不接收拖放
+    if (widget.state.isSnapshotMode) return child;
     return DropTarget(
       onDragEntered: (_) {
         if (widget.state.modalDropActive) return;
@@ -443,11 +505,12 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     );
   }
 
-  Widget _buildFileItem(BuildContext context, FileSystemEntity file, double c) {
+  Widget _buildFileItem(BuildContext context, _FileEntry file, double c) {
     return _FileGridItem(
       file: file,
       compactLevel: c,
       gifMode: widget.gifMode,
+      virtualMode: widget.state.isSnapshotMode,
       isSelected: widget.state.isBrowserSelected(file.path),
       selectedPaths: widget.state.selectedBrowserPaths,
       onTap: () {
@@ -464,6 +527,11 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         widget.state.selectBrowserRange(file.path, list);
       },
       onDoubleTap: () {
+        // 快照模式只读：双击不打开
+        if (widget.state.isSnapshotMode) {
+          _snapshotToast();
+          return;
+        }
         final ext = file.path.toLowerCase().split('.').last;
         final isVid = const {
           'mp4',
@@ -497,11 +565,18 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
           _openFile(file.path);
         }
       },
-      onRightClick: (globalPos) => _showContextMenu(context, file, globalPos),
+      onRightClick: (globalPos) {
+        // 快照模式只读：右键不弹操作菜单，统一 toast 提示
+        if (widget.state.isSnapshotMode) {
+          _snapshotToast();
+          return;
+        }
+        _showContextMenu(context, file, globalPos);
+      },
     );
   }
 
-  void _showContextMenu(BuildContext context, FileSystemEntity file, Offset globalPos) {
+  void _showContextMenu(BuildContext context, _FileEntry file, Offset globalPos) {
     widget.state.selectBrowserForContextMenu(file.path);
     final selected = widget.state.selectedBrowserPaths.toList();
     final isBatch = selected.length > 1;
@@ -658,7 +733,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
         case 'properties':
           showDialog(
             context: context,
-            builder: (_) => FilePropertiesDialog(file: file),
+            builder: (_) => FilePropertiesDialog(file: File(file.path)),
           );
         case 'deselect':
           widget.state.clearBrowserSelection();
@@ -706,7 +781,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
     }
   }
 
-  void _showRenameDialog(BuildContext context, FileSystemEntity file) {
+  void _showRenameDialog(BuildContext context, _FileEntry file) {
     final currentName = _baseName(file.path);
     final dotIndex = currentName.lastIndexOf('.');
     final nameWithoutExt =
@@ -744,7 +819,7 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
   }
 
   Future<void> _doRename(
-      BuildContext dialogContext, FileSystemEntity file, String newName) async {
+      BuildContext dialogContext, _FileEntry file, String newName) async {
     if (newName.isEmpty) return;
     Navigator.pop(dialogContext);
 
@@ -832,9 +907,11 @@ class _FileBrowserPanelState extends State<FileBrowserPanel> {
 }
 
 class _FileGridItem extends StatefulWidget {
-  final FileSystemEntity file;
+  final _FileEntry file;
   final double compactLevel;
   final GifDisplayMode gifMode;
+  /// 快照虚拟模式：文件内容不存在，不渲染图片缩略图（只显示图标）。
+  final bool virtualMode;
   final bool isSelected;
   final Set<String> selectedPaths;
   final VoidCallback onTap;
@@ -847,6 +924,7 @@ class _FileGridItem extends StatefulWidget {
     required this.file,
     required this.compactLevel,
     required this.gifMode,
+    required this.virtualMode,
     required this.isSelected,
     required this.selectedPaths,
     required this.onTap,
@@ -888,8 +966,9 @@ class _FileGridItemState extends State<_FileGridItem> {
     final c = widget.compactLevel;
     final cs = Theme.of(context).colorScheme;
     final name = _baseName(widget.file.path);
-    final isDir = widget.file is Directory;
+    final isDir = widget.file.isDir;
     final isImage = !isDir &&
+        !widget.virtualMode &&
         previewExtensions.any((ext) => name.toLowerCase().endsWith(ext));
 
     final selectedBorder = widget.isSelected
@@ -930,7 +1009,7 @@ class _FileGridItemState extends State<_FileGridItem> {
                       ? _buildFileIcon(name, c, isDir: true)
                       : (isImage
                           ? GifImage(
-                              file: widget.file as File,
+                              file: File(widget.file.path),
                               gifMode: widget.gifMode,
                               cacheWidth: 120,
                               fit: BoxFit.cover,

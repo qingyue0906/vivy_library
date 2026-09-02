@@ -196,10 +196,13 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
     if (widget.showBottomFilePanel) return false;
     final st = widget.state;
     if (st == null || widget.scriptService == null) return false;
-    final key = '${it.path}|${st.showSystemFiles}';
+    final key = '${it.path}|${st.showSystemFiles}|${st.isSnapshotMode}';
     if (key != _filesEmptyKey) {
       _filesEmptyKey = key;
-      _filesTabEmpty = browserShowsEmptyState(it.path, st.showSystemFiles);
+      // 快照模式：原目录不存在，空态由快照内记录的文件清单决定
+      _filesTabEmpty = st.isSnapshotMode
+          ? (st.snapshotItemFiles[it.path]?.isEmpty ?? true)
+          : browserShowsEmptyState(it.path, st.showSystemFiles);
     }
     return _filesTabEmpty;
   }

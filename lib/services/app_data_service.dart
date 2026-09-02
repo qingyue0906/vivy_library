@@ -80,6 +80,11 @@ class AppDataService {
     );
   }
 
+  /// 公开的原子写入口：供快照等服务向自己的 JSON 文件写入内容
+  /// （串行化 + 唯一临时文件 + rename 重试，避免并发/被占用失败）。
+  static Future<void> writeText(String targetPath, String content) =>
+      _atomicWrite(targetPath, content);
+
   static Future<String?> getString(String key) async {
     final data = await loadSettings();
     return data[key] as String?;

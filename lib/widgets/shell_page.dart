@@ -322,6 +322,60 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     );
                   },
                 ),
+                // 快照模式常驻警告栏：提示当前为快照预览（只读），右侧返回资源库
+                ListenableBuilder(
+                  listenable: _state,
+                  builder: (context, _) {
+                    final snap = _state.activeSnapshot;
+                    if (!_state.isSnapshotMode || snap == null) {
+                      return const SizedBox.shrink();
+                    }
+                    final cs = Theme.of(context).colorScheme;
+                    final dark = cs.brightness == Brightness.dark;
+                    final bg =
+                        dark ? Colors.amber.shade900 : Colors.amber.shade100;
+                    final fg = dark
+                        ? Colors.amber.shade100
+                        : Colors.amber.shade900;
+                    return Container(
+                      height: 30,
+                      color: bg,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 16, color: fg),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              Strings.tn('snapshotModeBanner', {
+                                'name': snap.name,
+                                'time': _formatSnapshotTime(snap.createdAt),
+                              }),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: fg),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _exitSnapshot,
+                            style: TextButton.styleFrom(
+                              foregroundColor: fg,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 0),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              Strings.t('backToLibrary'),
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -329,6 +383,26 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
         ),
       ),
     );
+  }
+
+  /// 快照警告栏时间格式：yyyy-MM-dd HH:mm。
+  String _formatSnapshotTime(DateTime dt) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+        '${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  /// 退出快照并返回源资源库；源路径已不存在时提示用户。
+  Future<void> _exitSnapshot() async {
+    final ok = await _state.exitSnapshot();
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Strings.t('snapshotBackSourceMissing')),
+          backgroundColor: Colors.orange.shade700,
+        ),
+      );
+    }
   }
 
   Widget _buildTitleBar(ColorScheme cs) {
@@ -457,7 +531,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
             child: SizedBox(
               height: 24 * c,
               child: LibraryRootSelector(
-                currentPath: '',
+                state: _state,
                 onRootSelected: _onRootSelected,
               ),
             ),
@@ -496,7 +570,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                     padding: const EdgeInsets.all(6),
                     color: cs.surfaceContainerLow.withValues(alpha: leftAlpha),
                     child: LibraryRootSelector(
-                      currentPath: _state.currentRootPath,
+                      state: _state,
                       onRootSelected: _onRootSelected,
                     ),
                   ),
@@ -638,6 +712,19 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
                 onOpenEdgeHtml: _openEdgeHtml,
                 onOpenMarkdown: _openMarkdown,
                 onGotoTap: (entry) async {
+                  // 快照模式下原路径不可用：path 型 goto 直接拦截提示，
+                  // uuid 型保留（快照内只读导航）
+                  if (_state.isSnapshotMode &&
+                      entry.path != null &&
+                      entry.path!.isNotEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(Strings.t('snapshotNotSupported')),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                    return;
+                  }
                   bool ok;
                   if (entry.path != null && entry.path!.isNotEmpty) {
                     if (_state.selectedItem == null) return;
@@ -709,9 +796,22 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     ));
   }
 
+  /// 快照模式下受限操作统一拦截：toast 提示并返回 true（已拦截）。
+  bool _snapshotBlocked() {
+    if (!_state.isSnapshotMode) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(Strings.t('snapshotNotSupported')),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+    return true;
+  }
+
   /// 打开内置视频播放器：递归扫描项目内所有视频构建播放列表，
   /// [startPath] 指定从哪个视频开始播放（底部面板双击视频文件时传入）。
   Future<void> _openVideoPlayer(LibraryItem item, {String? startPath}) async {
+    if (_snapshotBlocked()) return;
     final playlist = await VideoPlaylistService.build(item);
     final playlistWidth = await SettingsService.loadPlayerPlaylistWidth();
     // 预加载播放列表/毫秒开关以填充同步缓存，避免播放器首帧按默认闪现后跳变。
@@ -752,6 +852,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// 打开内置音频播放器：递归扫描项目内所有音频构建播放列表，
   /// [startPath] 指定从哪个音频开始播放（底部面板双击音频文件时传入）。
   Future<void> _openAudioPlayer(LibraryItem item, {String? startPath}) async {
+    if (_snapshotBlocked()) return;
     // 同一项目只扫描构建一次；之后每次打开都克隆独立副本（meta 保留），
     // 使页面级排序/展开/当前索引等状态互不干扰，且不再重复读盘/重探。
     final built = _audioPlaylistCache[item.path] ??=
@@ -792,6 +893,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// [startPath] 指定从哪张图片/压缩包开始阅读（底部面板双击图片/压缩包时传入）。
   /// 双击单个压缩包时只索引该包（避免递归扫描整个项目目录）。
   Future<void> _openComicReader(LibraryItem item, {String? startPath}) async {
+    if (_snapshotBlocked()) return;
     final playlist = (startPath != null && ComicPlaylistService.isArchiveFile(startPath))
         ? await ComicPlaylistService.buildFromArchive(startPath)
         : await ComicPlaylistService.build(item);
@@ -841,6 +943,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
   /// 打开内置电子书阅读器：递归扫描项目内所有 txt/epub/pdf/md 构建书列表，
   /// [startPath] 指定从哪本书开始阅读（底部面板双击电子书文件时传入）。
   Future<void> _openEbookReader(LibraryItem item, {String? startPath}) async {
+    if (_snapshotBlocked()) return;
     final playlist = await EbookPlaylistService.build(item);
     // 预加载阅读设置以填充同步缓存，避免首帧按默认值闪现后跳变。
     await SettingsService.loadEbookReadMode();
@@ -890,6 +993,7 @@ class _ShellPageState extends State<ShellPage> with WindowListener {
     required String noFilesKey,
     String? startPath,
   }) async {
+    if (_snapshotBlocked()) return;
     final dir = Directory(item.path);
     final files = <String>[];
     if (dir.existsSync()) {

@@ -9,8 +9,10 @@ import '../models/item_info.dart';
 import '../models/goto_entry.dart';
 import '../models/direct_file.dart';
 import '../models/search_query.dart';
+import '../models/snapshot_meta.dart';
 import '../services/library_scanner.dart';
 import '../services/settings_service.dart';
+import '../services/snapshot_service.dart';
 import '../services/translations.dart';
 
 class GroupedEntries<T> {
@@ -52,6 +54,13 @@ class LibraryState extends ChangeNotifier {
   final Set<String> _expandedPaths = {};
 
   bool _initialized = false;
+
+  // ===== 快照模式 =====
+  // 进入快照后，浏览/搜索/筛选等只读功能照常工作；所有写操作与
+  // 内置打开能力通过 canEdit / isSnapshotMode 门禁禁用（UI 层 toast 提示）。
+  bool _snapshotMode = false;
+  SnapshotMeta? _activeSnapshot;
+  Map<String, List<SnapshotFileEntry>> _snapshotItemFiles = {};
 
   bool _fileBrowserVisible = false;
   bool _showSystemFiles = false;
@@ -129,6 +138,18 @@ class LibraryState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get currentRootPath => _currentRootPath;
+
+  /// 是否处于快照预览模式（只读）。
+  bool get isSnapshotMode => _snapshotMode;
+  SnapshotMeta? get activeSnapshot => _activeSnapshot;
+
+  /// 快照中记录的各项目顶层文件清单（key=项目原绝对路径），
+  /// 供底部文件面板在快照模式下以只读虚拟列表展示。
+  Map<String, List<SnapshotFileEntry>> get snapshotItemFiles =>
+      _snapshotItemFiles;
+
+  /// 快照模式禁止一切编辑/写操作。
+  bool get canEdit => !_snapshotMode;
   String get searchQuery => _searchQuery;
   SearchScope get searchScope => _searchScope;
   ClassSource get classSource => _classSource;
@@ -1102,6 +1123,7 @@ class LibraryState extends ChangeNotifier {
 
   /// 拖入：将一组文件/文件夹复制到 [destDir]，处理同名冲突，完成后刷新面板。
   Future<void> copyFilesToDirectory(List<String> srcPaths, String destDir) async {
+    if (!canEdit) return;
     if (srcPaths.isEmpty) return;
     // 过滤掉已在目标目录内的源路径（防止拖入自身导致重复复制）
     final destNorm = destDir.replaceAll('\\', '/');
@@ -1134,6 +1156,8 @@ class LibraryState extends ChangeNotifier {
     String currentItemPath,
     String relativePath,
   ) async {
+    // 快照模式下原路径不可用，path 型 goto 一律失败
+    if (_snapshotMode) return false;
     final sep = Platform.pathSeparator;
     final target = '$currentItemPath$sep$relativePath';
     final dir = Directory(target);
@@ -1222,6 +1246,7 @@ class LibraryState extends ChangeNotifier {
   /// 淇濆瓨鍗曢」缂栬緫缁撴灉锛氱敤鏂扮殑 ItemInfo 鏇挎崲瀵瑰簲椤圭洰鐨?info,骞跺啓鍥?info.json銆?
   /// uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴愩€?
   Future<bool> saveItemInfo(String itemPath, ItemInfo newInfo) async {
+    if (!canEdit) return false;
     final index = _allItems.indexWhere((e) => e.path == itemPath);
     if (index == -1) return false;
 
@@ -1421,6 +1446,7 @@ class LibraryState extends ChangeNotifier {
     Uint8List? croppedImage,
     List<String> importedPaths = const [],
   }) async {
+    if (!canEdit) return null;
     final safeName = folderName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     String itemPath = '$parentPath${Platform.pathSeparator}$safeName';
     if (Directory(itemPath).existsSync()) {
@@ -1462,6 +1488,7 @@ class LibraryState extends ChangeNotifier {
 
   /// 淇濆瓨鏂囦欢澶癸紙CategoryNode锛夌殑 info.json銆傝繑鍥?define 鏄惁鍙樺寲锛堥渶閲嶆壂锛夈€?
   Future<bool> saveFolderInfo(String folderPath, ItemInfo newInfo) async {
+    if (!canEdit) return false;
     // uuid 涓虹┖鏃惰嚜鍔ㄧ敓鎴?
     ItemInfo finalInfo = newInfo;
     if (newInfo.uuid == null || newInfo.uuid!.isEmpty) {
@@ -1525,6 +1552,7 @@ class LibraryState extends ChangeNotifier {
     String tagsMode = 'overwrite',
     String gotoMode = 'overwrite',
   }) async {
+    if (!canEdit) return false;
     bool anyDefineChanged = false;
 
     for (final path in itemPaths) {
@@ -1598,6 +1626,7 @@ class LibraryState extends ChangeNotifier {
     String tagsMode = 'overwrite',
     String gotoMode = 'overwrite',
   }) async {
+    if (!canEdit) return false;
     bool anyDefineChanged = false;
 
     for (final path in folderPaths) {
@@ -1697,6 +1726,7 @@ class LibraryState extends ChangeNotifier {
 
   /// 閲嶅懡鍚嶉」鐩枃浠跺す鍐呯殑鏌愪釜鏂囦欢鎴栧瓙鏂囦欢澶?閲嶅懡鍚嶅悗鍒锋柊鏂囦欢闈㈡澘
   Future<String?> renameFile(String oldPath, String newName) async {
+    if (!canEdit) return Strings.t('snapshotNotSupported');
     try {
       final sep = oldPath.contains('\\') ? '\\' : '/';
       final dirParts = oldPath.split(sep);
@@ -1732,8 +1762,103 @@ class LibraryState extends ChangeNotifier {
     }
   }
 
+  /// 创建当前资源库的快照（序列化内存树 + 处理预览图），
+  /// 复用复制进度条机制展示"处理预览图 x/y"进度。
+  /// 返回创建的 SnapshotMeta；失败返回 null。
+  Future<SnapshotMeta?> createSnapshot({
+    required String name,
+    required String note,
+  }) async {
+    if (_currentRootPath.isEmpty || _snapshotMode) return null;
+    final rootPath = _currentRootPath;
+    startCopy(Strings.t('snapshotCreating'));
+    try {
+      final meta = await SnapshotService.create(
+        sourcePath: rootPath,
+        root: _categoryRoot,
+        name: name,
+        note: note,
+        onProgress: (done, total, title) {
+          updateCopyProgress(
+            total <= 0 ? 1.0 : done / total,
+            done >= total
+                ? Strings.t('snapshotCreating')
+                : Strings.tn('snapshotPreviewProgress', {
+                    'done': '$done',
+                    'total': '$total',
+                    'title': title,
+                  }),
+          );
+        },
+      );
+      showCopyComplete(
+        meta == null
+            ? Strings.t('snapshotCreateFailed')
+            : Strings.t('snapshotCreated'),
+      );
+      return meta;
+    } catch (e) {
+      showCopyComplete(Strings.t('snapshotCreateFailed'));
+      return null;
+    }
+  }
+
+  /// 进入快照预览模式：还原树到内存（_currentRootPath 保留为源库路径，
+  /// 供左键切库/右键菜单按当前库列快照/返回时重扫源库）。
+  Future<bool> loadSnapshot(SnapshotMeta meta) async {
+    final tree = await SnapshotService.load(meta);
+    if (tree == null) return false;
+    _snapshotMode = true;
+    _activeSnapshot = meta;
+    _snapshotItemFiles = tree.itemFiles;
+    _currentRootPath = meta.sourcePath;
+    _categoryRoot = tree.root;
+    _allItems = _categoryRoot.allItems;
+    _rebuildUuidIndex();
+    _bumpDataVersion();
+    _isLoading = false;
+    _error = null;
+    _selectedCategoryPath = null;
+    _selectedClass = kAllClass;
+    _selectedItem = null;
+    _selectedFolder = null;
+    _selectedPaths.clear();
+    _selectedFolderPaths.clear();
+    _selectedBrowserPaths.clear();
+    _browserSelectionAnchorPath = null;
+    _expandedPaths.clear();
+    _fileBrowserVisible = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// 退出快照模式，返回源资源库。源路径已不存在时进入"未选择资源库"状态，
+  /// 并返回 false（调用方可提示用户）。
+  Future<bool> exitSnapshot() async {
+    if (!_snapshotMode) return true;
+    _snapshotMode = false;
+    _activeSnapshot = null;
+    _snapshotItemFiles = {};
+    _snapshotCreatingCleanup();
+    final source = _currentRootPath;
+    if (source.isNotEmpty && Directory(source).existsSync()) {
+      await scan(source);
+      return true;
+    }
+    _currentRootPath = '';
+    markNoLibrarySelected();
+    return false;
+  }
+
+  /// 退出快照时的清理钩子（当前无额外状态需要清理，保留供后续扩展）。
+  void _snapshotCreatingCleanup() {}
+
   Future<void> scan(String rootDir) async {
     _currentRootPath = rootDir;
+    // 切库/重扫天然退出快照模式
+    _snapshotMode = false;
+    _activeSnapshot = null;
+    _snapshotItemFiles = {};
     _isLoading = true;
     _error = null;
     _selectedCategoryPath = null;

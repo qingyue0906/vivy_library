@@ -382,6 +382,16 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
       widget.onOpenMarkdown;
   double get middleOpacity => widget.middleOpacity;
 
+  /// 快照模式下受限操作统一 toast 提示。
+  void _snapshotToast() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(Strings.t('snapshotNotSupported')),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
   /// 文件面板的根 key，用于在嵌套 DropTarget 场景下排除其命中区域，
   /// 避免拖入底部面板时外层网格区也触发一次复制。
   final GlobalKey _panelKey = GlobalKey();
@@ -469,8 +479,7 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // ===== Drag performance cache =====
-  // Tier 1: full cache — same widget returned, Flutter skips update entirely.
+  // ===== Drag performance cache =====  // Tier 1: full cache — same widget returned, Flutter skips update entirely.
   Widget? _cachedScrollContent;
   String? _cachedFullKey;
   // Tier 2: delegate cache — same SliverChildBuilderDelegate instances reused
@@ -518,6 +527,7 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
         onFilesDropped: (paths) => onFileDrop?.call(paths),
         excludeKey: _panelKey,
         modalDropActive: state.modalDropActive,
+        disabled: state.isSnapshotMode,
         bottomInset: visible ? filePanelHeight + 4 : 0,
         child: AnimatedBuilder(
           animation: _panelAnim,
@@ -633,15 +643,16 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                Positioned(
-                  right: 16 * c,
-                  bottom: panelTotal * v + 16 * c,
-                  child: FloatingActionButton.small(
-                    heroTag: 'createItem',
-                    onPressed: onCreateItem,
-                    child: const Icon(Icons.add),
+                if (!state.isSnapshotMode)
+                  Positioned(
+                    right: 16 * c,
+                    bottom: panelTotal * v + 16 * c,
+                    child: FloatingActionButton.small(
+                      heroTag: 'createItem',
+                      onPressed: onCreateItem,
+                      child: const Icon(Icons.add),
+                    ),
                   ),
-                ),
               ],
             );
           },
@@ -1056,6 +1067,10 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
         onCtrlTap: () => state.toggleItemSelection(item),
         onShiftTap: () => state.selectRange(item, items),
         onDoubleTap: () {
+          if (state.isSnapshotMode) {
+            _snapshotToast();
+            return;
+          }
           final type = state.effectiveInfo(item).type.toLowerCase();
           if (type == 'video' || type == 'anime') {
             widget.onOpenVideoPlayer(item);
@@ -1105,7 +1120,13 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
           displayMode: gridSettings.displayMode,
           isSelected: state.selectedFile?.path == file.path,
           onTap: () => state.setSelectedFile(file),
-          onDoubleTap: () => _openFile(file.path),
+          onDoubleTap: () {
+            if (state.isSnapshotMode) {
+              _snapshotToast();
+              return;
+            }
+            _openFile(file.path);
+          },
           onRightClick: (globalPos) =>
               _showFileContextMenu(context, file, globalPos),
         ),
@@ -1472,6 +1493,11 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
   ) {
     final c = CompactLevel.of(context);
     state.selectFolderForContextMenu(node);
+    // 快照模式：只读，右键操作统一 toast 提示
+    if (state.isSnapshotMode) {
+      _snapshotToast();
+      return;
+    }
     final selectedFolders = state.selectedFolders;
     final isBatch = selectedFolders.length > 1;
 
@@ -1585,6 +1611,11 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
   ) {
     final c = CompactLevel.of(context);
     state.selectItemForContextMenu(tappedItem);
+    // 快照模式：只读，右键操作统一 toast 提示
+    if (state.isSnapshotMode) {
+      _snapshotToast();
+      return;
+    }
     final selectedItems = state.selectedItems;
     final isBatch = selectedItems.length > 1;
 
@@ -1704,6 +1735,11 @@ class _GridAreaState extends State<GridArea> with TickerProviderStateMixin {
     Offset globalPos,
   ) {
     final c = CompactLevel.of(context);
+    // 快照模式：只读，右键操作统一 toast 提示
+    if (state.isSnapshotMode) {
+      _snapshotToast();
+      return;
+    }
     final position = RelativeRect.fromLTRB(
       globalPos.dx,
       globalPos.dy,
@@ -1945,6 +1981,8 @@ class _DropHighlight extends StatefulWidget {
   /// 是否有带自身 DropTarget 的模态对话框（如创建项目对话框）打开。
   /// 打开时本层不显示高亮、也不接收拖放，避免与模态层叠加误亮/误复制。
   final bool modalDropActive;
+  /// 快照模式等只读场景：完全禁用拖放（不注册 DropTarget、无高亮）。
+  final bool disabled;
 
   const _DropHighlight({
     required this.child,
@@ -1952,6 +1990,7 @@ class _DropHighlight extends StatefulWidget {
     this.bottomInset = 0,
     this.excludeKey,
     this.modalDropActive = false,
+    this.disabled = false,
   });
 
   @override
@@ -1979,20 +2018,23 @@ class _DropHighlightState extends State<_DropHighlight> {
 
   @override
   Widget build(BuildContext context) {
+    // 注意：disabled（快照模式）时仍保留 DropTarget 结构，只屏蔽事件。
+    // 若直接返回 child 会导致子树整体重挂载（新 State），进入/退出快照时
+    // 网格内容被重建、滚动位置重置，并可能引发元素树错乱。
     final cs = Theme.of(context).colorScheme;
     final radius = BorderRadius.circular(8);
     return DropTarget(
       // 进入/移动时若落在被排除区域（底部面板）则不点亮本层高亮，
       // 让“拖到哪个区域哪个区域才高亮”的语义成立。
       onDragEntered: (details) {
-        if (widget.modalDropActive) {
+        if (widget.modalDropActive || widget.disabled) {
           _setOver(false);
           return;
         }
         _setOver(!_isExcluded(details.globalPosition));
       },
       onDragUpdated: (details) {
-        if (widget.modalDropActive) {
+        if (widget.modalDropActive || widget.disabled) {
           _setOver(false);
           return;
         }
@@ -2001,7 +2043,7 @@ class _DropHighlightState extends State<_DropHighlight> {
       onDragExited: (_) => _setOver(false),
       onDragDone: (detail) {
         _setOver(false);
-        if (widget.modalDropActive) return;
+        if (widget.modalDropActive || widget.disabled) return;
         if (_isExcluded(detail.globalPosition)) return;
         final paths = detail.files.map((f) => f.path).toList();
         if (paths.isNotEmpty) {

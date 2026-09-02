@@ -1,22 +1,25 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../models/library_root.dart';
+import '../providers/library_state.dart';
 import '../services/library_root_service.dart';
 import 'dart:io';
 import '../services/translations.dart';
 import 'compact_level.dart';
 import 'smooth_scroll.dart';
+import 'snapshot_panel.dart';
 
 /// 顶部"资源库选择"按钮 + 浮层。
 /// 按钮本身用 CompositedTransformTarget 包裹作为锚点,
 /// 点击后通过 Overlay 插入一个紧贴按钮下方的浮层(搜索 + 列表 + 打开其他)。
+/// 左键弹出资源库列表；右键弹出快照面板（创建快照 / 选择快照 / 管理所有快照）。
 class LibraryRootSelector extends StatefulWidget {
-  final String currentPath;
+  final LibraryState state;
   final void Function(String path) onRootSelected;
 
   const LibraryRootSelector({
     super.key,
-    required this.currentPath,
+    required this.state,
     required this.onRootSelected,
   });
 
@@ -27,6 +30,8 @@ class LibraryRootSelector extends StatefulWidget {
 class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   final LibraryRootService _service = LibraryRootService();
   List<LibraryRoot> _allRoots = [];
+
+  String get _currentPath => widget.state.currentRootPath;
 
   @override
   void initState() {
@@ -52,7 +57,7 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
           child: Padding(
             padding: const EdgeInsets.only(top: 65, left: 8),
             child: _LibraryRootPanel(
-              currentPath: widget.currentPath,
+              currentPath: _currentPath,
               onSelect: (path) {
                 widget.onRootSelected(path);
                 Navigator.of(context).pop();
@@ -68,6 +73,29 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
     ).then((_) => _loadRoots());
   }
 
+  /// 右键弹出快照面板。
+  void _showSnapshotPanel() {
+    showGeneralDialog(
+      context: context,
+      barrierLabel: Strings.t('snapshotManagement'),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.05),
+      transitionDuration: const Duration(milliseconds: 120),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 65, left: 8),
+            child: SnapshotPanel(state: widget.state),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = CompactLevel.of(context);
@@ -75,29 +103,41 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
     return Material(
       color: cs.surface,
       borderRadius: BorderRadius.circular(4 * c),
-      child: InkWell(
-        onTap: _showPanel,
-        borderRadius: BorderRadius.circular(4 * c),
-        hoverColor: cs.onSurface.withValues(alpha: 0.08),
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 4 * c),
-          child: Row(
-          children: [
-            Icon(Icons.video_library, size: 12 * c, color: cs.onSurfaceVariant),
-            SizedBox(width: 4 * c),
-            Expanded(
-              child: Text(
-                _displayLabel(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
+      child: GestureDetector(
+        // 右键打开快照面板；左键由 InkWell 处理（不同按键，手势不冲突）
+        onSecondaryTap: _showSnapshotPanel,
+        child: InkWell(
+          onTap: _showPanel,
+          borderRadius: BorderRadius.circular(4 * c),
+          hoverColor: cs.onSurface.withValues(alpha: 0.08),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 8 * c, vertical: 4 * c),
+            child: Row(
+            children: [
+              Icon(
+                widget.state.isSnapshotMode
+                    ? Icons.photo_camera
+                    : Icons.video_library,
+                size: 12 * c,
+                color: widget.state.isSnapshotMode
+                    ? Colors.amber.shade700
+                    : cs.onSurfaceVariant,
               ),
-            ),
-            SizedBox(width: 2 * c),
-            Icon(Icons.arrow_drop_down, size: 14 * c, color: cs.onSurfaceVariant),
-          ],
+              SizedBox(width: 4 * c),
+              Expanded(
+                child: Text(
+                  _displayLabel(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11 * c, color: cs.onSurface),
+                ),
+              ),
+              SizedBox(width: 2 * c),
+              Icon(Icons.arrow_drop_down, size: 14 * c, color: cs.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
       ),
@@ -105,10 +145,14 @@ class _LibraryRootSelectorState extends State<LibraryRootSelector> {
   }
 
   String _displayLabel() {
-    if (widget.currentPath.isEmpty) return Strings.t('selectLibrary');
-    final match = _allRoots.where((r) => r.path == widget.currentPath).toList();
+    // 快照模式下显示快照名（带标记），让用户一眼区分当前查看的是快照
+    if (widget.state.isSnapshotMode && widget.state.activeSnapshot != null) {
+      return '[${Strings.t('snapshot')}] ${widget.state.activeSnapshot!.name}';
+    }
+    if (_currentPath.isEmpty) return Strings.t('selectLibrary');
+    final match = _allRoots.where((r) => r.path == _currentPath).toList();
     if (match.isNotEmpty && match.first.name.isNotEmpty) return match.first.name;
-    final segments = widget.currentPath.replaceAll('\\', '/').split('/');
+    final segments = _currentPath.replaceAll('\\', '/').split('/');
     return segments.last;
   }
 }

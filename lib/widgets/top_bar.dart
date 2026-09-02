@@ -196,6 +196,8 @@ class TopBar extends StatelessWidget {
   }
 
   Widget _buildRefreshButton(double c) {
+    // 快照模式无刷新概念，隐藏按钮
+    if (state.isSnapshotMode) return const SizedBox.shrink();
     return IconButton(
       tooltip: Strings.t('refreshTooltip'),
       icon: Icon(Icons.refresh, size: 14 * c),
