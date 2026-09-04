@@ -1439,6 +1439,12 @@ class Strings {
       AppLocale.en: 'No related items',
       AppLocale.ja: '関連項目はありません',
     },
+    'referencedBy': {
+      AppLocale.zhHans: '被关联项目',
+      AppLocale.zhHant: '被關聯項目',
+      AppLocale.en: 'Referenced By',
+      AppLocale.ja: '参照元',
+    },
     'copied': {
       AppLocale.zhHans: '已复制',
       AppLocale.zhHant: '已複製',

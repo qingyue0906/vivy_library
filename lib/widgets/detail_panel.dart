@@ -809,13 +809,97 @@ class _DetailPanelBodyState extends State<_DetailPanelBody>
   }
 
   Widget _relatedContent(BuildContext context, double c, ColorScheme cs) {
+    final sections = <Widget>[];
     if (_isItem) {
       final info = widget.effectiveInfo ?? widget.item!.info;
+      // 出链：本项目 info.goto 指向的其他项目/隐藏子文件夹
       if (info.goto.isNotEmpty) {
-        return _buildGotoSection(context, c, cs, info.goto);
+        sections.add(_buildGotoSection(context, c, cs, info.goto));
+      }
+      // 入链：反向关联——库内哪些项目的 goto 指向本项目（不含自身）
+      final referrers = _referrersOfSelected();
+      if (referrers.isNotEmpty) {
+        if (sections.isNotEmpty) sections.add(SizedBox(height: 14 * c));
+        sections.add(_buildReferrersSection(context, c, cs, referrers));
       }
     }
-    return _hintCard(context, c, cs, Strings.t('noRelated'));
+    if (sections.isEmpty) {
+      return _hintCard(context, c, cs, Strings.t('noRelated'));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
+    );
+  }
+
+  /// 反向关联：当前选中项目被哪些项目引用（不含自身），按标题排序。
+  List<LibraryItem> _referrersOfSelected() {
+    final st = widget.state;
+    final it = widget.item;
+    if (st == null || it == null) return const [];
+    final uuid = it.info.uuid;
+    if (uuid == null || uuid.isEmpty) return const [];
+    final result =
+        st.itemsReferencing(uuid).where((r) => r.path != it.path).toList();
+    if (result.length > 1) {
+      result.sort(
+          (a, b) => _referrerTitle(st, a).compareTo(_referrerTitle(st, b)));
+    }
+    return result;
+  }
+
+  String _referrerTitle(LibraryState st, LibraryItem ref) {
+    final title = st.effectiveInfo(ref).title.trim();
+    if (title.isNotEmpty) return title;
+    return ref.folderName;
+  }
+
+  /// "被关联"区块：显示反向引用本项目的项目列表，点击跳转选中引用者。
+  Widget _buildReferrersSection(BuildContext context, double c, ColorScheme cs,
+      List<LibraryItem> referrers) {
+    final st = widget.state!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 6 * c),
+          child: Text(
+            Strings.t('referencedBy'),
+            style: TextStyle(
+              fontSize: 11 * c,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 6 * c,
+          runSpacing: 4 * c,
+          children: referrers.map((ref) {
+            final eff = st.effectiveInfo(ref);
+            final title = _referrerTitle(st, ref);
+            final type = eff.type;
+            final color =
+                type.isNotEmpty ? _typeColor(type) : _chipColor(title);
+            final refUuid = ref.info.uuid;
+            return ActionChip(
+              label: Text(title, style: TextStyle(fontSize: 11 * c)),
+              avatar: Icon(type.isNotEmpty ? _typeIcon(type) : Icons.link,
+                  size: 12 * c, color: color),
+              backgroundColor: color.withValues(alpha: 0.16),
+              labelStyle: TextStyle(fontSize: 11 * c, color: color),
+              // 引用者理论上编辑过 info（uuid 已生成）才可能写出 goto；
+              // 无 uuid 的极端情况禁用点击，避免跳转无目标。
+              onPressed: (refUuid == null || refUuid.isEmpty)
+                  ? null
+                  : () => st.selectByUuid(refUuid),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.symmetric(horizontal: 4 * c),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 
   // ===== 通用小组件 =====

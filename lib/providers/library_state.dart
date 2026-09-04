@@ -31,6 +31,8 @@ class LibraryState extends ChangeNotifier {
   CategoryNode _categoryRoot = CategoryNode(path: '', name: '');
   List<LibraryItem> _allItems = [];
   Map<String, LibraryItem> _itemByUuid = {};
+  // 反向关联索引：被引用目标的 uuid -> 引用它的项目列表（出链 goto 反查）。
+  Map<String, List<LibraryItem>> _referrersByUuid = {};
   bool _isLoading = true;
   String? _error;
 
@@ -1149,6 +1151,13 @@ class LibraryState extends ChangeNotifier {
   /// 閫氳繃 uuid 鏌ユ壘椤圭洰锛坓oto name 涓虹┖鏃舵樉绀烘爣棰樼敤锛夈€?
   LibraryItem? itemByUuid(String uuid) => _itemByUuid[uuid];
 
+  /// 反向关联：返回所有 info.goto 中 uuid 型条目指向 [uuid] 的项目
+  /// （即"谁关联了 uuid 对应的项目"）。uuid 为空或无人引用返回空列表。
+  List<LibraryItem> itemsReferencing(String uuid) {
+    if (uuid.isEmpty) return const [];
+    return _referrersByUuid[uuid] ?? const [];
+  }
+
   /// 閫氳繃鐩稿璺緞閫変腑宓屽 item锛坓oto 鐐瑰嚮 path 鍨嬶級銆?
   /// [currentItemPath] 鏄綋鍓嶉€変腑椤圭洰鐨勭粷瀵硅矾寰勶紝[relativePath] 鏄浉瀵瑰畠鐨勮矾寰勩€?
   /// 鍗虫椂鎵弿鏋勫缓涓存椂 LibraryItem 鏄剧ず銆傛壘涓嶅埌杩斿洖 false銆?
@@ -1722,6 +1731,18 @@ class LibraryState extends ChangeNotifier {
         if (item.info.uuid != null && item.info.uuid!.isNotEmpty)
           item.info.uuid!: item,
     };
+    // 同步构建反向关联索引：遍历每个项目的 goto 出链，凡 uuid 型条目
+    // 指向某目标 uuid，就把该项目登记为目标的"引用者"。
+    // 只统计 uuid 型条目；path 型指向项目内隐藏子文件夹，不在主列表，不参与。
+    final referrers = <String, List<LibraryItem>>{};
+    for (final item in _allItems) {
+      final seen = <String>{};
+      for (final entry in item.info.goto) {
+        if (entry.uuid.isEmpty || !seen.add(entry.uuid)) continue;
+        referrers.putIfAbsent(entry.uuid, () => []).add(item);
+      }
+    }
+    _referrersByUuid = referrers;
   }
 
   /// 閲嶅懡鍚嶉」鐩枃浠跺す鍐呯殑鏌愪釜鏂囦欢鎴栧瓙鏂囦欢澶?閲嶅懡鍚嶅悗鍒锋柊鏂囦欢闈㈡澘
