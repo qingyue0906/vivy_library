@@ -321,7 +321,11 @@ class _SnapshotPanelState extends State<SnapshotPanel> {
   }
 
   void _openSnapshotRoot() {
-    Process.run('explorer', [SnapshotService.snapshotRoot]);
+    // explorer 会把参数里的 /xxx 段当命令行开关解析；baseDir 用 '/' 拼接使
+    // snapshotRoot 混用分隔符，需转成原生反斜杠，否则会回退打开"文档"。
+    final dir =
+        SnapshotService.snapshotRoot.replaceAll('/', Platform.pathSeparator);
+    Process.run('explorer', [dir]);
   }
 
   Widget _buildTile(SnapshotMeta meta, {Widget? dragHandle, bool showLibrary = false}) {
